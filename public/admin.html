@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Panel de control - AlbinegrosCastellón</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      margin: 0;
+      padding: 20px;
+    }
+
+    h1, h2 {
+      color: #111;
+    }
+
+    .card {
+      background: white;
+      border-radius: 14px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    label {
+      display: block;
+      margin-top: 10px;
+      font-weight: bold;
+    }
+
+    input, textarea {
+      width: 100%;
+      padding: 10px;
+      margin-top: 6px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      box-sizing: border-box;
+    }
+
+    button {
+      margin-top: 14px;
+      padding: 12px 16px;
+      border: none;
+      border-radius: 10px;
+      background: #111;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
+    .success {
+      color: green;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Panel de control básico</h1>
+
+  <div class="card">
+    <h2>Próximo partido</h2>
+
+    <label>Logo equipo (URL)</label>
+    <input id="teamLogo" />
+
+    <label>Logo rival (URL)</label>
+    <input id="opponentLogo" />
+
+    <label>Equipo</label>
+    <input id="teamName" />
+
+    <label>Rival</label>
+    <input id="opponent" />
+
+    <label>Fecha</label>
+    <input id="date" />
+
+    <label>Hora</label>
+    <input id="time" />
+
+    <label>Estadio</label>
+    <input id="stadium" />
+
+    <label>Competición</label>
+    <input id="competition" />
+
+    <button onclick="saveNextMatch()">Guardar próximo partido</button>
+    <div id="nextMatchMsg" class="success"></div>
+  </div>
+
+  <div class="card">
+    <h2>¿Quiénes somos?</h2>
+
+    <label>Título</label>
+    <input id="aboutTitle" />
+
+    <label>Texto</label>
+    <textarea id="aboutText" rows="6"></textarea>
+
+    <button onclick="saveAbout()">Guardar sección</button>
+    <div id="aboutMsg" class="success"></div>
+  </div>
+
+  <div class="card">
+    <h2>Publicidad</h2>
+
+<label>Imagen anuncio 1 (URL)</label>
+<input id="ad1Image" />    
+<label>Título anuncio 1</label>
+    <input id="ad1Title" />
+
+    <label>Texto anuncio 1</label>
+    <input id="ad1Text" />
+
+    <label>Link anuncio 1</label>
+    <input id="ad1Link" />
+<label>Imagen anuncio 2 (URL)</label>
+<input id="ad2Image" />
+    
+<label>Título anuncio 2</label>
+    <input id="ad2Title" />
+
+    <label>Texto anuncio 2</label>
+    <input id="ad2Text" />
+
+    <label>Link anuncio 2</label>
+    <input id="ad2Link" />
+
+    <button onclick="saveAds()">Guardar publicidad</button>
+    <div id="adsMsg" class="success"></div>
+  </div>
+
+  <script>
+  async function loadData() {
+    try {
+      const nextMatchRes = await fetch('/api/admin/next-match');
+      const nextMatch = await nextMatchRes.json();
+
+      document.getElementById('teamName').value = nextMatch.teamName || '';
+      document.getElementById('opponent').value = nextMatch.opponent || '';
+      document.getElementById('date').value = nextMatch.date || '';
+      document.getElementById('time').value = nextMatch.time || '';
+      document.getElementById('stadium').value = nextMatch.stadium || '';
+      document.getElementById('competition').value = nextMatch.competition || '';
+      document.getElementById('teamLogo').value = nextMatch.teamLogo || '';
+      document.getElementById('opponentLogo').value = nextMatch.opponentLogo || '';
+
+      const aboutRes = await fetch('/api/admin/about');
+      const about = await aboutRes.json();
+
+      document.getElementById('aboutTitle').value = about.title || '';
+      document.getElementById('aboutText').value = about.text || '';
+
+      const adsRes = await fetch('/api/admin/ads');
+      const ads = await adsRes.json();
+
+      if (Array.isArray(ads) && ads[0]) {
+        document.getElementById('ad1Image').value = ads[0].image || '';
+        document.getElementById('ad1Title').value = ads[0].title || '';
+        document.getElementById('ad1Text').value = ads[0].text || '';
+        document.getElementById('ad1Link').value = ads[0].link || '';
+      }
+
+      if (Array.isArray(ads) && ads[1]) {
+        document.getElementById('ad2Image').value = ads[1].image || '';
+        document.getElementById('ad2Title').value = ads[1].title || '';
+        document.getElementById('ad2Text').value = ads[1].text || '';
+        document.getElementById('ad2Link').value = ads[1].link || '';
+      }
+    } catch (error) {
+      console.error('Error cargando datos del panel:', error);
+      alert('Error cargando datos del panel. Mira la consola del navegador.');
+    }
+  }
+
+  async function saveNextMatch() {
+    const payload = {
+      teamName: document.getElementById('teamName').value,
+      opponent: document.getElementById('opponent').value,
+      date: document.getElementById('date').value,
+      time: document.getElementById('time').value,
+      stadium: document.getElementById('stadium').value,
+      competition: document.getElementById('competition').value,
+      teamLogo: document.getElementById('teamLogo').value,
+      opponentLogo: document.getElementById('opponentLogo').value
+    };
+
+    await fetch('/api/admin/next-match', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    document.getElementById('nextMatchMsg').innerText = 'Próximo partido guardado';
+  }
+
+  async function saveAbout() {
+    const payload = {
+      title: document.getElementById('aboutTitle').value,
+      text: document.getElementById('aboutText').value
+    };
+
+    await fetch('/api/admin/about', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    document.getElementById('aboutMsg').innerText = 'Sección guardada';
+  }
+
+  async function saveAds() {
+    const payload = [
+      {
+        id: '1',
+        image: document.getElementById('ad1Image').value,
+        title: document.getElementById('ad1Title').value,
+        text: document.getElementById('ad1Text').value,
+        link: document.getElementById('ad1Link').value
+      },
+      {
+        id: '2',
+        image: document.getElementById('ad2Image').value,
+        title: document.getElementById('ad2Title').value,
+        text: document.getElementById('ad2Text').value,
+        link: document.getElementById('ad2Link').value
+      }
+    ];
+
+    await fetch('/api/admin/ads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    document.getElementById('adsMsg').innerText = 'Publicidad guardada';
+  }
+
+  window.onload = loadData;
+</script>
+</body>
+</html>

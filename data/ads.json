@@ -1,0 +1,16 @@
+[
+  {
+    "id": "1",
+    "title": "Patrocinador 1",
+    "text": "Publicidad del primer patrocinador.",
+    "link": "https://www.instagram.com/",
+    "image": "https://via.placeholder.com/600x300.png?text=Patrocinador+1"
+  },
+  {
+    "id": "2",
+    "title": "Patrocinador 2",
+    "text": "Publicidad del segundo patrocinador.",
+    "link": "https://www.google.com/",
+    "image": "https://via.placeholder.com/600x300.png?text=Patrocinador+2"
+  }
+]
