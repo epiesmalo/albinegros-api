@@ -135,11 +135,23 @@
     <button onclick="saveAds()">Guardar publicidad</button>
     <div id="adsMsg" class="success"></div>
   </div>
+<div class="card">
+  <h2>Clasificación</h2>
+
+  <textarea id="standingsJson" rows="14"></textarea>
+
+  <button onclick="saveStandings()">Guardar clasificación</button>
+  <div id="standingsMsg" class="success"></div>
+</div>
+
 
   <script>
   async function loadData() {
     try {
-      const nextMatchRes = await fetch('/api/admin/next-match');
+const standingsRes = await fetch('/api/admin/standings');
+const standings = await standingsRes.json();
+document.getElementById('standingsJson').value = JSON.stringify(standings, null, 2);      
+const nextMatchRes = await fetch('/api/admin/next-match');
       const nextMatch = await nextMatchRes.json();
 
       document.getElementById('teamName').value = nextMatch.teamName || '';
@@ -178,6 +190,21 @@
       alert('Error cargando datos del panel. Mira la consola del navegador.');
     }
   }
+async function saveStandings() {
+  try {
+    const standings = JSON.parse(document.getElementById('standingsJson').value);
+
+    await fetch('/api/admin/standings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(standings)
+    });
+
+    document.getElementById('standingsMsg').innerText = 'Clasificación guardada';
+  } catch (error) {
+    alert('El JSON de clasificación no es válido. Revisa comas, llaves y comillas.');
+  }
+}
 
   async function saveNextMatch() {
     const payload = {

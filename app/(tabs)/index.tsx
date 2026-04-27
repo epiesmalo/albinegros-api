@@ -53,8 +53,8 @@ export default function HomeScreen() {
   const loadHomeData = async () => {
     try {
       const [matchRes, adsRes] = await Promise.all([
-        fetch('http:192.168.1.211:3001/api/admin/next-match'),
-        fetch('http:192.168.1.211:3001/api/admin/ads'),
+        fetch('https://albinegros-api.onrender.com/api/admin/next-match'),
+        fetch('https://albinegros-api.onrender.com/api/admin/ads'),
       ]);
 
       const matchData = await matchRes.json();

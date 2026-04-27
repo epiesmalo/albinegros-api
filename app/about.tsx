@@ -17,7 +17,7 @@ export default function AboutScreen() {
 
   const loadAbout = async () => {
     try {
-      const response = await fetch('http://192.168.1.211:3001/api/admin/about');
+      const response = await fetch('https://albinegros-api.onrender.com/api/admin/about');
       const data = await response.json();
       setAbout(data);
     } catch (error) {

@@ -1,0 +1,20 @@
+[
+  {
+    "position": 1,
+    "team": "Equipo 1",
+    "points": 999,
+    "playedGames": 0,
+    "won": 0,
+    "draw": 0,
+    "lost": 0
+  },
+  {
+    "position": 2,
+    "team": "CD Castellón",
+    "points": 0,
+    "playedGames": 0,
+    "won": 0,
+    "draw": 0,
+    "lost": 0
+  }
+]

@@ -13,46 +13,6 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 console.log('API KEY:', process.env.API_FOOTBALL_KEY);
 
-// CLASIFICACIÓN
-app.get('/standings/first-team', async (req, res) => {
-  try {
-    const response = await axios.get('https://v3.football.api-sports.io/standings', {
-      headers: {
-        'x-apisports-key': process.env.API_FOOTBALL_KEY.trim(),
-      },
-      params: {
-        league: 141,
-        season: 2024,
-      },
-    });
-
-    const standings =
-      response.data?.response?.[0]?.league?.standings?.[0] || [];
-
-    const cleanTable = standings.map((team) => ({
-      position: team.rank,
-      team: team.team.name,
-      points: team.points,
-      playedGames: team.all.played,
-      won: team.all.win,
-      draw: team.all.draw,
-      lost: team.all.lose,
-      goalsFor: team.all.goals.for,
-      goalsAgainst: team.all.goals.against,
-      goalDifference: team.goalsDiff,
-    }));
-
-    res.json(cleanTable);
-  } catch (error) {
-    console.error('ERROR API-FOOTBALL STANDINGS:');
-    console.error(error.response?.data || error.message);
-
-    res.status(500).json({
-      error: 'No se pudo obtener la clasificación',
-      details: error.response?.data || error.message,
-    });
-  }
-});
 
 // CALENDARIO
 app.get('/calendar/first-team', async (req, res) => {
@@ -130,6 +90,23 @@ app.get('/api/admin/ads', (req, res) => {
 app.post('/api/admin/ads', (req, res) => {
   fs.writeFileSync(adsPath, JSON.stringify(req.body, null, 2), 'utf8');
   res.json({ success: true });
+});
+
+const standingsPath = path.join(__dirname, 'data', 'standings.json');
+
+app.get('/api/admin/standings', (req, res) => {
+  const data = JSON.parse(fs.readFileSync(standingsPath, 'utf8'));
+  res.json(data);
+});
+
+app.post('/api/admin/standings', (req, res) => {
+  fs.writeFileSync(standingsPath, JSON.stringify(req.body, null, 2), 'utf8');
+  res.json({ success: true });
+});
+
+app.get('/standings/first-team', (req, res) => {
+  const data = JSON.parse(fs.readFileSync(standingsPath, 'utf8'));
+  res.json(data);
 });
 
 app.listen(PORT, '0.0.0.0', () => {

@@ -25,7 +25,7 @@ export default function StandingsScreen() {
       setLoading(true);
       setError('');
 
-      const response = await fetch('http://192.168.1.211:3001/standings/first-team');
+      const response = await fetch('https://albinegros-api.onrender.com/standings/first-team');
       const data = await response.json();
 
       setStandings(data);

@@ -25,7 +25,7 @@ export default function CalendarScreen() {
       setLoading(true);
       setError('');
 
-      const response = await fetch('http://192.168.1.211:3001/calendar/first-team');
+      const response = await fetch('https://albinegros-api.onrender.com/calendar/first-team');
       const data = await response.json();
 
       if (!Array.isArray(data)) {
