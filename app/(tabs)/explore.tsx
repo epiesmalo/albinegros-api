@@ -1,18 +1,19 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { colors } from '../../theme/colors';
 
 type StandingItem = {
   position: number;
   team: string;
+  logo?: string;
   points: number;
   playedGames: number;
   won: number;
   draw: number;
   lost: number;
-  goalsFor: number;
-  goalsAgainst: number;
-  goalDifference: number;
+  goalsFor?: number;
+  goalsAgainst?: number;
+  goalDifference?: number;
 };
 
 export default function StandingsScreen() {
@@ -25,12 +26,12 @@ export default function StandingsScreen() {
       setLoading(true);
       setError('');
 
-      const response = await fetch('https://albinegros-api.onrender.com/standings/first-team');
+      const response = await fetch('https://api.albinegroscastellon.com/standings/first-team');
       const data = await response.json();
 
       setStandings(data);
     } catch (err) {
-      setError('No se pudo cargar la clasificación real.');
+      setError('No se pudo cargar la clasificación.');
       setStandings([]);
     } finally {
       setLoading(false);
@@ -63,16 +64,37 @@ export default function StandingsScreen() {
 
           {standings.map((item, index) => {
             const isCastellon = item.team.toLowerCase().includes('castell');
+            const isDirectPromotion = item.position <= 2;
+            const isPlayoff = item.position >= 3 && item.position <= 6;
+            const isRelegation = item.position >= standings.length - 3;
 
             return (
               <View
                 key={`${item.team}-${index}`}
-                style={[styles.row, isCastellon && styles.highlightRow]}
+                style={[
+                  styles.row,
+                  isDirectPromotion && styles.directPromotionRow,
+                  isPlayoff && styles.playoffRow,
+                  isRelegation && styles.relegationRow,
+                  isCastellon && styles.highlightRow,
+                ]}
               >
                 <Text style={[styles.rankText, styles.rankCell]}>{item.position}</Text>
-                <Text style={[styles.teamText, styles.teamCell]} numberOfLines={1}>
-                  {item.team}
-                </Text>
+
+                <View style={styles.teamCell}>
+                  <View style={styles.teamInfo}>
+                    {item.logo ? (
+                      <Image source={{ uri: item.logo }} style={styles.teamLogo} />
+                    ) : (
+                      <View style={styles.logoPlaceholder} />
+                    )}
+
+                    <Text style={styles.teamText} numberOfLines={1}>
+                      {item.team}
+                    </Text>
+                  </View>
+                </View>
+
                 <Text style={[styles.statText, styles.smallCell]}>{item.playedGames}</Text>
                 <Text style={[styles.statText, styles.smallCell]}>{item.won}</Text>
                 <Text style={[styles.statText, styles.smallCell]}>{item.draw}</Text>
@@ -134,10 +156,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  directPromotionRow: {
+    backgroundColor: '#e6f7e6',
+  },
+  playoffRow: {
+    backgroundColor: '#f0fff0',
+  },
+  relegationRow: {
+    backgroundColor: '#ffecec',
+  },
   highlightRow: {
     borderColor: colors.accent,
     borderWidth: 2,
-    backgroundColor: '#fffaf0',
   },
   rankCell: {
     width: 28,
@@ -145,6 +175,20 @@ const styles = StyleSheet.create({
   teamCell: {
     flex: 1,
     paddingRight: 8,
+  },
+  teamInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  teamLogo: {
+    width: 24,
+    height: 24,
+    marginRight: 8,
+  },
+  logoPlaceholder: {
+    width: 24,
+    height: 24,
+    marginRight: 8,
   },
   smallCell: {
     width: 34,
@@ -156,6 +200,7 @@ const styles = StyleSheet.create({
     color: colors.accent,
   },
   teamText: {
+    flex: 1,
     fontSize: 14,
     fontWeight: '700',
     color: colors.text,
