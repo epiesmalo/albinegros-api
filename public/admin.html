@@ -242,32 +242,35 @@ async function saveStandings() {
     document.getElementById('aboutMsg').innerText = 'Sección guardada';
   }
 
-  async function saveAds() {
-    const payload = [
-      {
-        id: '1',
-        image: document.getElementById('ad1Image').value,
-        title: document.getElementById('ad1Title').value,
-        text: document.getElementById('ad1Text').value,
-        link: document.getElementById('ad1Link').value
-      },
-      {
-        id: '2',
-        image: document.getElementById('ad2Image').value,
-        title: document.getElementById('ad2Title').value,
-        text: document.getElementById('ad2Text').value,
-        link: document.getElementById('ad2Link').value
-      }
-    ];
+async function saveAds() {
+  const payload = [
+    {
+      id: '1',
+      image: document.getElementById('ad1Image').value,
+      title: document.getElementById('ad1Title').value,
+      text: document.getElementById('ad1Text').value,
+      link: document.getElementById('ad1Link').value
+    },
+    {
+      id: '2',
+      image: document.getElementById('ad2Image').value,
+      title: document.getElementById('ad2Title').value,
+      text: document.getElementById('ad2Text').value,
+      link: document.getElementById('ad2Link').value
+    }
+  ];
 
-    await fetch('/api/admin/ads', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+  const response = await fetch('/api/admin/ads', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
 
-    document.getElementById('adsMsg').innerText = 'Publicidad guardada';
-  }
+  const result = await response.json();
+  console.log('ADS GUARDADOS:', result);
+
+  document.getElementById('adsMsg').innerText = 'Publicidad guardada correctamente';
+}
 
   window.onload = loadData;
 </script>

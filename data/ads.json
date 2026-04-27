@@ -1,16 +1,16 @@
 [
   {
     "id": "1",
-    "title": "Patrocinador 1",
-    "text": "Publicidad del primer patrocinador.",
-    "link": "https://www.instagram.com/",
-    "image": "https://via.placeholder.com/600x300.png?text=Patrocinador+1"
+    "image": "https://www.ccmonteclaro.com/wp-content/uploads/2016/06/logo-mercadona-300x200.jpg",
+    "title": "merca",
+    "text": "merca",
+    "link": "https://www.mercadona.com/"
   },
   {
     "id": "2",
-    "title": "Patrocinador 2",
-    "text": "Publicidad del segundo patrocinador.",
-    "link": "https://www.google.com/",
-    "image": "https://via.placeholder.com/600x300.png?text=Patrocinador+2"
+    "image": "https://www.feriahabitatvalencia.com/wp-content/uploads/2017/09/logo-vector-porcelanosa-300x152.jpg",
+    "title": "porce",
+    "text": "porce",
+    "link": "https://www.porcelanosa.com/"
   }
 ]
