@@ -2,7 +2,7 @@
   {
     "position": 1,
     "team": "Equipo 1",
-    "points": 999,
+    "points": 0,
     "playedGames": 0,
     "won": 0,
     "draw": 0,
@@ -10,7 +10,187 @@
   },
   {
     "position": 2,
-    "team": "CD Castellón",
+    "team": "Equipo 2",
+    "points": 0,
+    "playedGames": 0,
+    "won": 0,
+    "draw": 0,
+    "lost": 0
+  },
+  {
+    "position": 3,
+    "team": "Equipo 3",
+    "points": 0,
+    "playedGames": 0,
+    "won": 0,
+    "draw": 0,
+    "lost": 0
+  },
+  {
+    "position": 4,
+    "team": "Equipo 4",
+    "points": 0,
+    "playedGames": 0,
+    "won": 0,
+    "draw": 0,
+    "lost": 0
+  },
+  {
+    "position": 5,
+    "team": "Equipo 5",
+    "points": 0,
+    "playedGames": 0,
+    "won": 0,
+    "draw": 0,
+    "lost": 0
+  },
+  {
+    "position": 6,
+    "team": "Equipo 6",
+    "points": 0,
+    "playedGames": 0,
+    "won": 0,
+    "draw": 0,
+    "lost": 0
+  },
+  {
+    "position": 7,
+    "team": "Equipo 7",
+    "points": 0,
+    "playedGames": 0,
+    "won": 0,
+    "draw": 0,
+    "lost": 0
+  },
+  {
+    "position": 8,
+    "team": "Equipo 8",
+    "points": 0,
+    "playedGames": 0,
+    "won": 0,
+    "draw": 0,
+    "lost": 0
+  },
+  {
+    "position": 9,
+    "team": "Equipo 9",
+    "points": 0,
+    "playedGames": 0,
+    "won": 0,
+    "draw": 0,
+    "lost": 0
+  },
+  {
+    "position": 10,
+    "team": "Equipo 10",
+    "points": 0,
+    "playedGames": 0,
+    "won": 0,
+    "draw": 0,
+    "lost": 0
+  },
+  {
+    "position": 11,
+    "team": "Equipo 11",
+    "points": 0,
+    "playedGames": 0,
+    "won": 0,
+    "draw": 0,
+    "lost": 0
+  },
+  {
+    "position": 12,
+    "team": "Equipo 12",
+    "points": 0,
+    "playedGames": 0,
+    "won": 0,
+    "draw": 0,
+    "lost": 0
+  },
+  {
+    "position": 13,
+    "team": "Equipo 13",
+    "points": 0,
+    "playedGames": 0,
+    "won": 0,
+    "draw": 0,
+    "lost": 0
+  },
+  {
+    "position": 14,
+    "team": "Equipo 14",
+    "points": 0,
+    "playedGames": 0,
+    "won": 0,
+    "draw": 0,
+    "lost": 0
+  },
+  {
+    "position": 15,
+    "team": "Equipo 15",
+    "points": 0,
+    "playedGames": 0,
+    "won": 0,
+    "draw": 0,
+    "lost": 0
+  },
+  {
+    "position": 16,
+    "team": "Equipo 16",
+    "points": 0,
+    "playedGames": 0,
+    "won": 0,
+    "draw": 0,
+    "lost": 0
+  },
+  {
+    "position": 17,
+    "team": "Equipo 17",
+    "points": 0,
+    "playedGames": 0,
+    "won": 0,
+    "draw": 0,
+    "lost": 0
+  },
+  {
+    "position": 18,
+    "team": "Equipo 18",
+    "points": 0,
+    "playedGames": 0,
+    "won": 0,
+    "draw": 0,
+    "lost": 0
+  },
+  {
+    "position": 19,
+    "team": "Equipo 19",
+    "points": 0,
+    "playedGames": 0,
+    "won": 0,
+    "draw": 0,
+    "lost": 0
+  },
+  {
+    "position": 20,
+    "team": "Equipo 20",
+    "points": 0,
+    "playedGames": 0,
+    "won": 0,
+    "draw": 0,
+    "lost": 0
+  },
+  {
+    "position": 21,
+    "team": "Equipo 21",
+    "points": 0,
+    "playedGames": 0,
+    "won": 0,
+    "draw": 0,
+    "lost": 0
+  },
+  {
+    "position": 22,
+    "team": "Equipo 22",
     "points": 0,
     "playedGames": 0,
     "won": 0,
