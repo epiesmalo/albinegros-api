@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   directPromotionRow: {
-    backgroundColor: '#e6f7e6',
+    backgroundColor: '#c8e6c9',
   },
   playoffRow: {
     backgroundColor: '#f0fff0',

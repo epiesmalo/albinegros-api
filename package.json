@@ -16,6 +16,7 @@
     "@react-navigation/bottom-tabs": "^7.15.9",
     "@react-navigation/elements": "^2.6.3",
     "@react-navigation/native": "^7.2.2",
+    "@supabase/supabase-js": "^2.105.0",
     "axios": "^1.15.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
