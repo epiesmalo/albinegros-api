@@ -72,7 +72,16 @@ app.get('/api/admin/next-match', async (req, res) => {
 
     if (error) return res.status(500).json({ error: error.message });
 
-    res.json(data);
+    res.json({
+      teamName: data.teamName,
+      opponent: data.opponent,
+      date: data.date,
+      time: data.time,
+      stadium: data.stadium,
+      competition: data.competition,
+      teamLogo: data.teamlogo,        // 👈 aquí
+      opponentLogo: data.opponentLogo // 👈 aquí
+    });
   } catch (error) {
     res.status(500).json({
       error: 'No se pudo obtener el próximo partido',
@@ -91,8 +100,8 @@ app.post('/api/admin/next-match', async (req, res) => {
       time: req.body.time,
       stadium: req.body.stadium,
       competition: req.body.competition,
-      teamLogo: req.body.teamLogo,
-      opponentLogo: req.body.opponentLogo,
+      teamlogo: req.body.teamLogo,        // 👈 aquí
+      opponentLogo: req.body.opponentLogo // 👈 aquí
     };
 
     const { error } = await supabase
@@ -106,7 +115,7 @@ app.post('/api/admin/next-match', async (req, res) => {
     res.status(500).json({
       error: 'No se pudo guardar el próximo partido',
       details: error.message,
-    });
+     });
   }
 });
 
