@@ -19,10 +19,7 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 const PORT = process.env.PORT || 3001;
-
-const nextMatchPath = path.join(__dirname, 'data', 'nextMatch.json');
 const aboutPath = path.join(__dirname, 'data', 'about.json');
-const standingsPath = path.join(__dirname, 'data', 'standings.json');
 
 // CALENDARIO
 app.get('/calendar/first-team', async (req, res) => {
@@ -57,9 +54,6 @@ app.get('/calendar/first-team', async (req, res) => {
 
     res.json(cleanFixtures);
   } catch (error) {
-    console.error('ERROR API-FOOTBALL CALENDAR:');
-    console.error(error.response?.data || error.message);
-
     res.status(500).json({
       error: 'No se pudo obtener el calendario',
       details: error.response?.data || error.message,
@@ -67,18 +61,56 @@ app.get('/calendar/first-team', async (req, res) => {
   }
 });
 
-// PRÓXIMO PARTIDO
-app.get('/api/admin/next-match', (req, res) => {
-  const data = JSON.parse(fs.readFileSync(nextMatchPath, 'utf8'));
-  res.json(data);
+// PRÓXIMO PARTIDO - SUPABASE
+app.get('/api/admin/next-match', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('next_match')
+      .select('*')
+      .eq('id', '1')
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({
+      error: 'No se pudo obtener el próximo partido',
+      details: error.message,
+    });
+  }
 });
 
-app.post('/api/admin/next-match', (req, res) => {
-  fs.writeFileSync(nextMatchPath, JSON.stringify(req.body, null, 2), 'utf8');
-  res.json({ success: true });
+app.post('/api/admin/next-match', async (req, res) => {
+  try {
+    const payload = {
+      id: '1',
+      teamName: req.body.teamName,
+      opponent: req.body.opponent,
+      date: req.body.date,
+      time: req.body.time,
+      stadium: req.body.stadium,
+      competition: req.body.competition,
+      teamLogo: req.body.teamLogo,
+      opponentLogo: req.body.opponentLogo,
+    };
+
+    const { error } = await supabase
+      .from('next_match')
+      .upsert(payload);
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({
+      error: 'No se pudo guardar el próximo partido',
+      details: error.message,
+    });
+  }
 });
 
-// QUIÉNES SOMOS
+// QUIÉNES SOMOS - DE MOMENTO JSON
 app.get('/api/admin/about', (req, res) => {
   const data = JSON.parse(fs.readFileSync(aboutPath, 'utf8'));
   res.json(data);
@@ -97,9 +129,7 @@ app.get('/api/admin/ads', async (req, res) => {
       .select('*')
       .order('id', { ascending: true });
 
-    if (error) {
-      return res.status(500).json({ error: error.message });
-    }
+    if (error) return res.status(500).json({ error: error.message });
 
     res.json(data || []);
   } catch (error) {
@@ -122,9 +152,7 @@ app.post('/api/admin/ads', async (req, res) => {
 
     const { error } = await supabase.from('ads').insert(ads);
 
-    if (error) {
-      return res.status(500).json({ error: error.message });
-    }
+    if (error) return res.status(500).json({ error: error.message });
 
     res.json({ success: true });
   } catch (error) {
@@ -135,34 +163,110 @@ app.post('/api/admin/ads', async (req, res) => {
   }
 });
 
-// CLASIFICACIÓN
-app.get('/api/admin/standings', (req, res) => {
-  const data = JSON.parse(fs.readFileSync(standingsPath, 'utf8'));
-  res.json(data);
+// CLASIFICACIÓN - SUPABASE
+app.get('/api/admin/standings', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('standings')
+      .select('*')
+      .order('position', { ascending: true });
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    const cleanData = (data || []).map((team) => ({
+      id: team.id,
+      position: team.position,
+      team: team.team,
+      logo: team.logo,
+      points: team.points,
+      playedgames: team.playedgames,
+      playedGames: team.playedgames,
+      won: team.won,
+      draw: team.draw,
+      lost: team.lost,
+    }));
+
+    res.json(cleanData);
+  } catch (error) {
+    res.status(500).json({
+      error: 'No se pudo obtener la clasificación',
+      details: error.message,
+    });
+  }
 });
 
-app.post('/api/admin/standings', (req, res) => {
-  fs.writeFileSync(standingsPath, JSON.stringify(req.body, null, 2), 'utf8');
-  res.json({ success: true });
+app.post('/api/admin/standings', async (req, res) => {
+  try {
+    const standings = req.body;
+
+    if (!Array.isArray(standings)) {
+      return res.status(400).json({ error: 'La clasificación debe ser un array' });
+    }
+
+    const cleanStandings = standings.map((team, index) => ({
+      id: team.id || index + 1,
+      position: Number(team.position || index + 1),
+      team: team.team || '',
+      logo: team.logo || '',
+      points: Number(team.points || 0),
+      playedgames: Number(team.playedgames ?? team.playedGames ?? 0),
+      won: Number(team.won || 0),
+      draw: Number(team.draw || 0),
+      lost: Number(team.lost || 0),
+    }));
+
+    await supabase.from('standings').delete().neq('id', 0);
+
+    const { error } = await supabase
+      .from('standings')
+      .insert(cleanStandings);
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({
+      error: 'No se pudo guardar la clasificación',
+      details: error.message,
+    });
+  }
 });
 
-app.get('/standings/first-team', (req, res) => {
-  const data = JSON.parse(fs.readFileSync(standingsPath, 'utf8'));
-  res.json(data);
+app.get('/standings/first-team', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('standings')
+      .select('*')
+      .order('position', { ascending: true });
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    const cleanData = (data || []).map((team) => ({
+      position: team.position,
+      team: team.team,
+      logo: team.logo,
+      points: team.points,
+      playedGames: team.playedgames,
+      won: team.won,
+      draw: team.draw,
+      lost: team.lost,
+    }));
+
+    res.json(cleanData);
+  } catch (error) {
+    res.status(500).json({
+      error: 'No se pudo obtener la clasificación',
+      details: error.message,
+    });
+  }
 });
 
 app.get('/test-supabase', async (req, res) => {
-  try {
-    res.json({
-      hasUrl: !!process.env.SUPABASE_URL,
-      hasKey: !!process.env.SUPABASE_KEY,
-      url: process.env.SUPABASE_URL,
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: error.message,
-    });
-  }
+  res.json({
+    hasUrl: !!process.env.SUPABASE_URL,
+    hasKey: !!process.env.SUPABASE_KEY,
+    url: process.env.SUPABASE_URL,
+  });
 });
 
 app.listen(PORT, '0.0.0.0', () => {
