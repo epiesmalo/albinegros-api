@@ -151,6 +151,20 @@ app.get('/standings/first-team', (req, res) => {
   res.json(data);
 });
 
+app.get('/test-supabase', async (req, res) => {
+  try {
+    res.json({
+      hasUrl: !!process.env.SUPABASE_URL,
+      hasKey: !!process.env.SUPABASE_KEY,
+      url: process.env.SUPABASE_URL,
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: error.message,
+    });
+  }
+});
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Servidor funcionando en puerto ${PORT}`);
 });
