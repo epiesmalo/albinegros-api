@@ -22,41 +22,85 @@ const PORT = process.env.PORT || 3001;
 const aboutPath = path.join(__dirname, 'data', 'about.json');
 
 // CALENDARIO
+// CALENDARIO - SUPABASE
 app.get('/calendar/first-team', async (req, res) => {
   try {
-    const response = await axios.get('https://v3.football.api-sports.io/fixtures', {
-      headers: {
-        'x-apisports-key': process.env.API_FOOTBALL_KEY?.trim(),
-      },
-      params: {
-        league: 141,
-        season: 2024,
-        team: 5254,
-      },
-    });
+    const { data, error } = await supabase
+      .from('calendar')
+      .select('*')
+      .order('date', { ascending: true });
 
-    const fixtures = response.data?.response || [];
+    if (error) return res.status(500).json({ error: error.message });
 
-    const cleanFixtures = fixtures.map((match) => ({
-      id: match.fixture?.id,
-      date: match.fixture?.date,
-      status: match.fixture?.status?.short || '',
-      league: match.league?.name || '',
-      round: match.league?.round || '',
-      venue: match.fixture?.venue?.name || 'Estadio pendiente',
-      homeTeam: match.teams?.home?.name || '',
-      awayTeam: match.teams?.away?.name || '',
-      homeLogo: match.teams?.home?.logo || '',
-      awayLogo: match.teams?.away?.logo || '',
-      homeGoals: match.goals?.home,
-      awayGoals: match.goals?.away,
-    }));
-
-    res.json(cleanFixtures);
+    res.json(data || []);
   } catch (error) {
     res.status(500).json({
       error: 'No se pudo obtener el calendario',
-      details: error.response?.data || error.message,
+      details: error.message,
+    });
+  }
+});
+
+app.get('/api/admin/calendar', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('calendar')
+      .select('*')
+      .order('date', { ascending: true });
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    res.json(data || []);
+  } catch (error) {
+    res.status(500).json({
+      error: 'No se pudo obtener el calendario',
+      details: error.message,
+    });
+  }
+});
+
+app.post('/api/admin/calendar', async (req, res) => {
+  try {
+    const calendar = req.body;
+
+    if (!Array.isArray(calendar)) {
+      return res.status(400).json({ error: 'El calendario debe ser un array' });
+    }
+
+    const cleanCalendar = calendar.map((match, index) => ({
+      id: Number(match.id || index + 1),
+      date: match.date || '',
+      status: match.status || '',
+      league: match.league || '',
+      round: match.round || '',
+      venue: match.venue || '',
+      homeTeam: match.homeTeam || '',
+      awayTeam: match.awayTeam || '',
+      homeLogo: match.homeLogo || '',
+      awayLogo: match.awayLogo || '',
+      homeGoals:
+        match.homeGoals === '' || match.homeGoals === null || match.homeGoals === undefined
+          ? null
+          : Number(match.homeGoals),
+      awayGoals:
+        match.awayGoals === '' || match.awayGoals === null || match.awayGoals === undefined
+          ? null
+          : Number(match.awayGoals),
+    }));
+
+    await supabase.from('calendar').delete().neq('id', 0);
+
+    const { error } = await supabase
+      .from('calendar')
+      .insert(cleanCalendar);
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({
+      error: 'No se pudo guardar el calendario',
+      details: error.message,
     });
   }
 });

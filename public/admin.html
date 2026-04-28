@@ -144,10 +144,22 @@
   <div id="standingsMsg" class="success"></div>
 </div>
 
+<div class="card">
+  <h2>Calendario</h2>
+
+  <textarea id="calendarJson" rows="14"></textarea>
+
+  <button onclick="saveCalendar()">Guardar calendario</button>
+  <div id="calendarMsg" class="success"></div>
+</div>
+
 
   <script>
   async function loadData() {
     try {
+const calendarRes = await fetch('/api/admin/calendar');
+const calendar = await calendarRes.json();
+document.getElementById('calendarJson').value = JSON.stringify(calendar, null, 2);
 const standingsRes = await fetch('/api/admin/standings');
 const standings = await standingsRes.json();
 document.getElementById('standingsJson').value = JSON.stringify(standings, null, 2);      
@@ -190,6 +202,21 @@ const nextMatchRes = await fetch('/api/admin/next-match');
       alert('Error cargando datos del panel. Mira la consola del navegador.');
     }
   }
+async function saveCalendar() {
+  try {
+    const calendar = JSON.parse(document.getElementById('calendarJson').value);
+
+    await fetch('/api/admin/calendar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(calendar)
+    });
+
+    document.getElementById('calendarMsg').innerText = 'Calendario guardado';
+  } catch (error) {
+    alert('El JSON del calendario no es válido. Revisa comas, llaves y comillas.');
+  }
+}
 async function saveStandings() {
   try {
     const standings = JSON.parse(document.getElementById('standingsJson').value);
