@@ -61,6 +61,10 @@
   </style>
 </head>
 <body>
+<button onclick="logout()" style="float:right; background:#c62828;">
+  Cerrar sesión
+</button>
+
   <h1>Panel de control básico</h1>
 
   <div class="card">
@@ -155,6 +159,16 @@
 
 
   <script>
+
+function logout() {
+  fetch('/admin.html', {
+    headers: {
+      Authorization: 'Basic ' + btoa('logout:logout')
+    }
+  }).finally(() => {
+    window.location.href = '/admin.html';
+  });
+}
   async function loadData() {
     try {
 const calendarRes = await fetch('/api/admin/calendar');
