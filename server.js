@@ -16,6 +16,44 @@ const supabase = createClient(
 
 app.use(cors());
 app.use(express.json());
+
+const requireAdmin = (req, res, next) => {
+  const auth = req.headers.authorization;
+
+  if (!auth || !auth.startsWith('Basic ')) {
+    res.setHeader('WWW-Authenticate', 'Basic realm="Panel Admin"');
+    return res.status(401).send('Acceso restringido');
+  }
+
+  const base64Credentials = auth.split(' ')[1];
+  const credentials = Buffer.from(base64Credentials, 'base64').toString('utf8');
+  const [user, password] = credentials.split(':');
+
+  if (
+    user === process.env.ADMIN_USER &&
+    password === process.env.ADMIN_PASSWORD
+  ) {
+    return next();
+  }
+
+  res.setHeader('WWW-Authenticate', 'Basic realm="Panel Admin"');
+  return res.status(401).send('Usuario o contraseña incorrectos');
+};
+
+// 🔐 proteger acceso al admin.html
+app.get('/admin.html', requireAdmin, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
+// 🔐 proteger POST del panel
+app.use('/api/admin', (req, res, next) => {
+  if (req.method === 'POST') {
+    return requireAdmin(req, res, next);
+  }
+  next();
+});
+
+// 👇 esto SIEMPRE al final
 app.use(express.static(path.join(__dirname, 'public')));
 
 const PORT = process.env.PORT || 3001;
