@@ -395,6 +395,65 @@ app.get('/test-supabase', async (req, res) => {
     url: process.env.SUPABASE_URL,
   });
 });
+// NOTICIAS - SUPABASE
+app.get('/api/admin/news', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('news')
+      .select('*')
+      .order('date', { ascending: false });
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    res.json(data || []);
+  } catch (error) {
+    res.status(500).json({
+      error: 'No se pudieron obtener las noticias',
+      details: error.message,
+    });
+  }
+});
+
+app.post('/api/admin/news', async (req, res) => {
+  try {
+    const news = req.body;
+
+    if (!Array.isArray(news)) {
+      return res.status(400).json({ error: 'Las noticias deben ser un array' });
+    }
+
+    await supabase.from('news').delete().neq('id', '');
+
+    const { error } = await supabase.from('news').insert(news);
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({
+      error: 'No se pudieron guardar las noticias',
+      details: error.message,
+    });
+  }
+});
+
+app.get('/news', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('news')
+      .select('*')
+      .order('date', { ascending: false });
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    res.json(data || []);
+  } catch (error) {
+    res.status(500).json({
+      error: 'No se pudieron obtener las noticias',
+      details: error.message,
+    });
+  }
+});
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Servidor funcionando en puerto ${PORT}`);

@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 
+
 type NextMatch = {
   teamName: string;
   opponent: string;
@@ -70,12 +71,28 @@ export default function HomeScreen() {
   };
 
   return (
+
+
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Image
         source={require('../../assets/images/escudo.png')}
         style={styles.logo}
       />
+<View style={styles.socialContainer}>
+  <Pressable
+    style={styles.socialButton}
+    onPress={() => Linking.openURL('https://www.albinegroscastellon.com')}
+  >
+    <Text style={styles.socialText}>🌐 Web</Text>
+  </Pressable>
 
+  <Pressable
+    style={styles.socialButton}
+    onPress={() => Linking.openURL('https://www.instagram.com/albinegroscastellon')}
+  >
+    <Text style={styles.socialText}>📸 Instagram</Text>
+  </Pressable>
+</View>
       <Text style={styles.title}>Albinegros Castellón</Text>
       <Text style={styles.subtitle}>Toda la información del club en una sola app</Text>
 
@@ -303,5 +320,26 @@ const styles = StyleSheet.create({
   height: 160,
   borderRadius: 12,
   marginBottom: 12,
+},
+socialContainer: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  marginBottom: 20,
+},
+
+socialButton: {
+  flex: 1,
+  backgroundColor: colors.card,
+  padding: 12,
+  borderRadius: 12,
+  alignItems: 'center',
+  marginHorizontal: 4,
+  borderWidth: 1,
+  borderColor: colors.border,
+},
+
+socialText: {
+  fontWeight: '700',
+  color: colors.text,
 },
 });

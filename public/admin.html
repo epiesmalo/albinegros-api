@@ -157,6 +157,15 @@
   <div id="calendarMsg" class="success"></div>
 </div>
 
+<div class="card">
+  <h2>Noticias</h2>
+
+  <textarea id="newsJson" rows="14"></textarea>
+
+  <button onclick="saveNews()">Guardar noticias</button>
+  <div id="newsMsg" class="success"></div>
+</div>
+
 
   <script>
 
@@ -178,7 +187,7 @@ const standingsRes = await fetch('/api/admin/standings');
 const standings = await standingsRes.json();
 document.getElementById('standingsJson').value = JSON.stringify(standings, null, 2);      
 const nextMatchRes = await fetch('/api/admin/next-match');
-      const nextMatch = await nextMatchRes.json();
+const nextMatch = await nextMatchRes.json();
 
       document.getElementById('teamName').value = nextMatch.teamName || '';
       document.getElementById('opponent').value = nextMatch.opponent || '';
@@ -197,6 +206,9 @@ const nextMatchRes = await fetch('/api/admin/next-match');
 
       const adsRes = await fetch('/api/admin/ads');
       const ads = await adsRes.json();
+const newsRes = await fetch('/api/admin/news');
+const news = await newsRes.json();
+document.getElementById('newsJson').value = JSON.stringify(news, null, 2);
 
       if (Array.isArray(ads) && ads[0]) {
         document.getElementById('ad1Image').value = ads[0].image || '';
@@ -247,6 +259,21 @@ async function saveStandings() {
   }
 }
 
+async function saveNews() {
+  try {
+    const news = JSON.parse(document.getElementById('newsJson').value);
+
+    await fetch('/api/admin/news', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(news)
+    });
+
+    document.getElementById('newsMsg').innerText = 'Noticias guardadas';
+  } catch (error) {
+    alert('El JSON de noticias no es válido.');
+  }
+}
   async function saveNextMatch() {
     const payload = {
       teamName: document.getElementById('teamName').value,
