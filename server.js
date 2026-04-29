@@ -202,14 +202,50 @@ app.post('/api/admin/next-match', async (req, res) => {
 });
 
 // QUIÉNES SOMOS - DE MOMENTO JSON
-app.get('/api/admin/about', (req, res) => {
-  const data = JSON.parse(fs.readFileSync(aboutPath, 'utf8'));
-  res.json(data);
+// QUIÉNES SOMOS - SUPABASE
+app.get('/api/admin/about', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('about')
+      .select('*')
+      .eq('id', '1')
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    res.json({
+      title: data.title,
+      text: data.text,
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: 'No se pudo obtener la sección Quiénes somos',
+      details: error.message,
+    });
+  }
 });
 
-app.post('/api/admin/about', (req, res) => {
-  fs.writeFileSync(aboutPath, JSON.stringify(req.body, null, 2), 'utf8');
-  res.json({ success: true });
+app.post('/api/admin/about', async (req, res) => {
+  try {
+    const payload = {
+      id: '1',
+      title: req.body.title,
+      text: req.body.text,
+    };
+
+    const { error } = await supabase
+      .from('about')
+      .upsert(payload);
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({
+      error: 'No se pudo guardar la sección Quiénes somos',
+      details: error.message,
+    });
+  }
 });
 
 // SPONSORS - SUPABASE

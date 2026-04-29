@@ -19,32 +19,37 @@ export default function MediaScreen() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(1);
+  const [loadingAudio, setLoadingAudio] = useState(false);
 
   const loadSound = async (song: any, index: number) => {
-    try {
-      if (soundRef.current) {
-        await soundRef.current.unloadAsync();
-      }
+  try {
+    setLoadingAudio(true);
+    setCurrentSong(song);
+    setCurrentIndex(index);
 
-      const { sound } = await Audio.Sound.createAsync(song.file, {
-        shouldPlay: true,
-      });
-
-      sound.setOnPlaybackStatusUpdate((status: any) => {
-        if (status.isLoaded) {
-          setPosition(status.positionMillis);
-          setDuration(status.durationMillis || 1);
-          setIsPlaying(status.isPlaying);
-        }
-      });
-
-      soundRef.current = sound;
-      setCurrentSong(song);
-      setCurrentIndex(index);
-    } catch (error) {
-      console.log('Error cargando audio:', error);
+    if (soundRef.current) {
+      await soundRef.current.unloadAsync();
     }
-  };
+
+    const { sound } = await Audio.Sound.createAsync(song.file, {
+      shouldPlay: true,
+    });
+
+    sound.setOnPlaybackStatusUpdate((status: any) => {
+      if (status.isLoaded) {
+        setPosition(status.positionMillis);
+        setDuration(status.durationMillis || 1);
+        setIsPlaying(status.isPlaying);
+      }
+    });
+
+    soundRef.current = sound;
+  } catch (error) {
+    console.log('Error cargando audio:', error);
+  } finally {
+    setLoadingAudio(false);
+  }
+};
 
   const togglePlayPause = async () => {
     if (!soundRef.current) return;
@@ -119,7 +124,9 @@ export default function MediaScreen() {
 
       {currentSong && (
         <View style={styles.player}>
-          <Text style={styles.nowPlaying}>{currentSong.title}</Text>
+          <Text style={styles.nowPlaying}>
+  {loadingAudio ? `Cargando ${currentSong.title}...` : currentSong.title}
+</Text>
 
           <Slider
             style={{ width: '100%', height: 40 }}
@@ -143,7 +150,7 @@ export default function MediaScreen() {
 
             <Pressable style={styles.playButton} onPress={togglePlayPause}>
               <Text style={styles.playButtonText}>
-                {isPlaying ? '⏸' : '▶️'}
+                {loadingAudio ? 'Cargando...' : isPlaying ? '⏸' : '▶️'}
               </Text>
             </Pressable>
 
