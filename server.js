@@ -455,6 +455,81 @@ app.get('/news', async (req, res) => {
   }
 });
 
+app.get('/get-token', async (req, res) => {
+  try {
+    const code = req.query.code;
+
+    const response = await fetch('https://api.instagram.com/oauth/access_token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        client_id: process.env.INSTAGRAM_CLIENT_ID,
+        client_secret: process.env.INSTAGRAM_CLIENT_SECRET,
+        grant_type: 'authorization_code',
+        redirect_uri: 'https://localhost/',
+        code,
+      }),
+    });
+
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    res.json({ error: error.message });
+  }
+});
+
+app.get('/instagram/posts', async (req, res) => {
+  try {
+    const response = await fetch(
+      `https://graph.instagram.com/me/media?fields=id,caption,media_url,permalink,timestamp&access_token=${process.env.INSTAGRAM_ACCESS_TOKEN}`
+    );
+
+    const data = await response.json();
+
+    res.json(data);
+  } catch (error) {
+    res.json({ error: error.message });
+  }
+});
+
+app.get('/instagram/sync', async (req, res) => {
+  try {
+    const token = process.env.INSTAGRAM_ACCESS_TOKEN.trim();
+
+    const response = await fetch(
+      `https://graph.instagram.com/me/media?fields=id,caption,media_url,permalink,timestamp&access_token=${token}`
+    );
+
+    const data = await response.json();
+
+    for (const post of data.data) {
+      // comprobar si ya existe
+      const { data: existing } = await supabase
+        .from('news')
+        .select('*')
+        .eq('instagram_id', post.id)
+        .single();
+
+      if (!existing) {
+        await supabase.from('news').insert({
+          title: post.caption || 'Post de Instagram',
+          content: post.caption || '',
+          image_url: post.media_url,
+          source_url: post.permalink,
+          published_at: post.timestamp,
+          instagram_id: post.id
+        });
+      }
+    }
+
+    res.json({ success: true, posts: data.data.length });
+  } catch (error) {
+    res.json({ error: error.message });
+  }
+});
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Servidor funcionando en puerto ${PORT}`);
 });
