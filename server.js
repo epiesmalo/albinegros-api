@@ -500,8 +500,8 @@ app.get('/instagram/sync', async (req, res) => {
     const token = process.env.INSTAGRAM_ACCESS_TOKEN?.trim();
 
     const response = await fetch(
-      `https://graph.instagram.com/me/media?fields=id,caption,media_url,permalink,timestamp&access_token=${token}`
-    );
+  `https://graph.instagram.com/me/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp&access_token=${token}`
+);
 
     const result = await response.json();
 
@@ -534,7 +534,7 @@ const { error: insertError } = await supabase.from('news').insert({
   id: post.id,
   title: post.caption ? post.caption.slice(0, 80) : 'Post de Instagram',
   description: post.caption || '',
-  image: post.media_url || '',
+  image: post.thumbnail_url || post.media_url || '',
   link: post.permalink || '',
   date: post.timestamp || new Date().toISOString(),
   source: 'instagram',
