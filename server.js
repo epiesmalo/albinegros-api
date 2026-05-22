@@ -4,6 +4,7 @@ require('dotenv').config();
 const fs = require('fs');
 const healthRoutes = require('./routes/health.routes');
 const newsRoutes = require('./routes/news.routes');
+const instagramRoutes = require('./routes/instagram.routes');
 const standingsRoutes = require('./routes/standings.routes');
 const calendarRoutes = require('./routes/calendar.routes');
 const path = require('path');
@@ -24,6 +25,7 @@ app.use(express.json());
 app.use('/', healthRoutes);
 app.use('/', calendarRoutes);
 app.use('/', standingsRoutes);
+app.use('/', instagramRoutes);
 app.use('/', newsRoutes);
 
 const requireAdmin = (req, res, next) => {
@@ -427,85 +429,6 @@ app.get('/get-token', async (req, res) => {
   }
 });
 
-app.get('/instagram/posts', async (req, res) => {
-  try {
-    const response = await fetch(
-      `https://graph.instagram.com/me/media?fields=id,caption,media_url,permalink,timestamp&access_token=${process.env.INSTAGRAM_ACCESS_TOKEN}`
-    );
-
-    const data = await response.json();
-
-    res.json(data);
-  } catch (error) {
-    res.json({ error: error.message });
-  }
-});
-
-app.get('/instagram/sync', async (req, res) => {
-  try {
-    const token = process.env.INSTAGRAM_ACCESS_TOKEN?.trim();
-
-  const response = await fetch(
-  `https://graph.instagram.com/me/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp&access_token=${token}`
-);
-
-    const result = await response.json();
-
-    if (result.error) {
-      return res.status(500).json(result);
-    }
-
-    let inserted = 0;
-    let skipped = 0;
-    const errors = [];
-
-    for (const post of result.data || []) {
-      const { data: existing, error: existingError } = await supabase
-        .from('news')
-        .select('id')
-        .eq('instagram_id', post.id)
-        .maybeSingle();
-
-      if (existingError) {
-        errors.push(existingError.message);
-        continue;
-      }
-
-      if (existing) {
-        skipped++;
-        continue;
-      }
-
-const { error: insertError } = await supabase.from('news').insert({
-  id: post.id,
-  title: post.caption ? post.caption.slice(0, 80) : 'Post de Instagram',
-  description: post.caption || '',
-  image: post.thumbnail_url || post.media_url || '',
-  link: post.permalink || '',
-  date: post.timestamp || new Date().toISOString(),
-  source: 'instagram',
-  instagram_id: post.id,
-});
-
-      if (insertError) {
-        console.log('ERROR INSERT NEWS:', insertError);
-        errors.push(insertError.message);
-      } else {
-        inserted++;
-      }
-    }
-
-    res.json({
-      success: errors.length === 0,
-      posts: result.data?.length || 0,
-      inserted,
-      skipped,
-      errors,
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Servidor funcionando en puerto ${PORT}`);
