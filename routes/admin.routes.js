@@ -177,4 +177,61 @@ router.post('/api/admin/standings', adminAuth, async (req, res) => {
   }
 });
 
+router.get('/api/admin/next-match', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('next_match')
+      .select('*')
+      .eq('id', '1')
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    res.json({
+      teamName: data.teamName,
+      opponent: data.opponent,
+      date: data.date,
+      time: data.time,
+      stadium: data.stadium,
+      competition: data.competition,
+      teamLogo: data.teamlogo,
+      opponentLogo: data.opponentLogo,
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: 'No se pudo obtener el próximo partido',
+      details: error.message,
+    });
+  }
+});
+
+router.post('/api/admin/next-match', adminAuth, async (req, res) => {
+  try {
+    const payload = {
+      id: '1',
+      teamName: req.body.teamName,
+      opponent: req.body.opponent,
+      date: req.body.date,
+      time: req.body.time,
+      stadium: req.body.stadium,
+      competition: req.body.competition,
+      teamlogo: req.body.teamLogo,
+      opponentLogo: req.body.opponentLogo,
+    };
+
+    const { error } = await supabase
+      .from('next_match')
+      .upsert(payload);
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({
+      error: 'No se pudo guardar el próximo partido',
+      details: error.message,
+    });
+  }
+});
+
 module.exports = router;

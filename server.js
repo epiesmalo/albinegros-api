@@ -73,64 +73,6 @@ const PORT = process.env.PORT || 3001;
 const aboutPath = path.join(__dirname, 'data', 'about.json');
 
 
-// PRÓXIMO PARTIDO - SUPABASE
-app.get('/api/admin/next-match', async (req, res) => {
-  try {
-    const { data, error } = await supabase
-      .from('next_match')
-      .select('*')
-      .eq('id', '1')
-      .single();
-
-    if (error) return res.status(500).json({ error: error.message });
-
-    res.json({
-      teamName: data.teamName,
-      opponent: data.opponent,
-      date: data.date,
-      time: data.time,
-      stadium: data.stadium,
-      competition: data.competition,
-      teamLogo: data.teamlogo,        // 👈 aquí
-      opponentLogo: data.opponentLogo // 👈 aquí
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: 'No se pudo obtener el próximo partido',
-      details: error.message,
-    });
-  }
-});
-
-app.post('/api/admin/next-match', async (req, res) => {
-  try {
-    const payload = {
-      id: '1',
-      teamName: req.body.teamName,
-      opponent: req.body.opponent,
-      date: req.body.date,
-      time: req.body.time,
-      stadium: req.body.stadium,
-      competition: req.body.competition,
-      teamlogo: req.body.teamLogo,        // 👈 aquí
-      opponentLogo: req.body.opponentLogo // 👈 aquí
-    };
-
-    const { error } = await supabase
-      .from('next_match')
-      .upsert(payload);
-
-    if (error) return res.status(500).json({ error: error.message });
-
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({
-      error: 'No se pudo guardar el próximo partido',
-      details: error.message,
-     });
-  }
-});
-
 // QUIÉNES SOMOS - DE MOMENTO JSON
 // QUIÉNES SOMOS - SUPABASE
 app.get('/api/admin/about', async (req, res) => {
