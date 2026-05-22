@@ -2,6 +2,7 @@ require('dotenv').config();
 
 
 const fs = require('fs');
+const healthRoutes = require('./routes/health.routes');
 const path = require('path');
 const express = require('express');
 const axios = require('axios');
@@ -17,6 +18,7 @@ const supabase = createClient(
 
 app.use(cors());
 app.use(express.json());
+app.use('/', healthRoutes);
 
 const requireAdmin = (req, res, next) => {
   const auth = req.headers.authorization;
