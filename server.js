@@ -73,48 +73,6 @@ const PORT = process.env.PORT || 3001;
 const aboutPath = path.join(__dirname, 'data', 'about.json');
 
 
-// SPONSORS - SUPABASE
-app.get('/api/admin/ads', async (req, res) => {
-  try {
-    const { data, error } = await supabase
-      .from('ads')
-      .select('*')
-      .order('id', { ascending: true });
-
-    if (error) return res.status(500).json({ error: error.message });
-
-    res.json(data || []);
-  } catch (error) {
-    res.status(500).json({
-      error: 'No se pudieron obtener los sponsors',
-      details: error.message,
-    });
-  }
-});
-
-app.post('/api/admin/ads', async (req, res) => {
-  try {
-    const ads = req.body;
-
-    if (!Array.isArray(ads)) {
-      return res.status(400).json({ error: 'Los sponsors deben ser un array' });
-    }
-
-    await supabase.from('ads').delete().neq('id', '');
-
-    const { error } = await supabase.from('ads').insert(ads);
-
-    if (error) return res.status(500).json({ error: error.message });
-
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({
-      error: 'No se pudieron guardar los sponsors',
-      details: error.message,
-    });
-  }
-});
-
 app.get('/test-supabase', async (req, res) => {
   res.json({
     hasUrl: !!process.env.SUPABASE_URL,
