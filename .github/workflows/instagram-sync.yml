@@ -1,0 +1,37 @@
+name: Sync Instagram
+
+on:
+  schedule:
+    - cron: "20 8 * * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Wake API
+        run: |
+          curl -L --max-time 30 https://api.albinegroscastellon.com/news || true
+          sleep 120
+
+      - name: Sync Instagram with retries
+        run: |
+          for i in {1..10}; do
+            echo "Intento $i..."
+
+            STATUS=$(curl -L -s -o response.txt -w "%{http_code}" --max-time 30 https://api.albinegroscastellon.com/instagram/sync)
+
+            echo "Status: $STATUS"
+
+            if [ "$STATUS" = "200" ]; then
+              echo "Sync correcto"
+              exit 0
+            fi
+
+            echo "Falló, esperando 60 segundos..."
+            sleep 60
+          done
+
+          echo "Sync falló después de varios intentos"
+          exit 1

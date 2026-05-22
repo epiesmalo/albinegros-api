@@ -40,12 +40,15 @@ export default function HomeScreen() {
   };
 
   const quickLinks = [
-    { id: '1', title: 'Clasificación', route: '/(tabs)/explore', icon: 'trophy' },
-    { id: '2', title: 'Calendario', route: '/(tabs)/calendar', icon: 'calendar' },
-    { id: '3', title: 'Media', route: '/(tabs)/media', icon: 'musical-notes' },
-    { id: '4', title: 'Galería', route: '/(tabs)/gallery', icon: 'images' },
-    { id: '5', title: '¿Quiénes somos?', route: '/about', icon: 'information-circle' },
-  ] as const;
+  { id: '1', title: 'Clasificación', route: '/(tabs)/explore', icon: 'trophy' },
+  { id: '2', title: 'Calendario', route: '/(tabs)/calendar', icon: 'calendar' },
+  { id: '3', title: 'Media', route: '/(tabs)/media', icon: 'musical-notes' },
+  { id: '4', title: 'Galería', route: '/(tabs)/gallery', icon: 'images' },
+  { id: '5', title: '¿Quiénes somos?', route: '/about', icon: 'information-circle' },
+
+  // 👇 NUEVO
+  { id: '6', title: 'Tienda', route: '/(tabs)/shop', icon: 'bag-handle' },
+] as const;
 
   useEffect(() => {
     loadHomeData();
@@ -75,7 +78,7 @@ export default function HomeScreen() {
 
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Image
-        source={require('../../assets/images/escudo.png')}
+        source={require('../../assets/images/escudo1.png')}
         style={styles.logo}
       />
 <View style={styles.socialContainer}>
@@ -128,6 +131,8 @@ export default function HomeScreen() {
       </View>
 
       <Text style={styles.sectionTitle}>Accesos rápidos</Text>
+      
+
 
       <View style={styles.quickLinksGrid}>
         {quickLinks.map((item) => (
@@ -147,6 +152,7 @@ export default function HomeScreen() {
       <Text style={styles.sectionTitle}>Patrocinadores</Text>
 
       {ads.map((ad) => (
+  
   <Pressable
     key={ad.id}
     style={styles.adCard}
@@ -158,6 +164,7 @@ export default function HomeScreen() {
     <Text style={styles.adText}>{ad.text}</Text>
     <Text style={styles.adLink}>Abrir anuncio</Text>
   </Pressable>
+  
 ))}
     </ScrollView>
   );

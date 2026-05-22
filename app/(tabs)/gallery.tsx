@@ -30,6 +30,19 @@ export default function GalleryScreen() {
     [selectedCategory]
   );
 
+  const allImages = useMemo(() => {
+    return Object.values(galleryImages).flat() as GalleryItem[];
+  }, []);
+
+  const photoOfTheDay = useMemo(() => {
+    if (allImages.length === 0) return null;
+
+    const todayIndex =
+      Math.floor(new Date().setHours(0, 0, 0, 0) / 86400000) % allImages.length;
+
+    return allImages[todayIndex];
+  }, [allImages]);
+
   const selectedImage =
     selectedImageIndex !== null && images[selectedImageIndex]
       ? images[selectedImageIndex]
@@ -61,6 +74,14 @@ export default function GalleryScreen() {
     <>
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         <Text style={styles.screenTitle}>Galería</Text>
+
+        {photoOfTheDay && (
+          <View style={styles.photoOfDayCard}>
+            <Text style={styles.photoOfDayLabel}>Foto albinegra del día</Text>
+            <Image source={photoOfTheDay.image} style={styles.photoOfDayImage} />
+            <Text style={styles.photoOfDayTitle}>{photoOfTheDay.title}</Text>
+          </View>
+        )}
 
         <View style={styles.menuContainer}>
           {galleryCategories.map((category) => (
@@ -179,6 +200,31 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.text,
     marginBottom: 18,
+  },
+  photoOfDayCard: {
+    backgroundColor: colors.card,
+    borderRadius: 18,
+    padding: 12,
+    marginBottom: 18,
+    borderWidth: 2,
+    borderColor: colors.accent,
+  },
+  photoOfDayLabel: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: colors.accent,
+    marginBottom: 10,
+  },
+  photoOfDayImage: {
+    width: '100%',
+    height: 240,
+    borderRadius: 14,
+    marginBottom: 10,
+  },
+  photoOfDayTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.text,
   },
   menuContainer: {
     flexDirection: 'row',
