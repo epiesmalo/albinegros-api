@@ -4,6 +4,7 @@ require('dotenv').config();
 const fs = require('fs');
 const healthRoutes = require('./routes/health.routes');
 const newsRoutes = require('./routes/news.routes');
+const standingsRoutes = require('./routes/standings.routes');
 const calendarRoutes = require('./routes/calendar.routes');
 const path = require('path');
 const express = require('express');
@@ -22,6 +23,7 @@ app.use(cors());
 app.use(express.json());
 app.use('/', healthRoutes);
 app.use('/', calendarRoutes);
+app.use('/', standingsRoutes);
 app.use('/', newsRoutes);
 
 const requireAdmin = (req, res, next) => {
@@ -348,34 +350,6 @@ app.post('/api/admin/standings', async (req, res) => {
   }
 });
 
-app.get('/standings/first-team', async (req, res) => {
-  try {
-    const { data, error } = await supabase
-      .from('standings')
-      .select('*')
-      .order('position', { ascending: true });
-
-    if (error) return res.status(500).json({ error: error.message });
-
-    const cleanData = (data || []).map((team) => ({
-      position: team.position,
-      team: team.team,
-      logo: team.logo,
-      points: team.points,
-      playedGames: team.playedgames,
-      won: team.won,
-      draw: team.draw,
-      lost: team.lost,
-    }));
-
-    res.json(cleanData);
-  } catch (error) {
-    res.status(500).json({
-      error: 'No se pudo obtener la clasificación',
-      details: error.message,
-    });
-  }
-});
 
 app.get('/test-supabase', async (req, res) => {
   res.json({
