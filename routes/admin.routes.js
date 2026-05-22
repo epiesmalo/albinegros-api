@@ -109,4 +109,72 @@ router.post('/api/admin/calendar', adminAuth, async (req, res) => {
   }
 });
 
+router.get('/api/admin/standings', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('standings')
+      .select('*')
+      .order('position', { ascending: true });
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    const cleanData = (data || []).map((team) => ({
+      id: team.id,
+      position: team.position,
+      team: team.team,
+      logo: team.logo,
+      points: team.points,
+      playedgames: team.playedgames,
+      playedGames: team.playedgames,
+      won: team.won,
+      draw: team.draw,
+      lost: team.lost,
+    }));
+
+    res.json(cleanData);
+  } catch (error) {
+    res.status(500).json({
+      error: 'No se pudo obtener la clasificación',
+      details: error.message,
+    });
+  }
+});
+
+router.post('/api/admin/standings', adminAuth, async (req, res) => {
+  try {
+    const standings = req.body;
+
+    if (!Array.isArray(standings)) {
+      return res.status(400).json({ error: 'La clasificación debe ser un array' });
+    }
+
+    const cleanStandings = standings.map((team, index) => ({
+      id: team.id || index + 1,
+      position: Number(team.position || index + 1),
+      team: team.team || '',
+      logo: team.logo || '',
+      points: Number(team.points || 0),
+      playedgames: Number(team.playedgames ?? team.playedGames ?? 0),
+      won: Number(team.won || 0),
+      draw: Number(team.draw || 0),
+      lost: Number(team.lost || 0),
+    }));
+
+    await supabase.from('standings').delete().neq('id', 0);
+
+    const { error } = await supabase
+      .from('standings')
+      .insert(cleanStandings);
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({
+      error: 'No se pudo guardar la clasificación',
+      details: error.message,
+    });
+  }
+});
+
 module.exports = router;
