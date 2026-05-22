@@ -6,6 +6,7 @@ const healthRoutes = require('./routes/health.routes');
 const newsRoutes = require('./routes/news.routes');
 const instagramRoutes = require('./routes/instagram.routes');
 const standingsRoutes = require('./routes/standings.routes');
+const adminRoutes = require('./routes/admin.routes');
 const calendarRoutes = require('./routes/calendar.routes');
 const path = require('path');
 const express = require('express');
@@ -25,6 +26,7 @@ app.use(express.json());
 app.use('/', healthRoutes);
 app.use('/', calendarRoutes);
 app.use('/', standingsRoutes);
+app.use('/', adminRoutes);
 app.use('/', instagramRoutes);
 app.use('/', newsRoutes);
 
@@ -359,47 +361,6 @@ app.get('/test-supabase', async (req, res) => {
     hasKey: !!process.env.SUPABASE_KEY,
     url: process.env.SUPABASE_URL,
   });
-});
-// NOTICIAS - SUPABASE
-app.get('/api/admin/news', async (req, res) => {
-  try {
-    const { data, error } = await supabase
-      .from('news')
-      .select('*')
-      .order('date', { ascending: false });
-
-    if (error) return res.status(500).json({ error: error.message });
-
-    res.json(data || []);
-  } catch (error) {
-    res.status(500).json({
-      error: 'No se pudieron obtener las noticias',
-      details: error.message,
-    });
-  }
-});
-
-app.post('/api/admin/news', async (req, res) => {
-  try {
-    const news = req.body;
-
-    if (!Array.isArray(news)) {
-      return res.status(400).json({ error: 'Las noticias deben ser un array' });
-    }
-
-    await supabase.from('news').delete().neq('id', '');
-
-    const { error } = await supabase.from('news').insert(news);
-
-    if (error) return res.status(500).json({ error: error.message });
-
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({
-      error: 'No se pudieron guardar las noticias',
-      details: error.message,
-    });
-  }
 });
 
 
