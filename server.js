@@ -73,53 +73,6 @@ const PORT = process.env.PORT || 3001;
 const aboutPath = path.join(__dirname, 'data', 'about.json');
 
 
-// QUIÉNES SOMOS - DE MOMENTO JSON
-// QUIÉNES SOMOS - SUPABASE
-app.get('/api/admin/about', async (req, res) => {
-  try {
-    const { data, error } = await supabase
-      .from('about')
-      .select('*')
-      .eq('id', '1')
-      .single();
-
-    if (error) return res.status(500).json({ error: error.message });
-
-    res.json({
-      title: data.title,
-      text: data.text,
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: 'No se pudo obtener la sección Quiénes somos',
-      details: error.message,
-    });
-  }
-});
-
-app.post('/api/admin/about', async (req, res) => {
-  try {
-    const payload = {
-      id: '1',
-      title: req.body.title,
-      text: req.body.text,
-    };
-
-    const { error } = await supabase
-      .from('about')
-      .upsert(payload);
-
-    if (error) return res.status(500).json({ error: error.message });
-
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({
-      error: 'No se pudo guardar la sección Quiénes somos',
-      details: error.message,
-    });
-  }
-});
-
 // SPONSORS - SUPABASE
 app.get('/api/admin/ads', async (req, res) => {
   try {
