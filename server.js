@@ -4,6 +4,7 @@ require('dotenv').config();
 const fs = require('fs');
 const healthRoutes = require('./routes/health.routes');
 const newsRoutes = require('./routes/news.routes');
+const calendarRoutes = require('./routes/calendar.routes');
 const path = require('path');
 const express = require('express');
 const axios = require('axios');
@@ -20,6 +21,7 @@ const supabase = createClient(
 app.use(cors());
 app.use(express.json());
 app.use('/', healthRoutes);
+app.use('/', calendarRoutes);
 app.use('/', newsRoutes);
 
 const requireAdmin = (req, res, next) => {
@@ -65,24 +67,6 @@ const PORT = process.env.PORT || 3001;
 const aboutPath = path.join(__dirname, 'data', 'about.json');
 
 // CALENDARIO
-// CALENDARIO - SUPABASE
-app.get('/calendar/first-team', async (req, res) => {
-  try {
-    const { data, error } = await supabase
-      .from('calendar')
-      .select('*')
-      .order('date', { ascending: true });
-
-    if (error) return res.status(500).json({ error: error.message });
-
-    res.json(data || []);
-  } catch (error) {
-    res.status(500).json({
-      error: 'No se pudo obtener el calendario',
-      details: error.message,
-    });
-  }
-});
 
 app.get('/api/admin/calendar', async (req, res) => {
   try {
