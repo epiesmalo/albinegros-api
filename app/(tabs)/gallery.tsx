@@ -3,12 +3,13 @@ import * as MediaLibrary from 'expo-media-library';
 
 import { useMemo, useState } from 'react';
 import {
-Alert,
+  Alert,
   Dimensions,
   FlatList,
   Modal,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   View,
@@ -85,49 +86,76 @@ export default function GalleryScreen() {
   };
 
   const downloadImage = async () => {
-  if (!selectedImage) return;
+    if (!selectedImage) return;
 
-  try {
-   const permission = await MediaLibrary.requestPermissionsAsync(false, ['photo']);
+    try {
+      const permission =
+        await MediaLibrary.requestPermissionsAsync(false, ['photo']);
 
-    if (!permission.granted) {
-      Alert.alert(
-        'Permiso necesario',
-        'Necesitamos permiso para guardar la imagen en tu galería.'
+      if (!permission.granted) {
+        Alert.alert(
+          'Permiso necesario',
+          'Necesitamos permiso para guardar la imagen en tu galería.'
+        );
+        return;
+      }
+
+      const fileName = `${selectedImage.id}-${Date.now()}.jpg`;
+      const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+
+      const downloadResult = await FileSystem.downloadAsync(
+        selectedImage.image,
+        fileUri
       );
-      return;
+
+      if (downloadResult.status !== 200) {
+        Alert.alert(
+          'Error',
+          'No se pudo descargar la imagen desde el servidor.'
+        );
+        return;
+      }
+
+      const asset = await MediaLibrary.createAssetAsync(
+        downloadResult.uri
+      );
+
+      await MediaLibrary.createAlbumAsync(
+        'Albinegros Castellón',
+        asset,
+        false
+      );
+
+      Alert.alert(
+        'Guardado',
+        'La imagen se ha guardado en tu galería.'
+      );
+    } catch (error) {
+      console.log('ERROR DESCARGANDO IMAGEN:', error);
+
+      Alert.alert(
+        'Error',
+        'No se pudo guardar la imagen. Revisa permisos o conexión.'
+      );
     }
+  };
 
-    const fileName = `${selectedImage.id}-${Date.now()}.jpg`;
-    const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+  const shareImage = async () => {
+    if (!selectedImage) return;
 
-    const downloadResult = await FileSystem.downloadAsync(
-      selectedImage.image,
-      fileUri
-    );
-
-    if (downloadResult.status !== 200) {
-      Alert.alert('Error', 'No se pudo descargar la imagen desde el servidor.');
-      return;
+    try {
+      await Share.share({
+        message: `${selectedImage.title}\n${selectedImage.image}`,
+        url: selectedImage.image,
+        title: selectedImage.title,
+      });
+    } catch (error) {
+      Alert.alert(
+        'Error',
+        'No se pudo compartir la imagen.'
+      );
     }
-
-    const asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
-
-    await MediaLibrary.createAlbumAsync('Albinegros Castellón', asset, false);
-
-    Alert.alert(
-      'Guardado',
-      'La imagen se ha guardado en tu galería.'
-    );
-  } catch (error) {
-    console.log('ERROR DESCARGANDO IMAGEN:', error);
-
-    Alert.alert(
-      'Error',
-      'No se pudo guardar la imagen. Revisa permisos o conexión.'
-    );
-  }
-};
+  };
 
   const renderImage = ({
     item,
@@ -142,7 +170,9 @@ export default function GalleryScreen() {
           ? styles.wallpaperCard
           : styles.imageCard,
 
-        index % 2 === 0 ? styles.leftCard : styles.rightCard,
+        index % 2 === 0
+          ? styles.leftCard
+          : styles.rightCard,
       ]}
       onPress={() => openImage(index)}
     >
@@ -158,13 +188,18 @@ export default function GalleryScreen() {
         cachePolicy="disk"
       />
 
-      <Text style={styles.imageTitle} numberOfLines={2}>
+      <Text
+        style={styles.imageTitle}
+        numberOfLines={2}
+      >
         {item.title}
       </Text>
 
       {selectedCategory === 'fondos' && item.type && (
         <View style={styles.typeBadge}>
-          <Text style={styles.typeBadgeText}>{item.type}</Text>
+          <Text style={styles.typeBadgeText}>
+            {item.type}
+          </Text>
         </View>
       )}
     </Pressable>
@@ -182,7 +217,9 @@ export default function GalleryScreen() {
         contentContainerStyle={styles.content}
         ListHeaderComponent={
           <>
-            <Text style={styles.screenTitle}>Galería</Text>
+            <Text style={styles.screenTitle}>
+              Galería
+            </Text>
 
             {photoOfTheDay && (
               <Pressable style={styles.photoOfDayCard}>
@@ -204,7 +241,9 @@ export default function GalleryScreen() {
               </Pressable>
             )}
 
-            <Text style={styles.sectionTitle}>Categorías</Text>
+            <Text style={styles.sectionTitle}>
+              Categorías
+            </Text>
 
             <ScrollView
               horizontal
@@ -238,7 +277,9 @@ export default function GalleryScreen() {
             </ScrollView>
 
             <View style={styles.galleryHeader}>
-              <Text style={styles.sectionTitle}>Imágenes</Text>
+              <Text style={styles.sectionTitle}>
+                Imágenes
+              </Text>
 
               <Text style={styles.imageCount}>
                 {images.length} fotos
@@ -259,7 +300,9 @@ export default function GalleryScreen() {
             style={styles.closeButton}
             onPress={closeImage}
           >
-            <Text style={styles.closeButtonText}>Cerrar</Text>
+            <Text style={styles.closeButtonText}>
+              Cerrar
+            </Text>
           </Pressable>
 
           {selectedImage && (
@@ -288,14 +331,29 @@ export default function GalleryScreen() {
 
               <Text style={styles.counterText}>
                 {selectedImageIndex! + 1} / {images.length}
-            
               </Text>
-            
+
               {selectedCategory === 'fondos' && (
-  <Pressable style={styles.downloadButton} onPress={downloadImage}>
-    <Text style={styles.downloadButtonText}>Descargar fondo</Text>
-  </Pressable>
-)}
+                <View style={styles.wallpaperActions}>
+                  <Pressable
+                    style={styles.downloadButton}
+                    onPress={downloadImage}
+                  >
+                    <Text style={styles.downloadButtonText}>
+                      Descargar
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={styles.shareButton}
+                    onPress={shareImage}
+                  >
+                    <Text style={styles.shareButtonText}>
+                      Compartir
+                    </Text>
+                  </Pressable>
+                </View>
+              )}
 
               <View style={styles.navigationRow}>
                 <Pressable
@@ -315,12 +373,14 @@ export default function GalleryScreen() {
                 <Pressable
                   style={[
                     styles.navButton,
-                    selectedImageIndex === images.length - 1 &&
+                    selectedImageIndex ===
+                      images.length - 1 &&
                       styles.navButtonDisabled,
                   ]}
                   onPress={goToNext}
                   disabled={
-                    selectedImageIndex === images.length - 1
+                    selectedImageIndex ===
+                    images.length - 1
                   }
                 >
                   <Text style={styles.navButtonText}>
@@ -573,18 +633,35 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
+  wallpaperActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 14,
+  },
+
   downloadButton: {
-  backgroundColor: colors.accent,
-  paddingVertical: 12,
-  paddingHorizontal: 18,
-  borderRadius: 14,
-  marginBottom: 14,
-},
+    backgroundColor: colors.accent,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 14,
+  },
 
-downloadButtonText: {
-  color: '#fff',
-  fontWeight: '900',
-  fontSize: 14,
-},
+  downloadButtonText: {
+    color: '#fff',
+    fontWeight: '900',
+    fontSize: 14,
+  },
 
+  shareButton: {
+    backgroundColor: '#333',
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 14,
+  },
+
+  shareButtonText: {
+    color: '#fff',
+    fontWeight: '900',
+    fontSize: 14,
+  },
 });
