@@ -146,25 +146,29 @@ export const galleryImages = {
     },
   ],
 
-  fondos: [
+    fondos: [
     {
       id: 'f1',
-      title: 'Fondo 1',
+      title: 'Fondo móvil 1',
+      type: 'Móvil',
       image: 'https://www.albinegroscastellon.com/images/gallery/fondos/fondo-01.jpg',
     },
     {
       id: 'f2',
-      title: 'Fondo 2',
+      title: 'Fondo móvil 2',
+      type: 'Móvil',
       image: 'https://www.albinegroscastellon.com/images/gallery/fondos/fondo2.jpg',
     },
     {
       id: 'f3',
-      title: 'Fondo 3',
+      title: 'Poster albinegro 1',
+      type: 'Poster',
       image: 'https://www.albinegroscastellon.com/images/gallery/fondos/fondo3.jpg',
     },
     {
       id: 'f4',
-      title: 'Fondo 4',
+      title: 'Fondo pantalla 1',
+      type: 'Pantalla',
       image: 'https://www.albinegroscastellon.com/images/gallery/fondos/fondo4.jpg',
     },
   ],
