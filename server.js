@@ -1,28 +1,21 @@
 require('dotenv').config();
 
+const path = require('path');
+const express = require('express');
+const cors = require('cors');
 
-const fs = require('fs');
 const healthRoutes = require('./routes/health.routes');
 const newsRoutes = require('./routes/news.routes');
 const instagramRoutes = require('./routes/instagram.routes');
 const standingsRoutes = require('./routes/standings.routes');
 const adminRoutes = require('./routes/admin.routes');
 const calendarRoutes = require('./routes/calendar.routes');
-const path = require('path');
-const express = require('express');
-const axios = require('axios');
-const cors = require('cors');
-const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_KEY
-);
-
 app.use(cors());
 app.use(express.json());
+
 app.use('/', healthRoutes);
 app.use('/', calendarRoutes);
 app.use('/', standingsRoutes);
@@ -43,8 +36,8 @@ const requireAdmin = (req, res, next) => {
   const [user, password] = credentials.split(':');
 
   if (
-    user === process.env.ADMIN_USER &&
-    password === process.env.ADMIN_PASSWORD
+    user === process.env.ADMIN_USER?.trim() &&
+    password === process.env.ADMIN_PASSWORD?.trim()
   ) {
     return next();
   }
@@ -53,25 +46,11 @@ const requireAdmin = (req, res, next) => {
   return res.status(401).send('Usuario o contraseña incorrectos');
 };
 
-// 🔐 proteger acceso al admin.html
 app.get('/admin.html', requireAdmin, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
-// 🔐 proteger POST del panel
-app.use('/api/admin', (req, res, next) => {
-  if (req.method === 'POST') {
-    return requireAdmin(req, res, next);
-  }
-  next();
-});
-
-// 👇 esto SIEMPRE al final
 app.use(express.static(path.join(__dirname, 'public')));
-
-const PORT = process.env.PORT || 3001;
-const aboutPath = path.join(__dirname, 'data', 'about.json');
-
 
 app.get('/test-supabase', async (req, res) => {
   res.json({
@@ -80,8 +59,6 @@ app.get('/test-supabase', async (req, res) => {
     url: process.env.SUPABASE_URL,
   });
 });
-
-
 
 app.get('/get-token', async (req, res) => {
   try {
@@ -108,6 +85,7 @@ app.get('/get-token', async (req, res) => {
   }
 });
 
+const PORT = process.env.PORT || 3001;
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Servidor funcionando en puerto ${PORT}`);
