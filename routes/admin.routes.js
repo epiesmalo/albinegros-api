@@ -320,4 +320,64 @@ router.post('/api/admin/ads', adminAuth, async (req, res) => {
   }
 });
 
+// ==================== GALLERY ====================
+
+router.get('/api/admin/gallery', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('gallery')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return res.status(500).json({
+        error: error.message,
+      });
+    }
+
+    res.json(data || []);
+  } catch (error) {
+    res.status(500).json({
+      error: 'No se pudo obtener la galería',
+      details: error.message,
+    });
+  }
+});
+
+router.post('/api/admin/gallery', adminAuth, async (req, res) => {
+  try {
+    const gallery = req.body;
+
+    if (!Array.isArray(gallery)) {
+      return res.status(400).json({
+        error: 'La galería debe ser un array',
+      });
+    }
+
+    await supabase
+      .from('gallery')
+      .delete()
+      .neq('id', '');
+
+    const { error } = await supabase
+      .from('gallery')
+      .insert(gallery);
+
+    if (error) {
+      return res.status(500).json({
+        error: error.message,
+      });
+    }
+
+    res.json({
+      success: true,
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: 'No se pudo guardar la galería',
+      details: error.message,
+    });
+  }
+});
+
 module.exports = router;
