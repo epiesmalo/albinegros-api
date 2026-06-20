@@ -166,8 +166,46 @@
   <div id="newsMsg" class="success"></div>
 </div>
 
+<div class="card">
+  <h2>Galería</h2>
+
+  <label>Título</label>
+  <input id="galleryTitle" placeholder="Ej: Wallpaper Castalia" />
+
+  <label>Categoría</label>
+  <select id="galleryCategory">
+    <option value="tifos">Tifos</option>
+    <option value="castalia">Castalia</option>
+    <option value="jugadores">Jugadores</option>
+    <option value="vintage">Vintage</option>
+    <option value="aficion">Afición</option>
+    <option value="fondos">Fondos</option>
+  </select>
+
+  <label>Tipo</label>
+  <select id="galleryType">
+    <option value="">Normal</option>
+    <option value="Móvil">Móvil</option>
+    <option value="Poster">Poster</option>
+    <option value="Pantalla">Pantalla</option>
+  </select>
+
+  <label>URL imagen</label>
+  <input id="galleryImage" placeholder="https://www.albinegroscastellon.com/images/gallery/..." />
+
+  <button onclick="addGalleryImage()">Añadir imagen</button>
+ 
+
+  <div id="galleryMsg" class="success"></div>
+
+  <h3>Imágenes actuales</h3>
+  <div id="galleryList"></div>
+</div>
+
 
   <script>
+
+let galleryItems = [];
 
 function logout() {
   fetch('/admin.html', {
@@ -206,9 +244,9 @@ const nextMatch = await nextMatchRes.json();
 
       const adsRes = await fetch('/api/admin/ads');
       const ads = await adsRes.json();
-const newsRes = await fetch('/api/admin/news');
-const news = await newsRes.json();
-document.getElementById('newsJson').value = JSON.stringify(news, null, 2);
+const galleryRes = await fetch('/api/admin/gallery');
+galleryItems = await galleryRes.json();
+renderGalleryList();
 
       if (Array.isArray(ads) && ads[0]) {
         document.getElementById('ad1Image').value = ads[0].image || '';
@@ -272,6 +310,89 @@ async function saveNews() {
     document.getElementById('newsMsg').innerText = 'Noticias guardadas';
   } catch (error) {
     alert('El JSON de noticias no es válido.');
+  }
+}
+function renderGalleryList() {
+  const container = document.getElementById('galleryList');
+
+  if (!galleryItems.length) {
+    container.innerHTML = '<p>No hay imágenes todavía.</p>';
+    return;
+  }
+
+  container.innerHTML = galleryItems.map((item, index) => `
+    <div style="display:flex; gap:12px; align-items:center; border:1px solid #ddd; border-radius:12px; padding:10px; margin-bottom:10px;">
+      <img src="${item.image}" style="width:90px; height:70px; object-fit:cover; border-radius:8px;" />
+
+      <div style="flex:1;">
+        <strong>${item.title}</strong><br/>
+        <small>Categoría: ${item.category}</small><br/>
+        <small>Tipo: ${item.type || 'Normal'}</small>
+      </div>
+
+      <button onclick="deleteGalleryImage(${index})" style="background:#c62828;">
+        Eliminar
+      </button>
+    </div>
+  `).join('');
+}
+
+function addGalleryImage() {
+  const title = document.getElementById('galleryTitle').value.trim();
+  const category = document.getElementById('galleryCategory').value;
+  const type = document.getElementById('galleryType').value;
+  const image = document.getElementById('galleryImage').value.trim();
+
+  if (!title || !category || !image) {
+    alert('Rellena título, categoría y URL de imagen.');
+    return;
+  }
+
+  galleryItems.push({
+    id: `${category}-${Date.now()}`,
+    title,
+    category,
+    type,
+    image
+  });
+
+  document.getElementById('galleryTitle').value = '';
+  document.getElementById('galleryImage').value = '';
+  document.getElementById('galleryType').value = '';
+
+  renderGalleryList();
+saveGallery();
+}
+
+function deleteGalleryImage(index) {
+  if (!confirm('¿Eliminar esta imagen de la galería?')) return;
+
+  galleryItems.splice(index, 1);
+  renderGalleryList();
+}
+
+async function saveGallery() {
+  try {
+    const response = await fetch('/api/admin/gallery', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(galleryItems)
+    });
+
+    const result = await response.json();
+
+    console.log('RESULTADO GALERÍA:', result);
+
+    if (!response.ok) {
+      alert('Error guardando galería: ' + (result.error || 'Error desconocido'));
+      return;
+    }
+
+    document.getElementById('galleryMsg').innerText =
+      'Galería guardada correctamente';
+  } catch (error) {
+    console.error('ERROR SAVE GALLERY:', error);
+    alert('No se pudo guardar la galería.');
   }
 }
   async function saveNextMatch() {

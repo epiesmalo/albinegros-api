@@ -1,7 +1,7 @@
 import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Dimensions,
@@ -18,33 +18,69 @@ import {
 import { Image } from 'expo-image';
 import ImageZoom from 'react-native-image-pan-zoom';
 
-import { galleryCategories, galleryImages } from '../../data/galleryData';
 import { colors } from '../../theme/colors';
 
 type GalleryItem = {
   id: string;
   title: string;
   image: string;
+  category: string;
   type?: string;
 };
 
-const { width, height } = Dimensions.get('window');
+const galleryCategories = [
+  { id: 'tifos', title: 'Tifos' },
+  { id: 'castalia', title: 'Castalia' },
+  { id: 'jugadores', title: 'Jugadores' },
+  { id: 'vintage', title: 'Vintage' },
+  { id: 'aficion', title: 'Afición' },
+  { id: 'fondos', title: 'Fondos' },
+];
 
+const { width, height } = Dimensions.get('window');
 const CARD_GAP = 12;
 const CARD_WIDTH = (width - 16 * 2 - CARD_GAP) / 2;
 
 export default function GalleryScreen() {
-  const [selectedCategory, setSelectedCategory] = useState('tifos');
-  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
 
-  const images = useMemo(
-    () => galleryImages[selectedCategory as keyof typeof galleryImages] || [],
-    [selectedCategory]
+  const [selectedCategory, setSelectedCategory] = useState('tifos');
+
+  const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
+
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
+useEffect(() => {
+  loadGallery();
+}, []);
+
+const loadGallery = async () => {
+  try {
+
+    const response = await fetch(
+      'https://api.albinegroscastellon.com/api/admin/gallery'
+    );
+
+    const data = await response.json();
+
+    setGalleryItems(data);
+
+  } catch (error) {
+
+    console.log(
+      'Error cargando galería:',
+      error
+    );
+
+  }
+};
+const images = useMemo(() => {
+  return galleryItems.filter(
+    (item) => item.category === selectedCategory
   );
+}, [galleryItems, selectedCategory]);
 
   const allImages = useMemo(() => {
-    return Object.values(galleryImages).flat() as GalleryItem[];
-  }, []);
+  return galleryItems;
+}, [galleryItems]);
 
   const photoOfTheDay = useMemo(() => {
     if (allImages.length === 0) return null;
