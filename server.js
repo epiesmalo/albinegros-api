@@ -10,6 +10,7 @@ const instagramRoutes = require('./routes/instagram.routes');
 const standingsRoutes = require('./routes/standings.routes');
 const adminRoutes = require('./routes/admin.routes');
 const calendarRoutes = require('./routes/calendar.routes');
+const footballRoutes = require('./routes/football.routes');
 
 const app = express();
 
@@ -19,6 +20,7 @@ app.use(express.json());
 app.use('/', healthRoutes);
 app.use('/', calendarRoutes);
 app.use('/', standingsRoutes);
+app.use('/', footballRoutes);
 app.use('/', adminRoutes);
 app.use('/', instagramRoutes);
 app.use('/', newsRoutes);

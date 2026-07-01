@@ -1,5 +1,6 @@
 import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -26,6 +27,7 @@ type GalleryItem = {
   image: string;
   category: string;
   type?: string;
+  created_at?: string;
 };
 
 const galleryCategories = [
@@ -35,48 +37,75 @@ const galleryCategories = [
   { id: 'vintage', title: 'Vintage' },
   { id: 'aficion', title: 'Afición' },
   { id: 'fondos', title: 'Fondos' },
+  { id: 'favoritos', title: 'Favoritos' },
 ];
 
 const { width, height } = Dimensions.get('window');
 const CARD_GAP = 12;
 const CARD_WIDTH = (width - 16 * 2 - CARD_GAP) / 2;
+const FAVORITES_STORAGE_KEY = 'albinegros_gallery_favorites';
+
 
 export default function GalleryScreen() {
 
   const [selectedCategory, setSelectedCategory] = useState('tifos');
 
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
-
+  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
-useEffect(() => {
-  loadGallery();
-}, []);
 
-const loadGallery = async () => {
-  try {
+  useEffect(() => {
+    loadGallery();
+    loadFavorites();
+  }, []);
 
-    const response = await fetch(
-      'https://api.albinegroscastellon.com/api/admin/gallery'
-    );
+  const loadGallery = async () => {
+    try {
+      const response = await fetch(
+        'https://api.albinegroscastellon.com/api/admin/gallery'
+      );
 
-    const data = await response.json();
+      const data = await response.json();
 
-    setGalleryItems(data);
+      const sortedData = data.sort(
+        (a: GalleryItem, b: GalleryItem) =>
+          new Date(b.created_at || 0).getTime() -
+          new Date(a.created_at || 0).getTime()
+      );
 
-  } catch (error) {
+      setGalleryItems(sortedData);
+    } catch (error) {
+      console.log('Error cargando galería:', error);
+    }
+  };
 
-    console.log(
-      'Error cargando galería:',
-      error
-    );
+  const loadFavorites = async () => {
+    try {
+      const savedFavorites = await AsyncStorage.getItem(FAVORITES_STORAGE_KEY);
 
-  }
-};
-const images = useMemo(() => {
-  return galleryItems.filter(
-    (item) => item.category === selectedCategory
-  );
-}, [galleryItems, selectedCategory]);
+      if (savedFavorites) {
+        setFavoriteIds(JSON.parse(savedFavorites));
+      }
+    } catch (error) {
+      console.log('Error cargando favoritos:', error);
+    }
+  };
+
+  const getCategoryCount = (categoryId: string) => {
+    if (categoryId === 'favoritos') {
+      return galleryItems.filter((item) => favoriteIds.includes(item.id)).length;
+    }
+
+    return galleryItems.filter((item) => item.category === categoryId).length;
+  };
+
+  const images = useMemo(() => {
+    if (selectedCategory === 'favoritos') {
+      return galleryItems.filter((item) => favoriteIds.includes(item.id));
+    }
+
+    return galleryItems.filter((item) => item.category === selectedCategory);
+  }, [galleryItems, selectedCategory, favoriteIds]);
 
   const allImages = useMemo(() => {
   return galleryItems;
@@ -118,6 +147,31 @@ const images = useMemo(() => {
 
     if (selectedImageIndex < images.length - 1) {
       setSelectedImageIndex(selectedImageIndex + 1);
+    }
+  };
+
+  const isFavorite = (imageId: string) => {
+    return favoriteIds.includes(imageId);
+  };
+
+  const toggleFavorite = async (imageId: string) => {
+    try {
+      const updatedFavorites = favoriteIds.includes(imageId)
+        ? favoriteIds.filter((id) => id !== imageId)
+        : [...favoriteIds, imageId];
+
+      setFavoriteIds(updatedFavorites);
+
+      await AsyncStorage.setItem(
+        FAVORITES_STORAGE_KEY,
+        JSON.stringify(updatedFavorites)
+      );
+
+      if (selectedCategory === 'favoritos' && updatedFavorites.length === 0) {
+        setSelectedImageIndex(null);
+      }
+    } catch (error) {
+      console.log('Error guardando favorito:', error);
     }
   };
 
@@ -201,28 +255,40 @@ const images = useMemo(() => {
     index: number;
   }) => (
     <Pressable
-      style={[
-        selectedCategory === 'fondos'
-          ? styles.wallpaperCard
-          : styles.imageCard,
+  style={[
+    selectedCategory === 'fondos'
+      ? styles.wallpaperCard
+      : styles.imageCard,
 
-        index % 2 === 0
-          ? styles.leftCard
-          : styles.rightCard,
-      ]}
-      onPress={() => openImage(index)}
-    >
+    index % 2 === 0
+      ? styles.leftCard
+      : styles.rightCard,
+  ]}
+  onPress={() => openImage(index)}
+>
       <Image
-        source={{ uri: item.image }}
-        style={
-          selectedCategory === 'fondos'
-            ? styles.wallpaperImage
-            : styles.galleryImage
-        }
-        contentFit="cover"
-        transition={250}
-        cachePolicy="disk"
-      />
+  source={{ uri: item.image }}
+  style={
+    selectedCategory === 'fondos'
+      ? styles.wallpaperImage
+      : styles.galleryImage
+  }
+  contentFit="cover"
+  transition={250}
+  cachePolicy="disk"
+/>
+
+      <Pressable
+        style={styles.favoriteButton}
+        onPress={(event) => {
+          event.stopPropagation();
+          toggleFavorite(item.id);
+        }}
+      >
+        <Text style={styles.favoriteButtonText}>
+          {isFavorite(item.id) ? '❤️' : '🤍'}
+        </Text>
+      </Pressable>
 
       <Text
         style={styles.imageTitle}
@@ -266,7 +332,7 @@ const images = useMemo(() => {
                 <Image
                   source={{ uri: photoOfTheDay.image }}
                   style={styles.photoOfDayImage}
-                  contentFit="cover"
+                  contentFit="contain"
                   transition={250}
                   cachePolicy="disk"
                 />
@@ -306,7 +372,7 @@ const images = useMemo(() => {
                         styles.menuButtonTextActive,
                     ]}
                   >
-                    {category.title}
+                    {category.title} ({getCategoryCount(category.id)})
                   </Text>
                 </Pressable>
               ))}
@@ -368,6 +434,26 @@ const images = useMemo(() => {
               <Text style={styles.counterText}>
                 {selectedImageIndex! + 1} / {images.length}
               </Text>
+
+              <Pressable
+                style={[
+                  styles.modalFavoriteButton,
+                  selectedImage &&
+                    isFavorite(selectedImage.id) &&
+                    styles.modalFavoriteButtonActive,
+                ]}
+                onPress={() => {
+                  if (selectedImage) {
+                    toggleFavorite(selectedImage.id);
+                  }
+                }}
+              >
+                <Text style={styles.modalFavoriteButtonText}>
+                  {selectedImage && isFavorite(selectedImage.id)
+                    ? '❤️ Quitar de favoritos'
+                    : '🤍 Añadir a favoritos'}
+                </Text>
+              </Pressable>
 
               {selectedCategory === 'fondos' && (
                 <View style={styles.wallpaperActions}>
@@ -475,8 +561,8 @@ const styles = StyleSheet.create({
 
   photoOfDayImage: {
     width: '100%',
-    height: 245,
-    borderRadius: 16,
+    height: 380,
+    borderRadius: 14,
     marginBottom: 10,
   },
 
@@ -596,6 +682,40 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
 
+  favoriteButton: {
+    position: 'absolute',
+    top: 14,
+    left: 14,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  favoriteButtonText: {
+    fontSize: 18,
+  },
+
+  modalFavoriteButton: {
+    backgroundColor: '#333',
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 14,
+    marginBottom: 14,
+  },
+
+  modalFavoriteButtonActive: {
+    backgroundColor: colors.accent,
+  },
+
+  modalFavoriteButtonText: {
+    color: '#fff',
+    fontWeight: '900',
+    fontSize: 14,
+  },
+
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.96)',
@@ -700,4 +820,5 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     fontSize: 14,
   },
+  
 });
