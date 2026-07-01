@@ -128,7 +128,15 @@ router.post('/api/football/sync-calendar', async (req, res) => {
     const { error } = await supabase.from('calendar').insert(rows);
 
     if (error) throw error;
+await supabase
+  .from('calendar')
+  .update({ homeLogo: CASTELLON_LOGO })
+  .ilike('homeTeam', '%Castell%');
 
+await supabase
+  .from('calendar')
+  .update({ awayLogo: CASTELLON_LOGO })
+  .ilike('awayTeam', '%Castell%');
     res.json({
       ok: true,
       inserted: rows.length,
