@@ -2,7 +2,7 @@ name: Football Sync
 
 on:
   schedule:
-    - cron: "0 2 * * *"     # calendario cada día 02:00 UTC
+    - cron: "0 1 * * *"     # calendario cada día 02:00 UTC
     - cron: "0 6,12,18,22 * * *"  # clasificación 4 veces al día UTC
   workflow_dispatch:
 
