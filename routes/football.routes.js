@@ -12,7 +12,13 @@ const TIMEZONE = process.env.FOOTBALL_TIMEZONE || 'Europe/Madrid';
 const CASTELLON_LOGO = 'https://www.albinegroscastellon.com/castellon.png';
 
 const getTeamLogo = (teamName, apiLogo) => {
-  if (teamName === 'Castellón') {
+  const normalizedName = String(teamName || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+  if (normalizedName.includes('castellon')) {
     return CASTELLON_LOGO;
   }
 
