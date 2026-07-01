@@ -9,6 +9,16 @@ const LEAGUE_ID = process.env.FOOTBALL_LEAGUE_ID;
 const SEASON = process.env.FOOTBALL_SEASON;
 const TIMEZONE = process.env.FOOTBALL_TIMEZONE || 'Europe/Madrid';
 
+const CASTELLON_LOGO = 'https://www.albinegroscastellon.com/castellon.png';
+
+const getTeamLogo = (teamName, apiLogo) => {
+  if (teamName === 'Castellón') {
+    return CASTELLON_LOGO;
+  }
+
+  return apiLogo;
+};
+
 const footballFetch = async (endpoint) => {
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     headers: {
@@ -55,7 +65,7 @@ router.post('/api/football/sync-standings', async (req, res) => {
     const rows = standings.map((item) => ({
       position: item.rank,
       team: item.team.name,
-      logo: item.team.logo,
+      logo: getTeamLogo(item.team.name, item.team.logo),
       points: item.points,
       playedgames: item.all.played,
       won: item.all.win,
@@ -99,8 +109,8 @@ router.post('/api/football/sync-calendar', async (req, res) => {
       venue: match.fixture.venue?.name || '',
       homeTeam: match.teams.home.name,
       awayTeam: match.teams.away.name,
-      homeLogo: match.teams.home.logo,
-      awayLogo: match.teams.away.logo,
+      homeLogo: getTeamLogo(match.teams.home.name, match.teams.home.logo),
+      awayLogo: getTeamLogo(match.teams.away.name, match.teams.away.logo),
       homeGoals:
         match.goals.home === null ? '' : String(match.goals.home),
       awayGoals:
