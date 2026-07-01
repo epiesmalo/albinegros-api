@@ -1,0 +1,21 @@
+name: Football Sync
+
+on:
+  schedule:
+    - cron: "0 2 * * *"     # calendario cada día 02:00 UTC
+    - cron: "0 6,12,18,22 * * *"  # clasificación 4 veces al día UTC
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Sync standings
+        run: |
+          curl -X POST https://api.albinegroscastellon.com/api/football/sync-standings
+
+      - name: Sync calendar
+        if: github.event.schedule == '0 2 * * *' || github.event_name == 'workflow_dispatch'
+        run: |
+          curl -X POST https://api.albinegroscastellon.com/api/football/sync-calendar
