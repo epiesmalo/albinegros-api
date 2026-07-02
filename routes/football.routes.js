@@ -195,16 +195,16 @@ router.post('/api/football/sync-next-match', async (req, res) => {
     });
 
     const nextMatch = {
-      id: '1',
-      teamName: 'Castellón',
-      opponent: isHome ? match.awayTeam : match.homeTeam,
-      date: formattedDate,
-      time: formattedTime,
-      stadium: match.venue || '',
-      competition: match.league || '',
-      teamlogo: CASTELLON_LOGO,
-      opponentLogo: isHome ? match.awayLogo : match.homeLogo,
-    };
+  id: '1',
+  teamName: match.homeTeam,
+  opponent: match.awayTeam,
+  date: formattedDate,
+  time: formattedTime,
+  stadium: match.venue || '',
+  competition: match.league || '',
+  teamlogo: match.homeLogo,
+  opponentLogo: match.awayLogo,
+};
 
     const { error: upsertError } = await supabase
       .from('next_match')
