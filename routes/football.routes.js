@@ -150,5 +150,78 @@ await supabase
     });
   }
 });
+router.post('/api/football/sync-next-match', async (req, res) => {
+  try {
+    const now = new Date().toISOString();
+
+    const { data: matches, error } = await supabase
+      .from('calendar')
+      .select('*')
+      .gte('date', now)
+      .or('homeTeam.ilike.%Castell%,awayTeam.ilike.%Castell%')
+      .order('date', { ascending: true })
+      .limit(1);
+
+    if (error) throw error;
+
+    if (!matches || matches.length === 0) {
+      return res.status(404).json({
+        ok: false,
+        message: 'No se ha encontrado próximo partido del Castellón',
+      });
+    }
+
+    const match = matches[0];
+
+    const isHome = String(match.homeTeam || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .includes('castell');
+
+    const matchDate = new Date(match.date);
+
+    const formattedDate = matchDate.toLocaleDateString('es-ES', {
+      timeZone: TIMEZONE,
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+
+    const formattedTime = matchDate.toLocaleTimeString('es-ES', {
+      timeZone: TIMEZONE,
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    const nextMatch = {
+      id: '1',
+      teamName: 'Castellón',
+      opponent: isHome ? match.awayTeam : match.homeTeam,
+      date: formattedDate,
+      time: formattedTime,
+      stadium: match.venue || '',
+      competition: match.league || '',
+      teamlogo: CASTELLON_LOGO,
+      opponentLogo: isHome ? match.awayLogo : match.homeLogo,
+    };
+
+    const { error: upsertError } = await supabase
+      .from('next_match')
+      .upsert(nextMatch, { onConflict: 'id' });
+
+    if (upsertError) throw upsertError;
+
+    res.json({
+      ok: true,
+      next_match: nextMatch,
+    });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      error: error.message,
+    });
+  }
+});
 
 module.exports = router;
