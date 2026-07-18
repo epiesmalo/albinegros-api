@@ -5,9 +5,11 @@ const supabase = require('../config/supabase');
 
 const {
   getDisplayTeamName,
+  getShortTeamName,
   getTeamLogo,
   getCorrectVenue,
   getCompetitionName,
+  isCastellon,
 } = require('../config/footballConfig');
 
 const API_BASE_URL = process.env.API_FOOTBALL_BASE_URL;
@@ -267,17 +269,27 @@ router.post('/api/football/sync-next-match', async (req, res) => {
         hour12: false,
       });
 
-    const nextMatch = {
-      id: '1',
-      teamName: match.homeTeam,
-      opponent: match.awayTeam,
-      date: formattedDate,
-      time: formattedTime,
-      stadium: match.venue || '',
-      competition: match.league || '',
-      teamLogo: match.homeLogo,
-      opponentLogo: match.awayLogo,
-    };
+  const castellonIsHome = isCastellon(match.homeTeam);
+
+const nextMatch = {
+  id: '1',
+
+  teamName: match.homeTeam,
+  teamShortName: getShortTeamName(match.homeTeam),
+
+  opponent: match.awayTeam,
+  opponentShortName: getShortTeamName(match.awayTeam),
+
+  isHome: castellonIsHome,
+
+  date: formattedDate,
+  time: formattedTime,
+  stadium: match.venue || '',
+  competition: match.league || '',
+
+  teamLogo: match.homeLogo,
+  opponentLogo: match.awayLogo,
+};
 
     const { error: upsertError } = await supabase
       .from('next_match')
