@@ -345,7 +345,10 @@ router.get('/api/admin/gallery', async (req, res) => {
 });
 
 router.post('/api/admin/gallery', adminAuth, async (req, res) => {
-  try {
+  console.log("====== GALLERY POST ======");
+console.log(req.body.length);
+  
+try {
     const gallery = req.body;
 
     if (!Array.isArray(gallery)) {
@@ -353,6 +356,51 @@ router.post('/api/admin/gallery', adminAuth, async (req, res) => {
         error: 'La galería debe ser un array',
       });
     }
+console.log("BORRANDO...");
+console.log("INSERTANDO...");    
+const { error: deleteError } = await supabase
+      .from('gallery')
+      .delete()
+      .neq('id', '');
+    
+console.log("BORRADO TERMINADO");
+    if (deleteError) {
+      console.error('ERROR BORRANDO GALERÍA:', deleteError);
+
+      return res.status(500).json({
+        error: 'No se pudo borrar la galería anterior',
+        details: deleteError.message,
+      });
+    }
+
+    if (gallery.length > 0) {
+      const { error: insertError } = await supabase
+        .from('gallery')
+        .insert(gallery);
+
+      if (insertError) {
+        console.error('ERROR INSERTANDO GALERÍA:', insertError);
+
+        return res.status(500).json({
+          error: 'No se pudo insertar la nueva galería',
+          details: insertError.message,
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      total: gallery.length,
+    });
+  } catch (error) {
+    console.error('ERROR GENERAL GALERÍA:', error);
+
+    res.status(500).json({
+      error: 'No se pudo guardar la galería',
+      details: error.message,
+    });
+  }
+});
 
     await supabase
       .from('gallery')

@@ -15,11 +15,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 
 const NEXT_MATCH_BG = require('../../assets/images/next-match-bg.png');
-const CASTELLON_LOGO_URL = 'https://www.albinegroscastellon.com/cdcastellon-logo-app.png';
+const CASTELLON_LOGO_URL = 'https://www.albinegroscastellon.com/cas.png';
 
 type NextMatch = {
   teamName: string;
+  teamShortName?: string;
   opponent: string;
+  opponentShortName?: string;
+  isHome?: boolean;
   date: string;
   time: string;
   stadium: string;
@@ -34,25 +37,6 @@ type AdItem = {
   text: string;
   link: string;
   image: string;
-};
-
-const formatMatchDate = (date?: string, time?: string) => {
-  if (!date) return time || '';
-
-  const normalizedDate = date.includes('T') ? date : `${date}T12:00:00`;
-  const parsedDate = new Date(normalizedDate);
-
-  if (Number.isNaN(parsedDate.getTime())) {
-    return time ? `${date} · ${time}` : date;
-  }
-
-  const day = parsedDate.getDate();
-  const month = parsedDate
-    .toLocaleDateString('es-ES', { month: 'short' })
-    .replace('.', '')
-    .toUpperCase();
-
-  return time ? `${day} ${month} · ${time}` : `${day} ${month}`;
 };
 
 const formatMainDate = (date?: string) => {
@@ -75,25 +59,37 @@ const formatMainDate = (date?: string) => {
 };
 
 const getLogoUrl = (teamName?: string, logo?: string) => {
-  if (teamName?.toLowerCase().includes('castell')) {
+  const normalizedName = String(teamName || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+  if (normalizedName.includes('castellon')) {
     return CASTELLON_LOGO_URL;
   }
 
-  return logo || '';
+  return String(logo || '').trim();
 };
 
-const getDisplayTeamName = (name?: string) => {
-  if (!name) return '';
+const getDisplayTeamName = (shortName?: string, fullName?: string) => {
+  const selectedName = String(shortName || fullName || '').trim();
 
-  if (name.toLowerCase().includes('real sociedad')) {
+  if (!selectedName) return '';
+
+  const normalizedName = selectedName
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+  if (normalizedName.includes('castellon')) {
+    return 'C.D. CASTELLÓN';
+  }
+
+  if (normalizedName.includes('real sociedad')) {
     return 'REAL SOCIEDAD B';
   }
 
-  if (name.toLowerCase().includes('castell')) {
-    return 'CASTELLÓN';
-  }
-
-  return name.toUpperCase();
+  return selectedName.toUpperCase();
 };
 
 export default function HomeScreen() {
@@ -146,18 +142,25 @@ export default function HomeScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.headerCard}>
-        <Image source={require('../../assets/images/escudo1.png')} style={styles.logo} />
+        <Image
+          source={require('../../assets/images/escudo1.png')}
+          style={styles.logo}
+        />
 
         <View style={styles.headerTextBox}>
           <Text style={styles.title}>Albinegros Castellón</Text>
-          <Text style={styles.subtitle}>Toda la información del club en una sola app</Text>
+          <Text style={styles.subtitle}>
+            Toda la información del club en una sola app
+          </Text>
         </View>
       </View>
 
       <View style={styles.socialContainer}>
         <Pressable
           style={styles.socialButton}
-          onPress={() => Linking.openURL('https://www.albinegroscastellon.com')}
+          onPress={() =>
+            Linking.openURL('https://www.albinegroscastellon.com')
+          }
         >
           <Ionicons name="globe-outline" size={20} color={colors.accent} />
           <Text style={styles.socialText}>Web</Text>
@@ -165,37 +168,56 @@ export default function HomeScreen() {
 
         <Pressable
           style={styles.socialButton}
-          onPress={() => Linking.openURL('https://www.instagram.com/albinegroscastellon')}
+          onPress={() =>
+            Linking.openURL(
+              'https://www.instagram.com/albinegroscastellon'
+            )
+          }
         >
           <Ionicons name="logo-instagram" size={20} color={colors.accent} />
           <Text style={styles.socialText}>Instagram</Text>
         </Pressable>
       </View>
 
-      <ImageBackground source={NEXT_MATCH_BG} imageStyle={styles.matchBackgroundImage} style={styles.matchCard}>
+      <ImageBackground
+        source={NEXT_MATCH_BG}
+        imageStyle={styles.matchBackgroundImage}
+        style={styles.matchCard}
+      >
         <View style={styles.matchOverlay} />
 
         <View style={styles.matchContent}>
-          <View style={styles.matchHeader}>
-            <Text style={styles.cardLabel}>PRÓXIMO PARTIDO</Text>
-            {nextMatch?.competition ? (
-              <Text style={styles.competitionPill} numberOfLines={1}>{nextMatch.competition}</Text>
-            ) : null}
-          </View>
+          <Text style={styles.cardLabel}>PRÓXIMO PARTIDO</Text>
 
-          {loading && <ActivityIndicator size="large" color={colors.accent} style={styles.loader} />}
+          {loading && (
+            <ActivityIndicator
+              size="large"
+              color={colors.accent}
+              style={styles.loader}
+            />
+          )}
 
           {!loading && nextMatch && (
             <>
               <View style={styles.matchRow}>
                 <View style={styles.teamBox}>
                   <Image
-                    source={{ uri: getLogoUrl(nextMatch.teamName, nextMatch.teamLogo) }}
-                    style={styles.teamLogo}
-                  />
-                  <Text style={styles.teamName} numberOfLines={1}>
-                    {getDisplayTeamName(nextMatch.teamName)}
-                  </Text>
+  source={{
+    uri:
+      nextMatch.teamName?.toLowerCase().includes('real sociedad')
+        ? 'https://media.api-sports.io/football/teams/9585.png'
+        : getLogoUrl(nextMatch.teamName, nextMatch.teamLogo),
+  }}
+  style={styles.teamLogo}
+  resizeMode="contain"
+/>
+
+  <Text style={styles.teamName} numberOfLines={1}>
+  {getDisplayTeamName(
+    nextMatch.teamShortName,
+    nextMatch.teamName
+  )}
+</Text>
                 </View>
 
                 <View style={styles.vsBox}>
@@ -204,32 +226,76 @@ export default function HomeScreen() {
 
                 <View style={styles.teamBox}>
                   <Image
-                    source={{ uri: getLogoUrl(nextMatch.opponent, nextMatch.opponentLogo) }}
+                    source={{
+                      uri: getLogoUrl(
+                        nextMatch.opponent,
+                        nextMatch.opponentLogo
+                      ),
+                    }}
                     style={styles.teamLogo}
+                    resizeMode="contain"
                   />
+
                   <Text style={styles.teamName} numberOfLines={1}>
-                    {getDisplayTeamName(nextMatch.opponent)}
-                  </Text>
+  {getDisplayTeamName(
+    nextMatch.opponentShortName,
+    nextMatch.opponent
+  )}
+</Text>
                 </View>
               </View>
 
               <View style={styles.bottomPanel}>
                 <View style={styles.matchInfoPanel}>
                   <View style={styles.infoItem}>
-                    <Ionicons name="calendar" size={23} color={colors.accent} />
-                    <View style={styles.infoTextBox}>
-                      <Text style={styles.infoMain}>{formatMainDate(nextMatch.date)}</Text>
-                      <Text style={styles.infoTime}>{nextMatch.time}</Text>
-                    </View>
+                    <Ionicons
+                      name="calendar-outline"
+                      size={21}
+                      color={colors.accent}
+                    />
+                    <Text style={styles.infoMain}>
+                      {formatMainDate(nextMatch.date)}
+                    </Text>
+                    <Text style={styles.infoTime}>{nextMatch.time}</Text>
+                    <Text style={styles.infoSub}>Fecha y hora</Text>
                   </View>
 
                   <View style={styles.infoDivider} />
 
                   <View style={styles.infoItem}>
-                    <Ionicons name="football" size={23} color={colors.accent} />
-                    <View style={styles.infoTextBox}>
-                      <Text style={styles.infoMain} numberOfLines={1}>{nextMatch.stadium}</Text>
-                    </View>
+                    <Ionicons
+                      name="location-outline"
+                      size={21}
+                      color={colors.accent}
+                    />
+                    <Text
+                      style={styles.infoMain}
+                      numberOfLines={2}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.75}
+                    >
+                      {nextMatch.stadium}
+                    </Text>
+                    <Text style={styles.infoSub}>Estadio</Text>
+                  </View>
+
+                  <View style={styles.infoDivider} />
+
+                  <View style={styles.infoItem}>
+                    <Ionicons
+                      name="trophy-outline"
+                      size={21}
+                      color={colors.accent}
+                    />
+                    <Text
+                      style={styles.infoMain}
+                      numberOfLines={2}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.7}
+                    >
+                      {nextMatch.competition}
+                    </Text>
+                    <Text style={styles.infoSub}>Competición</Text>
                   </View>
                 </View>
 
@@ -238,7 +304,11 @@ export default function HomeScreen() {
                   onPress={() => router.push('/(tabs)/calendar' as any)}
                 >
                   <Text style={styles.calendarButtonText}>Ver calendario</Text>
-                  <Ionicons name="arrow-forward" size={14} color={colors.accent} />
+                  <Ionicons
+                    name="arrow-forward"
+                    size={16}
+                    color={colors.accent}
+                  />
                 </Pressable>
               </View>
             </>
@@ -260,9 +330,16 @@ export default function HomeScreen() {
             onPress={() => router.push(item.route as any)}
           >
             <View style={styles.quickIconWrapper}>
-              <Ionicons name={item.icon} size={25} color={colors.accent} />
+              <Ionicons
+                name={item.icon}
+                size={25}
+                color={colors.accent}
+              />
             </View>
-            <Text style={styles.quickLinkTitle} numberOfLines={2}>{item.title}</Text>
+
+            <Text style={styles.quickLinkTitle} numberOfLines={2}>
+              {item.title}
+            </Text>
           </Pressable>
         ))}
       </ScrollView>
@@ -276,9 +353,16 @@ export default function HomeScreen() {
           contentContainerStyle={styles.sponsorsContent}
         >
           {ads.map((ad) => (
-            <Pressable key={ad.id} style={styles.sponsorCard} onPress={() => openLink(ad.link)}>
+            <Pressable
+              key={ad.id}
+              style={styles.sponsorCard}
+              onPress={() => openLink(ad.link)}
+            >
               <Image source={{ uri: ad.image }} style={styles.sponsorImage} />
-              <Text style={styles.sponsorTitle} numberOfLines={2}>{ad.title}</Text>
+
+              <Text style={styles.sponsorTitle} numberOfLines={2}>
+                {ad.title}
+              </Text>
             </Pressable>
           ))}
         </ScrollView>
@@ -302,30 +386,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#0b0b0b',
     borderRadius: 18,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    padding: 14,
     borderWidth: 1,
     borderColor: '#262626',
     marginTop: 6,
     marginBottom: 10,
   },
   logo: {
-    width: 52,
-    height: 52,
+    width: 58,
+    height: 58,
     marginRight: 12,
   },
   headerTextBox: {
     flex: 1,
   },
   title: {
-    fontSize: 21,
+    fontSize: 22,
     fontWeight: '900',
     color: '#ffffff',
   },
   subtitle: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#a8a8a8',
-    marginTop: 3,
+    marginTop: 4,
   },
   socialContainer: {
     flexDirection: 'row',
@@ -351,7 +434,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   matchCard: {
-    height: 410,
+    height: 430,
     borderRadius: 24,
     overflow: 'hidden',
     marginBottom: 20,
@@ -365,16 +448,11 @@ const styles = StyleSheet.create({
   },
   matchOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.28)',
+    backgroundColor: 'rgba(0, 0, 0, 0.32)',
   },
   matchContent: {
     flex: 1,
     padding: 16,
-    justifyContent: 'space-between',
-  },
-  matchHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
   },
   cardLabel: {
@@ -383,58 +461,46 @@ const styles = StyleSheet.create({
     color: colors.accent,
     letterSpacing: 0.8,
   },
-  competitionPill: {
-    maxWidth: '48%',
-    fontSize: 11,
-    fontWeight: '900',
-    color: '#ffffff',
-    backgroundColor: 'rgba(0, 0, 0, 0.64)',
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    overflow: 'hidden',
-    textAlign: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.65)',
-  },
   loader: {
-    marginVertical: 110,
+    marginVertical: 150,
   },
   matchRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'flex-end',
-    marginTop: 120,
-    marginBottom: 2,
+    marginTop: 112,
+    marginBottom: 10,
   },
   teamBox: {
-    width: 118,
+    width: '39%',
     alignItems: 'center',
   },
   teamLogo: {
-    width: 92,
-    height: 92,
+    width: 94,
+    height: 94,
     resizeMode: 'contain',
-    marginBottom: 8,
+    marginBottom: 9,
   },
   teamName: {
-    fontSize: 15,
-    lineHeight: 18,
+    width: '100%',
+    fontSize: 13,
+    lineHeight: 16,
     fontWeight: '900',
     color: '#ffffff',
     textAlign: 'center',
     textShadowColor: 'rgba(0, 0, 0, 0.95)',
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 7,
+    textShadowRadius: 6,
+    paddingHorizontal: 0,
   },
   vsBox: {
-    width: 52,
+    width: '14%',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingBottom: 28,
+    paddingBottom: 23,
   },
   vsText: {
-    fontSize: 34,
+    fontSize: 32,
     fontWeight: '900',
     color: '#ffffff',
     fontStyle: 'italic',
@@ -446,65 +512,68 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   matchInfoPanel: {
+    minHeight: 92,
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.64)',
-    borderRadius: 15,
-    paddingVertical: 9,
-    paddingHorizontal: 10,
+    alignItems: 'stretch',
+    backgroundColor: 'rgba(0, 0, 0, 0.68)',
+    borderRadius: 18,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
     borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.35)',
+    borderColor: 'rgba(212, 175, 55, 0.38)',
   },
   infoItem: {
     flex: 1,
-    flexDirection: 'row',
+    minWidth: 0,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  infoTextBox: {
-    marginLeft: 8,
-    flexShrink: 1,
+    paddingHorizontal: 4,
   },
   infoMain: {
-    fontSize: 14,
+    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 14,
     fontWeight: '900',
     color: '#ffffff',
+    textAlign: 'center',
   },
   infoTime: {
-    fontSize: 22,
-    lineHeight: 24,
+    marginTop: 1,
+    fontSize: 17,
+    lineHeight: 19,
     fontWeight: '900',
     color: colors.accent,
-    marginTop: 1,
+    textAlign: 'center',
   },
   infoSub: {
-    fontSize: 11,
+    marginTop: 3,
+    fontSize: 9,
+    lineHeight: 11,
     fontWeight: '800',
     color: colors.accent,
-    marginTop: 2,
+    textAlign: 'center',
   },
   infoDivider: {
     width: 1,
-    height: 34,
-    backgroundColor: 'rgba(212, 175, 55, 0.45)',
-    marginHorizontal: 8,
+    marginVertical: 9,
+    backgroundColor: 'rgba(212, 175, 55, 0.42)',
   },
   calendarButton: {
     alignSelf: 'center',
-    minWidth: 122,
-    height: 28,
-    borderRadius: 14,
-    marginTop: 7,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    minWidth: 138,
+    height: 34,
+    borderRadius: 17,
+    marginTop: 9,
+    backgroundColor: 'rgba(0, 0, 0, 0.68)',
     borderWidth: 1,
     borderColor: 'rgba(212, 175, 55, 0.75)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 13,
+    paddingHorizontal: 16,
   },
   calendarButtonText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '900',
     color: colors.accent,
     marginRight: 7,

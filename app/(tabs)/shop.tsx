@@ -3,31 +3,60 @@ import { shopItems } from '../../data/shopData';
 import { colors } from '../../theme/colors';
 
 export default function ShopScreen() {
-  const openProduct = (url: string) => {
-    Linking.openURL(url);
+  const openProduct = async (url: string) => {
+    await Linking.openURL(url);
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.screenTitle}>Tienda</Text>
-      <Text style={styles.subtitle}>Productos albinegros</Text>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.header}>
+        <Text style={styles.eyebrow}>PRODUCTOS ALBINEGROS</Text>
+        <Text style={styles.screenTitle}>Tienda</Text>
+        <Text style={styles.headerDescription}>
+          Artículos seleccionados para llevar el sentimiento albinegro contigo.
+        </Text>
+      </View>
+
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Productos destacados</Text>
+        <Text style={styles.productCount}>{shopItems.length} artículos</Text>
+      </View>
 
       {shopItems.map((item) => (
-        <View key={item.id} style={styles.card}>
-          <Image source={item.image} style={styles.image} />
+        <Pressable
+          key={item.id}
+          style={({ pressed }) => [
+            styles.card,
+            pressed && styles.cardPressed,
+          ]}
+          onPress={() => openProduct(item.link)}
+        >
+          <View style={styles.imageContainer}>
+            <Image source={item.image} style={styles.image} resizeMode="cover" />
+
+            <View style={styles.productBadge}>
+              <Text style={styles.productBadgeText}>ALBINEGROS</Text>
+            </View>
+          </View>
 
           <View style={styles.info}>
             <Text style={styles.title}>{item.title}</Text>
             <Text style={styles.description}>{item.description}</Text>
-            <Text style={styles.price}>{item.price}</Text>
 
-            <Pressable style={styles.button} onPress={() => openProduct(item.link)}>
-              <Text style={styles.buttonText}>
-  Comprar ahora
-</Text>
-            </Pressable>
+            <View style={styles.bottomRow}>
+              <Text style={styles.price}>{item.price}</Text>
+
+              <View style={styles.buyButton}>
+                <Text style={styles.buyButtonText}>Comprar</Text>
+                <Text style={styles.buyArrow}>→</Text>
+              </View>
+            </View>
           </View>
-        </View>
+        </Pressable>
       ))}
     </ScrollView>
   );
@@ -36,73 +65,153 @@ export default function ShopScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#050505',
   },
+
   content: {
-    padding: 16,
-    paddingBottom: 30,
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 36,
   },
+
+  header: {
+    marginBottom: 20,
+  },
+
+  eyebrow: {
+    color: colors.accent,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1.35,
+    marginBottom: 4,
+  },
+
   screenTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: colors.text,
-    marginBottom: 6,
+    color: '#FFFFFF',
+    fontSize: 31,
+    fontWeight: '900',
   },
-  subtitle: {
-    fontSize: 15,
-    color: colors.subtitle,
-    marginBottom: 18,
+
+  headerDescription: {
+    marginTop: 5,
+    color: '#9A9A9A',
+    fontSize: 14,
+    lineHeight: 20,
   },
+
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 13,
+  },
+
+  sectionTitle: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '900',
+  },
+
+  productCount: {
+    color: colors.accent,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+
   card: {
-  backgroundColor: colors.card,
-  borderRadius: 22,
-  marginBottom: 20,
-  overflow: 'hidden',
-  borderWidth: 1,
-  borderColor: '#222',
-  shadowColor: '#000',
-  shadowOffset: {
-    width: 0,
-    height: 4,
+    backgroundColor: '#111111',
+    borderRadius: 22,
+    marginBottom: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#282828',
   },
-  shadowOpacity: 0.25,
-  shadowRadius: 6,
-  elevation: 6,
-},
+
+  imageContainer: {
+    position: 'relative',
+    backgroundColor: '#0A0A0A',
+  },
+
   image: {
     width: '100%',
     height: 250,
   },
-  info: {
-    padding: 14,
+
+  productBadge: {
+    position: 'absolute',
+    top: 14,
+    left: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: colors.accent,
   },
-  title: {
-    fontSize: 19,
+
+  productBadgeText: {
+    color: '#101010',
+    fontSize: 9,
     fontWeight: '900',
-    color: colors.text,
+    letterSpacing: 0.8,
+  },
+
+  info: {
+    padding: 15,
+  },
+
+  title: {
+    color: '#FFFFFF',
+    fontSize: 19,
+    lineHeight: 23,
+    fontWeight: '900',
     marginBottom: 6,
   },
+
   description: {
+    color: '#9A9A9A',
     fontSize: 14,
-    color: colors.subtitle,
-    marginBottom: 10,
+    lineHeight: 20,
+    marginBottom: 15,
   },
+
+  bottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
   price: {
-  fontSize: 24,
-  fontWeight: '900',
-  color: colors.accent,
-  marginBottom: 14,
-},
-  button: {
-  backgroundColor: colors.accent,
-  paddingVertical: 14,
-  borderRadius: 14,
-  alignItems: 'center',
-},
-  buttonText: {
-  color: '#fff',
-  fontWeight: '900',
-  fontSize: 15,
-  letterSpacing: 0.3,
-},
+    color: colors.accent,
+    fontSize: 24,
+    fontWeight: '900',
+  },
+
+  buyButton: {
+    minHeight: 42,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 15,
+    borderRadius: 14,
+    backgroundColor: '#080808',
+    borderWidth: 1,
+    borderColor: colors.accent,
+  },
+
+  buyButtonText: {
+    color: colors.accent,
+    fontSize: 13,
+    fontWeight: '900',
+  },
+
+  buyArrow: {
+    color: colors.accent,
+    fontSize: 18,
+    marginLeft: 8,
+    marginTop: -1,
+  },
+
+  cardPressed: {
+    opacity: 0.88,
+    transform: [{ scale: 0.992 }],
+    borderColor: colors.accent,
+  },
 });

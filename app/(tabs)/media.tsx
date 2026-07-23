@@ -21,7 +21,7 @@ const chants: Chant[] = [
     id: "cantico-1",
     title: "HIMNO OFICIAL C.D.CASTELLÓN",
     subtitle: "CDCS",
-    logo: "https://www.albinegroscastellon.com/castellon.png",
+    logo: "https://www.albinegroscastellon.com/cas.png",
     file: {
       uri: "https://www.albinegroscastellon.com/audio/canticos/himno.mp3",
     },
@@ -356,6 +356,15 @@ export default function MediaScreen() {
     await loadChantSound(chant);
   };
 
+  const handleSongPress = async (song: any, index: number) => {
+    if (currentSong?.id === song.id) {
+      await stopCurrentSound();
+      return;
+    }
+
+    await loadSound(song, index);
+  };
+
   const onSeek = async (value: number) => {
     if (soundRef.current) {
       await soundRef.current.setPositionAsync(value);
@@ -409,10 +418,20 @@ export default function MediaScreen() {
   }, []);
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.screenTitle}>Media</Text>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.header}>
+        <Text style={styles.eyebrow}>SONIDO ALBINEGRO</Text>
+        <Text style={styles.screenTitle}>Media</Text>
+        <Text style={styles.headerDescription}>
+          Canciones y cánticos para sentir Castalia.
+        </Text>
+      </View>
 
-      <View style={styles.tabsRow}>
+      <View style={styles.tabsContainer}>
         <Pressable
           style={[
             styles.tabButton,
@@ -426,7 +445,7 @@ export default function MediaScreen() {
               selectedTab === "canciones" && styles.tabButtonTextActive,
             ]}
           >
-            🎵 Canciones
+            ♫ Canciones
           </Text>
         </Pressable>
 
@@ -443,47 +462,87 @@ export default function MediaScreen() {
               selectedTab === "canticos" && styles.tabButtonTextActive,
             ]}
           >
-            📣 Cánticos
+            ♬ Cánticos
           </Text>
         </Pressable>
       </View>
 
       {selectedTab === "canciones" && (
         <>
-          <Text style={styles.sectionTitle}>Canciones del Castellón</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionLabel}>REPRODUCCIÓN</Text>
+            <Text style={styles.sectionTitle}>Canciones del Castellón</Text>
+          </View>
 
           {songs.map((song, index) => {
             const isCurrentSong = currentSong?.id === song.id;
 
             return (
-              <View key={song.id}>
+              <View key={song.id} style={styles.songWrapper}>
                 <Pressable
-                  style={[
+                  style={({ pressed }) => [
                     styles.songCard,
                     isCurrentSong && styles.songCardActive,
+                    pressed && styles.cardPressed,
                   ]}
-                  onPress={() => loadSound(song, index)}
+                  onPress={() => handleSongPress(song, index)}
                 >
-                  <Text style={styles.songTitle}>{song.title}</Text>
-                  <Text style={styles.songSubtitle}>{song.subtitle}</Text>
+                  <View
+                    style={[
+                      styles.songPlayIcon,
+                      isCurrentSong && styles.songPlayIconActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.songPlayIconText,
+                        isCurrentSong && styles.songPlayIconTextActive,
+                      ]}
+                    >
+                      {isCurrentSong && isPlaying ? "Ⅱ" : "▶"}
+                    </Text>
+                  </View>
+
+                  <View style={styles.songInfo}>
+                    <Text style={styles.songTitle} numberOfLines={2}>
+                      {song.title}
+                    </Text>
+                    <Text style={styles.songSubtitle} numberOfLines={2}>
+                      {song.subtitle}
+                    </Text>
+                  </View>
+
+                  <Text style={styles.songChevron}>›</Text>
                 </Pressable>
 
                 {isCurrentSong && (
-                  <View style={styles.player}>
-                    <Text style={styles.nowPlaying}>
-                      {loadingAudio
-                        ? `Cargando ${currentSong.title}...`
-                        : currentSong.title}
-                    </Text>
+                  <View style={styles.integratedPlayer}>
+                    <View style={styles.playerHeading}>
+                      <View>
+                        <Text style={styles.nowPlayingLabel}>
+                          {loadingAudio ? "CARGANDO" : "SONANDO AHORA"}
+                        </Text>
+                        <Text style={styles.nowPlayingTitle} numberOfLines={1}>
+                          {currentSong.title}
+                        </Text>
+                      </View>
+
+                      <View style={styles.playingIndicator}>
+                        <View style={styles.playingBarSmall} />
+                        <View style={styles.playingBarMedium} />
+                        <View style={styles.playingBarLarge} />
+                      </View>
+                    </View>
 
                     <Slider
-                      style={{ width: "100%", height: 40 }}
+                      style={styles.slider}
                       minimumValue={0}
                       maximumValue={duration}
                       value={position}
                       onSlidingComplete={onSeek}
                       minimumTrackTintColor={colors.accent}
-                      maximumTrackTintColor="#ccc"
+                      maximumTrackTintColor="#D7D7D7"
+                      thumbTintColor={colors.accent}
                     />
 
                     <View style={styles.timeRow}>
@@ -492,18 +551,36 @@ export default function MediaScreen() {
                     </View>
 
                     <View style={styles.controlsRow}>
-                      <Pressable style={styles.controlButton} onPress={playPrevious}>
-                        <Text style={styles.controlText}>⏮</Text>
+                      <Pressable
+                        style={({ pressed }) => [
+                          styles.secondaryControl,
+                          pressed && styles.buttonPressed,
+                        ]}
+                        onPress={playPrevious}
+                      >
+                        <Text style={styles.secondaryControlText}>⏮</Text>
                       </Pressable>
 
-                      <Pressable style={styles.playButton} onPress={togglePlayPause}>
-                        <Text style={styles.playButtonText}>
-                          {loadingAudio ? "Cargando..." : isPlaying ? "⏸" : "▶️"}
+                      <Pressable
+                        style={({ pressed }) => [
+                          styles.mainControl,
+                          pressed && styles.buttonPressed,
+                        ]}
+                        onPress={togglePlayPause}
+                      >
+                        <Text style={styles.mainControlText}>
+                          {loadingAudio ? "…" : isPlaying ? "Ⅱ" : "▶"}
                         </Text>
                       </Pressable>
 
-                      <Pressable style={styles.controlButton} onPress={playNext}>
-                        <Text style={styles.controlText}>⏭</Text>
+                      <Pressable
+                        style={({ pressed }) => [
+                          styles.secondaryControl,
+                          pressed && styles.buttonPressed,
+                        ]}
+                        onPress={playNext}
+                      >
+                        <Text style={styles.secondaryControlText}>⏭</Text>
                       </Pressable>
                     </View>
                   </View>
@@ -516,11 +593,13 @@ export default function MediaScreen() {
 
       {selectedTab === "canticos" && (
         <>
-          <Text style={styles.sectionTitle}>Cánticos de Castalia</Text>
-
-          <Text style={styles.sectionDescription}>
-            Letras para animar al CD Castellón desde la grada.
-          </Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionLabel}>GRADA DE CASTALIA</Text>
+            <Text style={styles.sectionTitle}>Cánticos de Castalia</Text>
+            <Text style={styles.sectionDescription}>
+              Letras para animar al CD Castellón desde la grada.
+            </Text>
+          </View>
 
           {chants.map((chant) => {
             const isOpen = selectedChantId === chant.id;
@@ -529,62 +608,111 @@ export default function MediaScreen() {
             return (
               <Pressable
                 key={chant.id}
-                style={[styles.chantCard, isOpen && styles.chantCardActive]}
+                style={({ pressed }) => [
+                  styles.chantCard,
+                  isOpen && styles.chantCardOpen,
+                  pressed && styles.cardPressed,
+                ]}
                 onPress={() => toggleChant(chant.id)}
               >
                 <View style={styles.chantHeader}>
-                  <View style={styles.chantInfo}>
-                    <View style={styles.titleRow}>
-                      {chant.logo && (
-                        <Image
-                          source={{ uri: chant.logo }}
-                          style={styles.chantLogo}
-                        />
-                      )}
-
-                      <Text style={styles.chantTitle}>{chant.title}</Text>
-                    </View>
-
-                    <Text style={styles.chantSubtitle}>{chant.subtitle}</Text>
+                  <View
+                    style={[
+                      styles.chantLogoContainer,
+                      isOpen && styles.chantLogoContainerOpen,
+                    ]}
+                  >
+                    {chant.logo ? (
+                      <Image
+                        source={{ uri: chant.logo }}
+                        style={styles.chantLogo}
+                      />
+                    ) : (
+                      <Text style={styles.chantFallbackIcon}>📣</Text>
+                    )}
                   </View>
 
-                  <Text style={styles.chantArrow}>
-                    {isOpen ? "▲" : "▼"}
-                  </Text>
+                  <View style={styles.chantInfo}>
+                    <Text style={styles.chantTitle} numberOfLines={2}>
+                      {chant.title}
+                    </Text>
+                    <Text style={styles.chantSubtitle}>
+                      {chant.subtitle}
+                    </Text>
+                  </View>
+
+                  <View
+                    style={[
+                      styles.chantToggle,
+                      isOpen && styles.chantToggleOpen,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.chantToggleText,
+                        isOpen && styles.chantToggleTextOpen,
+                      ]}
+                    >
+                      {isOpen ? "⌃" : "⌄"}
+                    </Text>
+                  </View>
                 </View>
 
                 {isOpen && (
-                  <>
+                  <View style={styles.chantBody}>
                     {chant.file && (
                       <Pressable
-                        style={styles.playChantButton}
+                        style={({ pressed }) => [
+                          styles.chantPlayButton,
+                          isCurrentChant && styles.chantPlayButtonActive,
+                          pressed && styles.buttonPressed,
+                        ]}
                         onPress={(event: any) => {
                           event.stopPropagation?.();
                           handleChantPlayPress(chant);
                         }}
                       >
-                        <Text style={styles.playChantButtonText}>
+                        <Text
+                          style={[
+                            styles.chantPlayIcon,
+                            isCurrentChant && styles.chantPlayTextActive,
+                          ]}
+                        >
                           {loadingAudio && isCurrentChant
-                            ? "Cargando..."
+                            ? "…"
                             : isCurrentChant && isPlaying
-                              ? "⏸ Pausar cántico"
+                              ? "Ⅱ"
+                              : "▶"}
+                        </Text>
+
+                        <Text
+                          style={[
+                            styles.chantPlayText,
+                            isCurrentChant && styles.chantPlayTextActive,
+                          ]}
+                        >
+                          {loadingAudio && isCurrentChant
+                            ? "Cargando cántico"
+                            : isCurrentChant && isPlaying
+                              ? "Pausar cántico"
                               : isCurrentChant
-                                ? "▶️ Reanudar cántico"
-                                : "▶️ Escuchar cántico"}
+                                ? "Reanudar cántico"
+                                : "Escuchar cántico"}
                         </Text>
                       </Pressable>
                     )}
 
                     {isCurrentChant && (
-                      <View style={styles.chantPlayerBox}>
+                      <View style={styles.chantProgressBox}>
                         <Slider
-                          style={{ width: "100%", height: 36 }}
+                          style={styles.slider}
                           minimumValue={0}
                           maximumValue={duration}
                           value={position}
                           onSlidingComplete={onSeek}
                           minimumTrackTintColor={colors.accent}
-                          maximumTrackTintColor="#ccc"
+                          maximumTrackTintColor="#D7D7D7"
+                          thumbTintColor={colors.accent}
                         />
 
                         <View style={styles.timeRow}>
@@ -594,10 +722,15 @@ export default function MediaScreen() {
                       </View>
                     )}
 
+                    <View style={styles.lyricsHeading}>
+                      <Text style={styles.lyricsHeadingText}>LETRA</Text>
+                      <View style={styles.lyricsHeadingLine} />
+                    </View>
+
                     <View style={styles.lyricsBox}>
                       <Text style={styles.lyricsText}>{chant.lyrics}</Text>
                     </View>
-                  </>
+                  </View>
                 )}
               </Pressable>
             );
@@ -611,212 +744,471 @@ export default function MediaScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: "#050505",
   },
+
   content: {
-    padding: 16,
-    paddingBottom: 30,
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 36,
   },
-  screenTitle: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: colors.text,
+
+  header: {
     marginBottom: 18,
   },
-  tabsRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginBottom: 22,
-  },
-  tabButton: {
-    flex: 1,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 999,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  tabButtonActive: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
-  },
-  tabButtonText: {
-    color: colors.text,
+
+  eyebrow: {
+    color: colors.accent,
+    fontSize: 10,
     fontWeight: "900",
+    letterSpacing: 1.35,
+    marginBottom: 4,
+  },
+
+  screenTitle: {
+    fontSize: 31,
+    fontWeight: "900",
+    color: "#FFFFFF",
+  },
+
+  headerDescription: {
+    marginTop: 5,
+    color: "#9A9A9A",
     fontSize: 14,
-  },
-  tabButtonTextActive: {
-    color: "#fff",
-  },
-  sectionTitle: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: colors.text,
-    marginBottom: 12,
-  },
-  sectionDescription: {
-    fontSize: 14,
-    color: colors.subtitle,
-    marginBottom: 14,
     lineHeight: 20,
   },
-  songCard: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 12,
+
+  tabsContainer: {
+    flexDirection: "row",
+    padding: 4,
+    marginBottom: 24,
+    borderRadius: 18,
+    backgroundColor: "#101010",
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: "#242424",
   },
+
+  tabButton: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  tabButtonActive: {
+    backgroundColor: colors.accent,
+  },
+
+  tabButtonText: {
+    color: "#9A9A9A",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+
+  tabButtonTextActive: {
+    color: "#101010",
+  },
+
+  sectionHeader: {
+    marginBottom: 14,
+  },
+
+  sectionLabel: {
+    color: colors.accent,
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1.15,
+    marginBottom: 4,
+  },
+
+  sectionTitle: {
+    color: "#FFFFFF",
+    fontSize: 23,
+    fontWeight: "900",
+  },
+
+  sectionDescription: {
+    marginTop: 5,
+    color: "#9A9A9A",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+
+  songWrapper: {
+    marginBottom: 11,
+  },
+
+  songCard: {
+    minHeight: 82,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 18,
+    backgroundColor: "#111111",
+    borderWidth: 1,
+    borderColor: "#252525",
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
   songCardActive: {
     borderColor: colors.accent,
-    borderWidth: 2,
+    backgroundColor: "#15130D",
+    borderBottomLeftRadius: 10,
+    borderBottomRightRadius: 10,
   },
-  songTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: colors.text,
-  },
-  songSubtitle: {
-    fontSize: 14,
-    color: colors.subtitle,
-  },
-  player: {
-    marginTop: -4,
-    marginBottom: 12,
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 16,
-  },
-  nowPlaying: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: colors.text,
-    marginBottom: 10,
-  },
-  playButton: {
-    backgroundColor: colors.accent,
-    padding: 14,
-    borderRadius: 12,
+
+  songPlayIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
-    marginTop: 10,
-    minWidth: 70,
+    justifyContent: "center",
+    backgroundColor: "#050505",
+    borderWidth: 1,
+    borderColor: "#2A2A2A",
+    marginRight: 12,
   },
-  playButtonText: {
-    color: "#fff",
-    fontWeight: "800",
-    fontSize: 20,
+
+  songPlayIconActive: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
+
+  songPlayIconText: {
+    color: colors.accent,
+    fontSize: 15,
+    fontWeight: "900",
+    marginLeft: 1,
+  },
+
+  songPlayIconTextActive: {
+    color: "#111111",
+  },
+
+  songInfo: {
+    flex: 1,
+  },
+
+  songTitle: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    lineHeight: 20,
+    fontWeight: "900",
+  },
+
+  songSubtitle: {
+    marginTop: 3,
+    color: "#9A9A9A",
+    fontSize: 13,
+    lineHeight: 17,
+  },
+
+  songChevron: {
+    marginLeft: 8,
+    color: colors.accent,
+    fontSize: 26,
+    fontWeight: "300",
+  },
+
+  integratedPlayer: {
+    marginTop: -1,
+    paddingHorizontal: 15,
+    paddingTop: 14,
+    paddingBottom: 15,
+    borderBottomLeftRadius: 18,
+    borderBottomRightRadius: 18,
+    backgroundColor: "#0D0D0D",
+    borderWidth: 1,
+    borderTopWidth: 0,
+    borderColor: colors.accent,
+  },
+
+  playerHeading: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 5,
+  },
+
+  nowPlayingLabel: {
+    color: colors.accent,
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 1.15,
+    marginBottom: 3,
+  },
+
+  nowPlayingTitle: {
+    maxWidth: 260,
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+
+  playingIndicator: {
+    height: 22,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 3,
+  },
+
+  playingBarSmall: {
+    width: 3,
+    height: 8,
+    borderRadius: 2,
+    backgroundColor: colors.accent,
+  },
+
+  playingBarMedium: {
+    width: 3,
+    height: 14,
+    borderRadius: 2,
+    backgroundColor: colors.accent,
+  },
+
+  playingBarLarge: {
+    width: 3,
+    height: 20,
+    borderRadius: 2,
+    backgroundColor: colors.accent,
+  },
+
+  slider: {
+    width: "100%",
+    height: 34,
+  },
+
   timeRow: {
     flexDirection: "row",
     justifyContent: "space-between",
   },
+
   timeText: {
-    color: colors.subtitle,
-    fontSize: 12,
+    color: "#8A8A8A",
+    fontSize: 11,
+    fontWeight: "700",
   },
+
   controlsRow: {
+    marginTop: 10,
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 12,
+    justifyContent: "center",
+    gap: 22,
   },
-  controlButton: {
-    padding: 10,
-  },
-  controlText: {
-    fontSize: 22,
-    color: colors.text,
-  },
-  chantCard: {
-    backgroundColor: colors.card,
-    borderRadius: 18,
-    padding: 14,
-    marginBottom: 12,
+
+  secondaryControl: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#171717",
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: "#303030",
   },
-  chantCardActive: {
+
+  secondaryControlText: {
+    color: "#FFFFFF",
+    fontSize: 18,
+  },
+
+  mainControl: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.accent,
+  },
+
+  mainControlText: {
+    color: "#111111",
+    fontSize: 20,
+    fontWeight: "900",
+    marginLeft: 1,
+  },
+
+  chantCard: {
+    marginBottom: 11,
+    padding: 13,
+    borderRadius: 18,
+    backgroundColor: "#111111",
+    borderWidth: 1,
+    borderColor: "#252525",
+  },
+
+  chantCardOpen: {
     borderColor: colors.accent,
-    borderWidth: 2,
+    backgroundColor: "#15130D",
   },
+
   chantHeader: {
     flexDirection: "row",
     alignItems: "center",
   },
-  chantIconCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: "#111",
+
+  chantLogoContainer: {
+    width: 56,
+    height: 56,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
   },
-  chantIcon: {
+
+  chantLogoContainerOpen: {
+    opacity: 1,
+  },
+
+  chantLogo: {
+    width: 48,
+    height: 48,
+    resizeMode: "contain",
+  },
+
+  chantFallbackIcon: {
     fontSize: 20,
   },
+
   chantInfo: {
     flex: 1,
   },
+
   chantTitle: {
+    color: "#FFFFFF",
     fontSize: 16,
+    lineHeight: 20,
     fontWeight: "900",
-    color: colors.text,
   },
+
   chantSubtitle: {
-    fontSize: 13,
-    color: colors.subtitle,
-    marginTop: 2,
+    marginTop: 3,
+    color: colors.accent,
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0.45,
   },
-  chantArrow: {
+
+  chantToggle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#050505",
+    borderWidth: 1,
+    borderColor: "#2A2A2A",
+    marginLeft: 8,
+  },
+
+  chantToggleOpen: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+
+  chantToggleText: {
+    color: colors.accent,
+    fontSize: 17,
+    fontWeight: "900",
+    marginTop: -2,
+  },
+
+  chantToggleTextOpen: {
+    color: "#111111",
+  },
+
+  chantBody: {
+    marginTop: 13,
+    paddingTop: 13,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(215, 178, 67, 0.22)",
+  },
+
+  chantPlayButton: {
+    minHeight: 46,
+    borderRadius: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#0A0A0A",
+    borderWidth: 1,
+    borderColor: colors.accent,
+  },
+
+  chantPlayButtonActive: {
+    backgroundColor: colors.accent,
+  },
+
+  chantPlayIcon: {
+    marginRight: 9,
+    color: colors.accent,
+    fontSize: 15,
+    fontWeight: "900",
+  },
+
+  chantPlayText: {
     color: colors.accent,
     fontSize: 14,
     fontWeight: "900",
   },
-  playChantButton: {
-    backgroundColor: colors.accent,
-    paddingVertical: 12,
-    borderRadius: 12,
+
+  chantPlayTextActive: {
+    color: "#111111",
+  },
+
+  chantProgressBox: {
+    marginTop: 9,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 14,
+    backgroundColor: "#0A0A0A",
+    borderWidth: 1,
+    borderColor: "#262626",
+  },
+
+  lyricsHeading: {
+    marginTop: 15,
+    marginBottom: 9,
+    flexDirection: "row",
     alignItems: "center",
-    marginTop: 12,
   },
-  playChantButtonText: {
-    color: "#fff",
+
+  lyricsHeadingText: {
+    marginRight: 9,
+    color: colors.accent,
+    fontSize: 10,
     fontWeight: "900",
+    letterSpacing: 1.1,
   },
-  chantPlayerBox: {
-    backgroundColor: colors.background,
-    borderRadius: 12,
-    padding: 12,
-    marginTop: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
+
+  lyricsHeadingLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "rgba(215, 178, 67, 0.22)",
   },
+
   lyricsBox: {
-    marginTop: 10,
-    backgroundColor: colors.background,
-    borderRadius: 12,
-    padding: 12,
+    padding: 15,
+    borderRadius: 14,
+    backgroundColor: "#0A0A0A",
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: "#262626",
   },
+
   lyricsText: {
-    color: colors.text,
+    color: "#F2F2F2",
     fontSize: 15,
     lineHeight: 24,
-    fontWeight: "700",
+    fontWeight: "600",
   },
-titleRow: {
-  flexDirection: "row",
-  alignItems: "center",
-},
 
-chantLogo: {
-  width: 24,
-  height: 24,
-  marginRight: 8,
-  resizeMode: "contain",
-},
+  cardPressed: {
+    opacity: 0.88,
+    transform: [{ scale: 0.994 }],
+  },
+
+  buttonPressed: {
+    opacity: 0.72,
+  },
 });

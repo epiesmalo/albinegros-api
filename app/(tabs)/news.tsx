@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Image,
   Linking,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -21,71 +21,406 @@ type NewsItem = {
   source: string;
 };
 
+const NEWS_PER_PAGE = 5;
+const FALLBACK_NEWS_IMAGE = require('../../assets/images/news_fallback.png');
+
+function formatRelativeDate(dateValue: string) {
+  if (!dateValue) return '';
+
+  const parsedDate = new Date(dateValue);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return dateValue;
+  }
+
+  const now = new Date();
+  const diffMs = now.getTime() - parsedDate.getTime();
+  const diffMinutes = Math.floor(diffMs / 60_000);
+  const diffHours = Math.floor(diffMs / 3_600_000);
+  const diffDays = Math.floor(diffMs / 86_400_000);
+
+  if (diffMinutes < 1) return 'Ahora';
+  if (diffMinutes < 60) return `Hace ${diffMinutes} min`;
+
+  if (diffHours < 24) {
+    return diffHours === 1 ? 'Hace 1 hora' : `Hace ${diffHours} horas`;
+  }
+
+  if (diffDays === 1) return 'Ayer';
+  if (diffDays < 7) return `Hace ${diffDays} días`;
+
+  return new Intl.DateTimeFormat('es-ES', {
+    day: '2-digit',
+    month: 'short',
+  })
+    .format(parsedDate)
+    .replace('.', '');
+}
+
+function normalizeSource(source: string) {
+  return source?.trim() || 'Albinegros Castellón';
+}
+
+function NewsSkeleton() {
+  return (
+    <View>
+      <View style={[styles.skeletonCard, styles.skeletonHero]}>
+        <View style={styles.skeletonHeroImage} />
+
+        <View style={styles.skeletonContent}>
+          <View style={[styles.skeletonLine, { width: '36%' }]} />
+          <View style={[styles.skeletonLine, { width: '92%', height: 18 }]} />
+          <View style={[styles.skeletonLine, { width: '72%', height: 18 }]} />
+          <View style={[styles.skeletonLine, { width: '48%' }]} />
+        </View>
+      </View>
+
+      {[1, 2, 3, 4].map((item) => (
+        <View key={item} style={styles.skeletonCompactCard}>
+          <View style={styles.skeletonCompactImage} />
+
+          <View style={styles.skeletonCompactContent}>
+            <View style={[styles.skeletonLine, { width: '38%' }]} />
+            <View style={[styles.skeletonLine, { width: '94%', height: 16 }]} />
+            <View style={[styles.skeletonLine, { width: '68%', height: 16 }]} />
+            <View style={[styles.skeletonLine, { width: '48%' }]} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 export default function NewsScreen() {
   const [news, setNews] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
 
-  const loadNews = async () => {
+  const loadNews = useCallback(async (isRefresh = false) => {
     try {
-      setLoading(true);
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
       setError('');
 
-      const response = await fetch('https://api.albinegroscastellon.com/news');
-      const data = await response.json();
+      const response = await fetch(
+        'https://api.albinegroscastellon.com/news'
+      );
 
-      setNews(Array.isArray(data) ? data : []);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      const normalizedNews: NewsItem[] = Array.isArray(data) ? data : [];
+
+      setNews(normalizedNews);
+      setCurrentPage(1);
+      setFailedImages({});
     } catch (err) {
+      console.error('Error cargando noticias:', err);
       setError('No se pudieron cargar las noticias.');
       setNews([]);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadNews();
-  }, []);
+  }, [loadNews]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(news.length / NEWS_PER_PAGE)
+  );
+
+  const currentNews = useMemo(() => {
+    const startIndex = (currentPage - 1) * NEWS_PER_PAGE;
+
+    return news.slice(startIndex, startIndex + NEWS_PER_PAGE);
+  }, [currentPage, news]);
+
+  const featuredNews = currentNews[0];
+  const secondaryNews = currentNews.slice(1);
 
   const openLink = async (url: string) => {
     if (!url) return;
 
-    const supported = await Linking.canOpenURL(url);
+    try {
+      const supported = await Linking.canOpenURL(url);
 
-    if (supported) {
-      await Linking.openURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      }
+    } catch (err) {
+      console.error('No se pudo abrir la noticia:', err);
     }
   };
 
+  const changePage = (nextPage: number) => {
+    if (
+      nextPage < 1 ||
+      nextPage > totalPages ||
+      nextPage === currentPage
+    ) {
+      return;
+    }
+
+    setCurrentPage(nextPage);
+  };
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.screenTitle}>Noticias</Text>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={() => loadNews(true)}
+          tintColor={colors.accent}
+          colors={[colors.accent]}
+          progressBackgroundColor={colors.card}
+        />
+      }
+    >
+      <View style={styles.header}>
+        <View style={styles.headerText}>
+          <Text style={styles.eyebrow}>ACTUALIDAD ALBINEGRA</Text>
+          <Text style={styles.screenTitle}>Noticias</Text>
+          <Text style={styles.headerDescription}>
+            Últimas noticias del C.D. Castellón.
+          </Text>
+        </View>
 
-      {loading && <ActivityIndicator size="large" color={colors.accent} />}
+        {!loading && !error && news.length > 0 ? (
+          <View style={styles.counterBadge}>
+            <Text style={styles.counterText}>{news.length}</Text>
+          </View>
+        ) : null}
+      </View>
 
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {loading ? <NewsSkeleton /> : null}
 
-      {!loading && !error && news.length === 0 && (
-        <Text style={styles.emptyText}>Todavía no hay noticias disponibles.</Text>
-      )}
+      {!loading && error ? (
+        <View style={styles.messageCard}>
+          <Text style={styles.errorTitle}>
+            No se pudieron cargar
+          </Text>
 
-      {!loading &&
-        !error &&
-        news.map((item) => (
-          <Pressable key={item.id} style={styles.newsCard} onPress={() => openLink(item.link)}>
-            {item.image ? (
-              <Image source={{ uri: item.image }} style={styles.newsImage} />
-            ) : null}
+          <Text style={styles.errorText}>{error}</Text>
 
-            <View style={styles.newsContent}>
-              <Text style={styles.newsDate}>{item.date}</Text>
-              <Text style={styles.newsTitle}>{item.title}</Text>
-              <Text style={styles.newsDescription}>{item.description}</Text>
+          <Pressable
+            style={({ pressed }) => [
+              styles.retryButton,
+              pressed && styles.buttonPressed,
+            ]}
+            onPress={() => loadNews()}
+          >
+            <Text style={styles.retryButtonText}>Reintentar</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
-              {item.link ? <Text style={styles.newsLink}>Abrir noticia</Text> : null}
+      {!loading && !error && news.length === 0 ? (
+        <View style={styles.messageCard}>
+          <Text style={styles.emptyTitle}>
+            Todavía no hay noticias
+          </Text>
+
+          <Text style={styles.emptyText}>
+            Las últimas novedades del C.D. Castellón aparecerán aquí.
+          </Text>
+        </View>
+      ) : null}
+
+      {!loading && !error && featuredNews ? (
+        <>
+          <Pressable
+            style={({ pressed }) => [
+              styles.featuredCard,
+              pressed && styles.cardPressed,
+            ]}
+            onPress={() => openLink(featuredNews.link)}
+          >
+            {featuredNews.image && !failedImages[featuredNews.id] ? (
+              <Image
+                source={{ uri: featuredNews.image }}
+                style={styles.featuredImage}
+                resizeMode="cover"
+                onError={() =>
+                  setFailedImages((previous) => ({
+                    ...previous,
+                    [featuredNews.id]: true,
+                  }))
+                }
+              />
+            ) : (
+              <View style={styles.featuredImageFallback}>
+                <Image
+                  source={FALLBACK_NEWS_IMAGE}
+                  style={styles.featuredFallbackLogo}
+                  resizeMode="contain"
+                />
+              </View>
+            )}
+
+            <View style={styles.featuredOverlay} />
+
+            <View style={styles.featuredTopRow}>
+              <View style={styles.featuredBadge}>
+                <Text style={styles.featuredBadgeText}>
+                  DESTACADA
+                </Text>
+              </View>
+
+              <Text style={styles.featuredDate}>
+                {formatRelativeDate(featuredNews.date)}
+              </Text>
+            </View>
+
+            <View style={styles.featuredContent}>
+              <Text style={styles.featuredSource}>
+                {normalizeSource(featuredNews.source)}
+              </Text>
+
+              <Text style={styles.featuredTitle} numberOfLines={3}>
+                {featuredNews.title}
+              </Text>
+
+              <View style={styles.readRow}>
+                <Text style={styles.readText}>Leer noticia</Text>
+                <Text style={styles.readArrow}>→</Text>
+              </View>
             </View>
           </Pressable>
-        ))}
+
+          <View style={styles.secondaryList}>
+            {secondaryNews.map((item) => (
+              <Pressable
+                key={item.id}
+                style={({ pressed }) => [
+                  styles.compactCard,
+                  pressed && styles.cardPressed,
+                ]}
+                onPress={() => openLink(item.link)}
+              >
+                {item.image && !failedImages[item.id] ? (
+                  <Image
+                    source={{ uri: item.image }}
+                    style={styles.compactImage}
+                    resizeMode="cover"
+                    onError={() =>
+                      setFailedImages((previous) => ({
+                        ...previous,
+                        [item.id]: true,
+                      }))
+                    }
+                  />
+                ) : (
+                  <View style={styles.compactImageFallback}>
+                    <Image
+                      source={FALLBACK_NEWS_IMAGE}
+                      style={styles.compactFallbackLogo}
+                      resizeMode="contain"
+                    />
+                  </View>
+                )}
+
+                <View style={styles.compactContent}>
+                  <View style={styles.compactMetaRow}>
+                    <Text
+                      style={styles.compactSource}
+                      numberOfLines={1}
+                    >
+                      {normalizeSource(item.source)}
+                    </Text>
+
+                    <Text style={styles.metaDot}>•</Text>
+
+                    <Text style={styles.compactDate}>
+                      {formatRelativeDate(item.date)}
+                    </Text>
+                  </View>
+
+                  <Text style={styles.compactTitle} numberOfLines={3}>
+                    {item.title}
+                  </Text>
+
+                  <Text style={styles.compactReadText}>
+                    Leer noticia →
+                  </Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+
+          {totalPages > 1 ? (
+            <View style={styles.paginationCard}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.pageButton,
+                  currentPage === 1 && styles.pageButtonDisabled,
+                  pressed &&
+                    currentPage !== 1 &&
+                    styles.buttonPressed,
+                ]}
+                onPress={() => changePage(currentPage - 1)}
+                disabled={currentPage === 1}
+              >
+                <Text
+                  style={[
+                    styles.pageButtonText,
+                    currentPage === 1 &&
+                      styles.pageButtonTextDisabled,
+                  ]}
+                >
+                  ‹
+                </Text>
+              </Pressable>
+
+              <View style={styles.pageInfo}>
+                <Text style={styles.pageInfoLabel}>PÁGINA</Text>
+
+                <Text style={styles.pageInfoText}>
+                  {currentPage} de {totalPages}
+                </Text>
+              </View>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.pageButton,
+                  currentPage === totalPages &&
+                    styles.pageButtonDisabled,
+                  pressed &&
+                    currentPage !== totalPages &&
+                    styles.buttonPressed,
+                ]}
+                onPress={() => changePage(currentPage + 1)}
+                disabled={currentPage === totalPages}
+              >
+                <Text
+                  style={[
+                    styles.pageButtonText,
+                    currentPage === totalPages &&
+                      styles.pageButtonTextDisabled,
+                  ]}
+                >
+                  ›
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </>
+      ) : null}
     </ScrollView>
   );
 }
@@ -93,61 +428,436 @@ export default function NewsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#050505',
   },
+
   content: {
-    padding: 16,
-    paddingBottom: 30,
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 36,
   },
+
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+
+  headerText: {
+    flex: 1,
+    paddingRight: 14,
+  },
+
+  eyebrow: {
+    color: colors.accent,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1.35,
+    marginBottom: 4,
+  },
+
   screenTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: colors.text,
-    marginBottom: 18,
+    fontSize: 31,
+    fontWeight: '900',
+    color: '#FFFFFF',
   },
-  newsCard: {
-    backgroundColor: colors.card,
-    borderRadius: 18,
-    marginBottom: 16,
+
+  headerDescription: {
+    marginTop: 5,
+    color: '#9A9A9A',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+
+  counterBadge: {
+    minWidth: 42,
+    height: 42,
+    paddingHorizontal: 10,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#111111',
+    borderWidth: 1,
+    borderColor: '#282828',
+  },
+
+  counterText: {
+    color: colors.accent,
+    fontSize: 13,
+    fontWeight: '900',
+  },
+
+  featuredCard: {
+    height: 420,
+    borderRadius: 24,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#2A2A2A',
+    backgroundColor: '#111111',
+    marginBottom: 14,
   },
-  newsImage: {
+
+  featuredImage: {
+    ...StyleSheet.absoluteFillObject,
     width: '100%',
-    height: 180,
+    height: '100%',
   },
-  newsContent: {
-    padding: 14,
+
+  featuredImageFallback: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0D0D0D',
   },
-  newsDate: {
+
+  featuredFallbackLogo: {
+    width: '82%',
+    height: '82%',
+  },
+
+  featuredOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.50)',
+  },
+
+  featuredTopRow: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+  featuredBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: colors.accent,
+  },
+
+  featuredBadgeText: {
+    color: '#090909',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+
+  featuredDate: {
+    color: '#FFFFFF',
     fontSize: 12,
-    fontWeight: '700',
-    color: colors.accent,
-    marginBottom: 6,
-  },
-  newsTitle: {
-    fontSize: 18,
     fontWeight: '800',
-    color: colors.text,
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    textShadowRadius: 4,
+  },
+
+  featuredContent: {
+    position: 'absolute',
+    left: 18,
+    right: 18,
+    bottom: 18,
+  },
+
+  featuredSource: {
+    color: colors.accent,
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0.7,
+    textTransform: 'uppercase',
     marginBottom: 8,
   },
-  newsDescription: {
-    fontSize: 14,
-    color: colors.subtitle,
-    lineHeight: 20,
-    marginBottom: 10,
+
+  featuredTitle: {
+    color: '#FFFFFF',
+    fontSize: 27,
+    lineHeight: 32,
+    fontWeight: '900',
+    marginBottom: 16,
+    textShadowColor: 'rgba(0, 0, 0, 0.78)',
+    textShadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    textShadowRadius: 5,
   },
-  newsLink: {
-    fontSize: 14,
-    fontWeight: '800',
+
+  readRow: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(215, 178, 67, 0.72)',
+    borderRadius: 999,
+    paddingHorizontal: 15,
+    paddingVertical: 9,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+  },
+
+  readText: {
     color: colors.accent,
+    fontSize: 13,
+    fontWeight: '900',
   },
+
+  readArrow: {
+    color: colors.accent,
+    fontSize: 18,
+    marginLeft: 9,
+    marginTop: -1,
+  },
+
+  secondaryList: {
+    gap: 12,
+  },
+
+  compactCard: {
+    height: 126,
+    flexDirection: 'row',
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#282828',
+    backgroundColor: '#111111',
+  },
+
+  compactImage: {
+    width: 126,
+    height: 126,
+  },
+
+  compactImageFallback: {
+    width: 126,
+    height: 126,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0D0D0D',
+    borderRightWidth: 1,
+    borderRightColor: 'rgba(215, 178, 67, 0.28)',
+  },
+
+  compactFallbackLogo: {
+    width: 94,
+    height: 94,
+  },
+
+  compactContent: {
+    flex: 1,
+    paddingHorizontal: 13,
+    paddingVertical: 12,
+    justifyContent: 'space-between',
+  },
+
+  compactMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  compactSource: {
+    maxWidth: '52%',
+    color: colors.accent,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+
+  metaDot: {
+    color: '#737373',
+    fontSize: 11,
+    marginHorizontal: 6,
+  },
+
+  compactDate: {
+    flexShrink: 1,
+    color: '#9A9A9A',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+
+  compactTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    lineHeight: 20,
+    fontWeight: '900',
+    marginVertical: 7,
+  },
+
+  compactReadText: {
+    color: colors.accent,
+    fontSize: 11,
+    fontWeight: '900',
+  },
+
+  paginationCard: {
+    marginTop: 20,
+    padding: 10,
+    borderRadius: 20,
+    backgroundColor: '#111111',
+    borderWidth: 1,
+    borderColor: '#282828',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+  pageButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#080808',
+    borderWidth: 1,
+    borderColor: colors.accent,
+  },
+
+  pageButtonDisabled: {
+    borderColor: '#2B2B2B',
+    backgroundColor: '#171717',
+    opacity: 0.55,
+  },
+
+  pageButtonText: {
+    color: colors.accent,
+    fontSize: 30,
+    lineHeight: 32,
+    fontWeight: '400',
+    marginTop: -2,
+  },
+
+  pageButtonTextDisabled: {
+    color: '#555555',
+  },
+
+  pageInfo: {
+    alignItems: 'center',
+  },
+
+  pageInfoLabel: {
+    color: '#858585',
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 1.2,
+    marginBottom: 2,
+  },
+
+  pageInfoText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '900',
+  },
+
+  messageCard: {
+    padding: 22,
+    borderRadius: 20,
+    backgroundColor: '#111111',
+    borderWidth: 1,
+    borderColor: '#282828',
+    alignItems: 'center',
+  },
+
+  errorTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '900',
+    marginBottom: 6,
+  },
+
   errorText: {
-    color: 'red',
+    color: '#9A9A9A',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+
+  retryButton: {
+    marginTop: 16,
+    borderRadius: 999,
+    paddingHorizontal: 20,
+    paddingVertical: 11,
+    backgroundColor: colors.accent,
+  },
+
+  retryButtonText: {
+    color: '#090909',
+    fontWeight: '900',
+  },
+
+  emptyTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '900',
+    marginBottom: 6,
+  },
+
+  emptyText: {
+    color: '#9A9A9A',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+
+  cardPressed: {
+    opacity: 0.88,
+    transform: [{ scale: 0.992 }],
+  },
+
+  buttonPressed: {
+    opacity: 0.72,
+  },
+
+  skeletonCard: {
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#282828',
+    backgroundColor: '#111111',
+  },
+
+  skeletonHero: {
+    height: 420,
+    borderRadius: 24,
+    marginBottom: 14,
+  },
+
+  skeletonHeroImage: {
+    height: 250,
+    backgroundColor: '#171717',
+  },
+
+  skeletonContent: {
+    padding: 17,
+  },
+
+  skeletonLine: {
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#242424',
+    marginBottom: 11,
+  },
+
+  skeletonCompactCard: {
+    minHeight: 126,
+    flexDirection: 'row',
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#282828',
+    backgroundColor: '#111111',
     marginBottom: 12,
   },
-  emptyText: {
-    color: colors.subtitle,
+
+  skeletonCompactImage: {
+    width: 126,
+    minHeight: 126,
+    backgroundColor: '#171717',
+  },
+
+  skeletonCompactContent: {
+    flex: 1,
+    padding: 13,
   },
 });

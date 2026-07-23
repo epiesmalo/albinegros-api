@@ -318,4 +318,53 @@ const nextMatch = {
   }
 });
 
+/**
+ * Sirve los escudos de API-Football a través de nuestro backend.
+ *
+ * Ejemplo:
+ * GET /api/football/team-logo/9585
+ */
+router.get('/api/football/team-logo/:teamId', async (req, res) => {
+  try {
+    const teamId = String(req.params.teamId || '').trim();
+
+    if (!/^\d+$/.test(teamId)) {
+      return res.status(400).json({
+        ok: false,
+        error: 'ID de equipo no válido',
+      });
+    }
+
+    const logoUrl =
+      `https://media.api-sports.io/football/teams/${teamId}.png`;
+
+    const response = await fetch(logoUrl);
+
+    if (!response.ok) {
+      throw new Error(
+        `No se pudo descargar el escudo: ${response.status}`
+      );
+    }
+
+    const imageBuffer = Buffer.from(
+      await response.arrayBuffer()
+    );
+
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader(
+      'Cache-Control',
+      'public, max-age=604800, immutable'
+    );
+
+    return res.send(imageBuffer);
+  } catch (error) {
+    console.error('Error sirviendo escudo:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: error.message,
+    });
+  }
+});
+
 module.exports = router;

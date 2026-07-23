@@ -255,7 +255,7 @@ export default function GalleryScreen() {
     index: number;
   }) => (
     <Pressable
-  style={[
+  style={({ pressed }) => [
     selectedCategory === 'fondos'
       ? styles.wallpaperCard
       : styles.imageCard,
@@ -263,6 +263,8 @@ export default function GalleryScreen() {
     index % 2 === 0
       ? styles.leftCard
       : styles.rightCard,
+
+    pressed && styles.cardPressed,
   ]}
   onPress={() => openImage(index)}
 >
@@ -319,12 +321,39 @@ export default function GalleryScreen() {
         contentContainerStyle={styles.content}
         ListHeaderComponent={
           <>
-            <Text style={styles.screenTitle}>
-              Galería
-            </Text>
+            <View style={styles.header}>
+              <Text style={styles.eyebrow}>MOMENTOS ALBINEGROS</Text>
+              <Text style={styles.screenTitle}>Galería</Text>
+              <Text style={styles.headerDescription}>
+                Imágenes, recuerdos y fondos del C.D. Castellón.
+              </Text>
+            </View>
 
             {photoOfTheDay && (
-              <Pressable style={styles.photoOfDayCard}>
+              <Pressable
+                  style={({ pressed }) => [
+                    styles.photoOfDayCard,
+                    pressed && styles.cardPressed,
+                  ]}
+                  onPress={() => {
+                    const imageIndex = images.findIndex(
+                      (item) => item.id === photoOfTheDay.id
+                    );
+
+                    if (imageIndex >= 0) {
+                      openImage(imageIndex);
+                    } else {
+                      setSelectedCategory(photoOfTheDay.category);
+                      const categoryImages = galleryItems.filter(
+                        (item) => item.category === photoOfTheDay.category
+                      );
+                      const categoryIndex = categoryImages.findIndex(
+                        (item) => item.id === photoOfTheDay.id
+                      );
+                      setSelectedImageIndex(categoryIndex >= 0 ? categoryIndex : null);
+                    }
+                  }}
+                >
                 <Text style={styles.photoOfDayLabel}>
                   Foto albinegra del día
                 </Text>
@@ -521,69 +550,101 @@ export default function GalleryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#050505',
   },
 
   content: {
     padding: 16,
-    paddingBottom: 32,
+    paddingBottom: 34,
+  },
+
+  header: {
+    marginBottom: 20,
+  },
+
+  eyebrow: {
+    color: colors.accent,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1.35,
+    marginBottom: 4,
   },
 
   screenTitle: {
-    fontSize: 30,
+    fontSize: 31,
     fontWeight: '900',
-    color: colors.text,
-    marginBottom: 18,
+    color: '#FFFFFF',
+  },
+
+  headerDescription: {
+    marginTop: 5,
+    color: '#9A9A9A',
+    fontSize: 14,
+    lineHeight: 20,
   },
 
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '900',
-    color: colors.text,
+    color: '#FFFFFF',
     marginBottom: 12,
   },
 
   photoOfDayCard: {
-    backgroundColor: colors.card,
+    backgroundColor: '#111111',
     borderRadius: 22,
-    padding: 12,
-    marginBottom: 22,
-    borderWidth: 2,
-    borderColor: colors.accent,
+    padding: 10,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(215, 178, 67, 0.7)',
+    overflow: 'hidden',
   },
 
   photoOfDayLabel: {
-    fontSize: 18,
+    alignSelf: 'flex-start',
+    color: '#111111',
+    backgroundColor: colors.accent,
+    fontSize: 10,
     fontWeight: '900',
-    color: colors.accent,
+    letterSpacing: 0.9,
+    textTransform: 'uppercase',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
     marginBottom: 10,
   },
 
   photoOfDayImage: {
     width: '100%',
-    height: 380,
-    borderRadius: 14,
-    marginBottom: 10,
+    height: 360,
+    borderRadius: 16,
+    marginBottom: 11,
+    backgroundColor: '#0A0A0A',
   },
 
   photoOfDayTitle: {
+    paddingHorizontal: 4,
+    paddingBottom: 4,
     fontSize: 16,
-    fontWeight: '800',
-    color: colors.text,
+    lineHeight: 21,
+    fontWeight: '900',
+    color: '#FFFFFF',
   },
 
   menuContainer: {
-    paddingBottom: 18,
+    paddingBottom: 20,
   },
 
   menuButton: {
-    backgroundColor: colors.card,
+    minHeight: 42,
+    justifyContent: 'center',
+    backgroundColor: '#111111',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#282828',
     borderRadius: 999,
     paddingVertical: 10,
     paddingHorizontal: 16,
-    marginRight: 10,
+    marginRight: 9,
   },
 
   menuButtonActive: {
@@ -592,14 +653,14 @@ const styles = StyleSheet.create({
   },
 
   menuButtonText: {
-    color: colors.text,
-    fontWeight: '800',
-    fontSize: 13,
+    color: '#A0A0A0',
+    fontWeight: '900',
+    fontSize: 12,
     textTransform: 'uppercase',
   },
 
   menuButtonTextActive: {
-    color: '#fff',
+    color: '#101010',
   },
 
   galleryHeader: {
@@ -610,29 +671,30 @@ const styles = StyleSheet.create({
   },
 
   imageCount: {
-    color: colors.muted,
-    fontSize: 13,
-    fontWeight: '700',
+    color: colors.accent,
+    fontSize: 12,
+    fontWeight: '900',
   },
 
   imageCard: {
     width: CARD_WIDTH,
-    backgroundColor: colors.card,
+    backgroundColor: '#111111',
     borderRadius: 18,
-    padding: 8,
+    padding: 7,
     marginBottom: CARD_GAP,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#282828',
+    overflow: 'hidden',
   },
 
   wallpaperCard: {
     width: CARD_WIDTH,
-    backgroundColor: '#111',
-    borderRadius: 22,
-    padding: 8,
+    backgroundColor: '#111111',
+    borderRadius: 20,
+    padding: 7,
     marginBottom: CARD_GAP,
-    borderWidth: 2,
-    borderColor: colors.accent,
+    borderWidth: 1,
+    borderColor: 'rgba(215, 178, 67, 0.72)',
     overflow: 'hidden',
   },
 
@@ -646,79 +708,91 @@ const styles = StyleSheet.create({
 
   galleryImage: {
     width: '100%',
-    height: 160,
-    borderRadius: 14,
-    marginBottom: 8,
+    height: 164,
+    borderRadius: 13,
+    marginBottom: 9,
+    backgroundColor: '#0A0A0A',
   },
 
   wallpaperImage: {
     width: '100%',
     height: 320,
-    borderRadius: 16,
+    borderRadius: 15,
     marginBottom: 10,
+    backgroundColor: '#0A0A0A',
   },
 
   imageTitle: {
+    paddingHorizontal: 3,
+    paddingBottom: 3,
     fontSize: 13,
+    lineHeight: 17,
     fontWeight: '800',
-    color: colors.text,
-    minHeight: 34,
+    color: '#FFFFFF',
+    minHeight: 37,
   },
 
   typeBadge: {
     position: 'absolute',
-    top: 16,
-    right: 16,
+    top: 15,
+    right: 15,
     backgroundColor: colors.accent,
-    paddingHorizontal: 10,
+    paddingHorizontal: 9,
     paddingVertical: 5,
     borderRadius: 999,
   },
 
   typeBadgeText: {
-    color: '#fff',
+    color: '#101010',
     fontWeight: '900',
-    fontSize: 11,
+    fontSize: 10,
     textTransform: 'uppercase',
   },
 
   favoriteButton: {
     position: 'absolute',
-    top: 14,
-    left: 14,
-    backgroundColor: 'rgba(0,0,0,0.65)',
+    top: 13,
+    left: 13,
+    backgroundColor: 'rgba(5,5,5,0.82)',
     width: 34,
     height: 34,
-    borderRadius: 999,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   favoriteButtonText: {
-    fontSize: 18,
+    fontSize: 17,
   },
 
   modalFavoriteButton: {
-    backgroundColor: '#333',
+    minHeight: 46,
+    backgroundColor: '#111111',
+    borderWidth: 1,
+    borderColor: '#303030',
     paddingVertical: 12,
     paddingHorizontal: 18,
     borderRadius: 14,
     marginBottom: 14,
+    justifyContent: 'center',
   },
 
   modalFavoriteButtonActive: {
     backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
 
   modalFavoriteButtonText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontWeight: '900',
     fontSize: 14,
   },
 
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.96)',
+    backgroundColor: 'rgba(0,0,0,0.98)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
@@ -735,16 +809,18 @@ const styles = StyleSheet.create({
   },
 
   fullImageTitle: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontSize: 18,
-    fontWeight: '800',
+    lineHeight: 23,
+    fontWeight: '900',
     marginTop: 12,
     textAlign: 'center',
   },
 
   counterText: {
-    color: '#ccc',
-    fontSize: 14,
+    color: '#929292',
+    fontSize: 13,
+    fontWeight: '700',
     marginTop: 6,
     marginBottom: 14,
   },
@@ -758,18 +834,24 @@ const styles = StyleSheet.create({
 
   navButton: {
     flex: 1,
-    backgroundColor: colors.accent,
+    minHeight: 46,
+    backgroundColor: '#111111',
+    borderWidth: 1,
+    borderColor: colors.accent,
     paddingVertical: 12,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: 'center',
+    justifyContent: 'center',
   },
 
   navButtonDisabled: {
-    backgroundColor: '#666',
+    borderColor: '#2B2B2B',
+    backgroundColor: '#171717',
+    opacity: 0.5,
   },
 
   navButtonText: {
-    color: '#fff',
+    color: colors.accent,
     fontWeight: '900',
   },
 
@@ -778,15 +860,17 @@ const styles = StyleSheet.create({
     top: 50,
     right: 20,
     zIndex: 10,
-    backgroundColor: '#222',
+    backgroundColor: '#111111',
+    borderWidth: 1,
+    borderColor: '#303030',
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderRadius: 12,
   },
 
   closeButtonText: {
-    color: '#fff',
-    fontWeight: '800',
+    color: '#FFFFFF',
+    fontWeight: '900',
   },
 
   wallpaperActions: {
@@ -803,22 +887,28 @@ const styles = StyleSheet.create({
   },
 
   downloadButtonText: {
-    color: '#fff',
+    color: '#101010',
     fontWeight: '900',
     fontSize: 14,
   },
 
   shareButton: {
-    backgroundColor: '#333',
+    backgroundColor: '#111111',
+    borderWidth: 1,
+    borderColor: '#303030',
     paddingVertical: 12,
     paddingHorizontal: 18,
     borderRadius: 14,
   },
 
   shareButtonText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontWeight: '900',
     fontSize: 14,
   },
-  
+
+  cardPressed: {
+    opacity: 0.88,
+    transform: [{ scale: 0.992 }],
+  },
 });

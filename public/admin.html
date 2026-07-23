@@ -364,13 +364,15 @@ function addGalleryImage() {
 saveGallery();
 }
 
-function deleteGalleryImage(index) {
+async function deleteGalleryImage(index) {
   if (!confirm('¿Eliminar esta imagen de la galería?')) return;
 
   galleryItems.splice(index, 1);
-  renderGalleryList();
-}
 
+  renderGalleryList();
+
+  await saveGallery();
+}
 async function saveGallery() {
   try {
     const response = await fetch('/api/admin/gallery', {
