@@ -402,30 +402,6 @@ console.log("BORRADO TERMINADO");
   }
 });
 
-    await supabase
-      .from('gallery')
-      .delete()
-      .neq('id', '');
-
-    const { error } = await supabase
-      .from('gallery')
-      .insert(gallery);
-
-    if (error) {
-      return res.status(500).json({
-        error: error.message,
-      });
-    }
-
-    res.json({
-      success: true,
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: 'No se pudo guardar la galería',
-      details: error.message,
-    });
-  }
-});
+    
 
 module.exports = router;
