@@ -2,8 +2,10 @@ name: Football Sync
 
 on:
   schedule:
-    - cron: "0 1 * * *"     # calendario cada día 02:00 UTC
-    - cron: "0 6,12,18,22 * * *"  # clasificación 4 veces al día UTC
+    # Sincronización completa cuatro veces al día, en horario UTC
+    - cron: "0 1,7,13,19 * * *"
+
+  # Permite ejecutarlo manualmente desde GitHub
   workflow_dispatch:
 
 jobs:
@@ -11,11 +13,107 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Sync standings
+      - name: Wake API
         run: |
-          curl -X POST https://api.albinegroscastellon.com/api/football/sync-standings
+          echo "Despertando la API de Render..."
+
+          curl -L \
+            --silent \
+            --show-error \
+            --max-time 30 \
+            https://api.albinegroscastellon.com/health || true
+
+          sleep 120
 
       - name: Sync calendar
-        if: github.event.schedule == '0 2 * * *' || github.event_name == 'workflow_dispatch'
         run: |
-          curl -X POST https://api.albinegroscastellon.com/api/football/sync-calendar
+          echo "Actualizando calendario..."
+
+          for i in {1..5}; do
+            echo "Intento $i..."
+
+            STATUS=$(curl -L \
+              --silent \
+              --output calendar-response.txt \
+              --write-out "%{http_code}" \
+              --max-time 120 \
+              --request POST \
+              https://api.albinegroscastellon.com/api/football/sync-calendar)
+
+            cat calendar-response.txt || true
+            echo ""
+            echo "HTTP status: $STATUS"
+
+            if [ "$STATUS" = "200" ]; then
+              echo "Calendario actualizado correctamente"
+              exit 0
+            fi
+
+            echo "El calendario ha fallado. Nuevo intento en 30 segundos..."
+            sleep 30
+          done
+
+          echo "No se pudo actualizar el calendario"
+          exit 1
+
+      - name: Sync next match
+        run: |
+          echo "Actualizando próximo partido..."
+
+          for i in {1..5}; do
+            echo "Intento $i..."
+
+            STATUS=$(curl -L \
+              --silent \
+              --output next-match-response.txt \
+              --write-out "%{http_code}" \
+              --max-time 120 \
+              --request POST \
+              https://api.albinegroscastellon.com/api/football/sync-next-match)
+
+            cat next-match-response.txt || true
+            echo ""
+            echo "HTTP status: $STATUS"
+
+            if [ "$STATUS" = "200" ]; then
+              echo "Próximo partido actualizado correctamente"
+              exit 0
+            fi
+
+            echo "La actualización ha fallado. Nuevo intento en 30 segundos..."
+            sleep 30
+          done
+
+          echo "No se pudo actualizar el próximo partido"
+          exit 1
+
+      - name: Sync standings
+        run: |
+          echo "Actualizando clasificación..."
+
+          for i in {1..5}; do
+            echo "Intento $i..."
+
+            STATUS=$(curl -L \
+              --silent \
+              --output standings-response.txt \
+              --write-out "%{http_code}" \
+              --max-time 120 \
+              --request POST \
+              https://api.albinegroscastellon.com/api/football/sync-standings)
+
+            cat standings-response.txt || true
+            echo ""
+            echo "HTTP status: $STATUS"
+
+            if [ "$STATUS" = "200" ]; then
+              echo "Clasificación actualizada correctamente"
+              exit 0
+            fi
+
+            echo "La clasificación ha fallado. Nuevo intento en 30 segundos..."
+            sleep 30
+          done
+
+          echo "No se pudo actualizar la clasificación"
+          exit 1
