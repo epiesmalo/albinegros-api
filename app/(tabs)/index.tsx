@@ -5,6 +5,7 @@ import {
   ImageBackground,
   Linking,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -123,6 +124,7 @@ export default function HomeScreen() {
   const [nextMatch, setNextMatch] = useState<NextMatch | null>(null);
   const [ads, setAds] = useState<AdItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(Date.now());
 
@@ -147,8 +149,14 @@ export default function HomeScreen() {
     return () => clearInterval(timer);
   }, []);
 
-  const loadHomeData = async () => {
+  const loadHomeData = async (isRefresh = false) => {
     try {
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
       const [matchRes, adsRes] = await Promise.all([
         fetch('https://albinegros-api.onrender.com/api/admin/next-match'),
         fetch('https://albinegros-api.onrender.com/api/admin/ads'),
@@ -164,11 +172,20 @@ export default function HomeScreen() {
           : new Date().toISOString()
       );
       setCurrentTime(Date.now());
+      if (!matchRes.ok) {
+        throw new Error(`Error cargando próximo partido: HTTP ${matchRes.status}`);
+      }
+
+      if (!adsRes.ok) {
+        throw new Error(`Error cargando patrocinadores: HTTP ${adsRes.status}`);
+      }
+
       setAds(Array.isArray(adsData) ? adsData : []);
     } catch (error) {
       console.log('Error cargando datos del inicio:', error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -183,7 +200,20 @@ export default function HomeScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={() => loadHomeData(true)}
+          tintColor={colors.accent}
+          colors={[colors.accent]}
+          progressBackgroundColor="#101010"
+        />
+      }
+    >
       <View style={styles.headerCard}>
         <Image
           source={require('../../assets/images/escudo1.png')}
