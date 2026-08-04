@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system';
+import { File, Paths } from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 
 import { Image } from 'expo-image';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ImageZoom from 'react-native-image-pan-zoom';
 
 import { colors } from '../../theme/colors';
@@ -47,6 +48,7 @@ const FAVORITES_STORAGE_KEY = 'albinegros_gallery_favorites';
 
 
 export default function GalleryScreen() {
+  const insets = useSafeAreaInsets();
 
   const [selectedCategory, setSelectedCategory] = useState('tifos');
 
@@ -179,8 +181,20 @@ export default function GalleryScreen() {
     if (!selectedImage) return;
 
     try {
-      const permission =
-        await MediaLibrary.requestPermissionsAsync(false, ['photo']);
+      const mediaLibraryAvailable = await MediaLibrary.isAvailableAsync();
+
+      if (!mediaLibraryAvailable) {
+        Alert.alert(
+          'No disponible',
+          'La galería del dispositivo no está disponible.'
+        );
+        return;
+      }
+
+      const permission = await MediaLibrary.requestPermissionsAsync(
+        false,
+        ['photo']
+      );
 
       if (!permission.granted) {
         Alert.alert(
@@ -190,42 +204,60 @@ export default function GalleryScreen() {
         return;
       }
 
-      const fileName = `${selectedImage.id}-${Date.now()}.jpg`;
-      const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+      const imageUrl = selectedImage.image;
+      const cleanUrl = imageUrl.split('?')[0];
+      const detectedExtension = cleanUrl.match(/\.(png|jpe?g|webp)$/i)?.[1];
+      const extension = detectedExtension
+        ? detectedExtension.toLowerCase().replace('jpeg', 'jpg')
+        : 'jpg';
 
-      const downloadResult = await FileSystem.downloadAsync(
-        selectedImage.image,
-        fileUri
+      const safeId = selectedImage.id.replace(/[^a-zA-Z0-9-_]/g, '-');
+      const fileName = `${safeId}-${Date.now()}.${extension}`;
+      const destination = new File(Paths.cache, fileName);
+
+      const downloadedFile = await File.downloadFileAsync(
+        imageUrl,
+        destination,
+        { idempotent: true }
       );
 
-      if (downloadResult.status !== 200) {
-        Alert.alert(
-          'Error',
-          'No se pudo descargar la imagen desde el servidor.'
-        );
-        return;
+      if (!downloadedFile.exists) {
+        throw new Error('El archivo descargado no existe.');
       }
 
-      const asset = await MediaLibrary.createAssetAsync(
-        downloadResult.uri
-      );
+      const albumName = 'Albinegros Castellón';
+      const existingAlbum = await MediaLibrary.getAlbumAsync(albumName);
 
-      await MediaLibrary.createAlbumAsync(
-        'Albinegros Castellón',
-        asset,
-        false
-      );
+      if (existingAlbum) {
+        await MediaLibrary.createAssetAsync(
+          downloadedFile.uri,
+          existingAlbum
+        );
+      } else {
+        const asset = await MediaLibrary.createAssetAsync(
+          downloadedFile.uri
+        );
+
+        await MediaLibrary.createAlbumAsync(
+          albumName,
+          asset,
+          false
+        );
+      }
 
       Alert.alert(
         'Guardado',
         'La imagen se ha guardado en tu galería.'
       );
     } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+
       console.log('ERROR DESCARGANDO IMAGEN:', error);
 
       Alert.alert(
-        'Error',
-        'No se pudo guardar la imagen. Revisa permisos o conexión.'
+        'No se pudo guardar',
+        `Ha ocurrido un error al descargar o guardar la imagen.\n\n${errorMessage}`
       );
     }
   };
@@ -426,7 +458,14 @@ export default function GalleryScreen() {
         animationType="fade"
         onRequestClose={closeImage}
       >
-        <View style={styles.modalOverlay}>
+        <View
+          style={[
+            styles.modalOverlay,
+            {
+              paddingBottom: Math.max(insets.bottom, 18) + 18,
+            },
+          ]}
+        >
           <Pressable
             style={styles.closeButton}
             onPress={closeImage}
@@ -440,9 +479,9 @@ export default function GalleryScreen() {
             <View style={styles.modalContent}>
               <ImageZoom
                 cropWidth={width}
-                cropHeight={height * 0.72}
+                cropHeight={height * 0.56}
                 imageWidth={width - 32}
-                imageHeight={height * 0.72}
+                imageHeight={height * 0.56}
                 minScale={1}
                 maxScale={3}
                 enableSwipeDown={false}
@@ -463,6 +502,40 @@ export default function GalleryScreen() {
               <Text style={styles.counterText}>
                 {selectedImageIndex! + 1} / {images.length}
               </Text>
+
+              <View style={styles.navigationRow}>
+                <Pressable
+                  style={[
+                    styles.navButton,
+                    selectedImageIndex === 0 &&
+                      styles.navButtonDisabled,
+                  ]}
+                  onPress={goToPrevious}
+                  disabled={selectedImageIndex === 0}
+                >
+                  <Text style={styles.navButtonText}>
+                    Anterior
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  style={[
+                    styles.navButton,
+                    selectedImageIndex ===
+                      images.length - 1 &&
+                      styles.navButtonDisabled,
+                  ]}
+                  onPress={goToNext}
+                  disabled={
+                    selectedImageIndex ===
+                    images.length - 1
+                  }
+                >
+                  <Text style={styles.navButtonText}>
+                    Siguiente
+                  </Text>
+                </Pressable>
+              </View>
 
               <Pressable
                 style={[
@@ -505,40 +578,6 @@ export default function GalleryScreen() {
                   </Pressable>
                 </View>
               )}
-
-              <View style={styles.navigationRow}>
-                <Pressable
-                  style={[
-                    styles.navButton,
-                    selectedImageIndex === 0 &&
-                      styles.navButtonDisabled,
-                  ]}
-                  onPress={goToPrevious}
-                  disabled={selectedImageIndex === 0}
-                >
-                  <Text style={styles.navButtonText}>
-                    Anterior
-                  </Text>
-                </Pressable>
-
-                <Pressable
-                  style={[
-                    styles.navButton,
-                    selectedImageIndex ===
-                      images.length - 1 &&
-                      styles.navButtonDisabled,
-                  ]}
-                  onPress={goToNext}
-                  disabled={
-                    selectedImageIndex ===
-                    images.length - 1
-                  }
-                >
-                  <Text style={styles.navButtonText}>
-                    Siguiente
-                  </Text>
-                </Pressable>
-              </View>
             </View>
           )}
         </View>
@@ -768,14 +807,14 @@ const styles = StyleSheet.create({
   },
 
   modalFavoriteButton: {
-    minHeight: 46,
+    minHeight: 38,
     backgroundColor: '#111111',
     borderWidth: 1,
     borderColor: '#303030',
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: 14,
-    marginBottom: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    marginBottom: 10,
     justifyContent: 'center',
   },
 
@@ -787,7 +826,7 @@ const styles = StyleSheet.create({
   modalFavoriteButtonText: {
     color: '#FFFFFF',
     fontWeight: '900',
-    fontSize: 14,
+    fontSize: 12,
   },
 
   modalOverlay: {
@@ -795,7 +834,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.98)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 16,
   },
 
   modalContent: {
@@ -805,41 +845,42 @@ const styles = StyleSheet.create({
 
   fullImage: {
     width: width - 32,
-    height: height * 0.72,
+    height: height * 0.56,
   },
 
   fullImageTitle: {
     color: '#FFFFFF',
-    fontSize: 18,
-    lineHeight: 23,
+    fontSize: 15,
+    lineHeight: 20,
     fontWeight: '900',
-    marginTop: 12,
+    marginTop: 8,
     textAlign: 'center',
   },
 
   counterText: {
     color: '#929292',
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '700',
-    marginTop: 6,
-    marginBottom: 14,
+    marginTop: 4,
+    marginBottom: 10,
   },
 
   navigationRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     width: '100%',
-    gap: 12,
+    gap: 10,
+    marginBottom: 10,
   },
 
   navButton: {
     flex: 1,
-    minHeight: 46,
+    minHeight: 40,
     backgroundColor: '#111111',
     borderWidth: 1,
     borderColor: colors.accent,
-    paddingVertical: 12,
-    borderRadius: 14,
+    paddingVertical: 9,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -853,6 +894,7 @@ const styles = StyleSheet.create({
   navButtonText: {
     color: colors.accent,
     fontWeight: '900',
+    fontSize: 12,
   },
 
   closeButton: {
@@ -875,36 +917,36 @@ const styles = StyleSheet.create({
 
   wallpaperActions: {
     flexDirection: 'row',
-    gap: 10,
-    marginBottom: 14,
+    gap: 8,
+    marginBottom: 0,
   },
 
   downloadButton: {
     backgroundColor: colors.accent,
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: 14,
+    paddingVertical: 9,
+    paddingHorizontal: 15,
+    borderRadius: 12,
   },
 
   downloadButtonText: {
     color: '#101010',
     fontWeight: '900',
-    fontSize: 14,
+    fontSize: 12,
   },
 
   shareButton: {
     backgroundColor: '#111111',
     borderWidth: 1,
     borderColor: '#303030',
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: 14,
+    paddingVertical: 9,
+    paddingHorizontal: 15,
+    borderRadius: 12,
   },
 
   shareButtonText: {
     color: '#FFFFFF',
     fontWeight: '900',
-    fontSize: 14,
+    fontSize: 12,
   },
 
   cardPressed: {
