@@ -1,5 +1,14 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { colors } from '../../theme/colors';
 
 type StandingItem = {
@@ -27,16 +36,33 @@ const getLogoUrl = (teamName: string, logo?: string) => {
 export default function StandingsScreen() {
   const [standings, setStandings] = useState<StandingItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState<'summary' | 'full'>('summary');
 
-  const loadStandings = async () => {
+  const loadStandings = async (isRefresh = false) => {
     try {
-      setLoading(true);
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
       setError('');
 
-      const response = await fetch('https://api.albinegroscastellon.com/standings/first-team');
+      const response = await fetch(
+        'https://api.albinegroscastellon.com/standings/first-team'
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
       const data = await response.json();
+
+      if (!Array.isArray(data)) {
+        throw new Error('La respuesta de la clasificación no es válida.');
+      }
 
       setStandings(data);
     } catch (err) {
@@ -44,6 +70,7 @@ export default function StandingsScreen() {
       setStandings([]);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -52,7 +79,20 @@ export default function StandingsScreen() {
   }, []);
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={() => loadStandings(true)}
+          tintColor={colors.accent}
+          colors={[colors.accent]}
+          progressBackgroundColor="#101010"
+        />
+      }
+    >
       <View style={styles.heroCard}>
         <Text style={styles.kicker}>SEGUNDA DIVISIÓN</Text>
         <Text style={styles.subtitle}>Temporada 2026/27</Text>
