@@ -5,6 +5,7 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
+        animation: 'fade',
         headerTitleAlign: 'center',
         headerStyle: {
           backgroundColor: '#101010',
