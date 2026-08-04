@@ -9,6 +9,7 @@ import {
   FlatList,
   Modal,
   Pressable,
+  RefreshControl,
   ScrollView,
   Share,
   StyleSheet,
@@ -54,6 +55,7 @@ export default function GalleryScreen() {
 
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
 
   useEffect(() => {
@@ -61,15 +63,27 @@ export default function GalleryScreen() {
     loadFavorites();
   }, []);
 
-  const loadGallery = async () => {
+  const loadGallery = async (isRefresh = false) => {
     try {
+      if (isRefresh) {
+        setRefreshing(true);
+      }
+
       const response = await fetch(
         'https://api.albinegroscastellon.com/api/admin/gallery'
       );
 
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
       const data = await response.json();
 
-      const sortedData = data.sort(
+      if (!Array.isArray(data)) {
+        throw new Error('La respuesta de la galería no es válida.');
+      }
+
+      const sortedData = [...data].sort(
         (a: GalleryItem, b: GalleryItem) =>
           new Date(b.created_at || 0).getTime() -
           new Date(a.created_at || 0).getTime()
@@ -78,6 +92,8 @@ export default function GalleryScreen() {
       setGalleryItems(sortedData);
     } catch (error) {
       console.log('Error cargando galería:', error);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -351,6 +367,15 @@ export default function GalleryScreen() {
         numColumns={2}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => loadGallery(true)}
+            tintColor={colors.accent}
+            colors={[colors.accent]}
+            progressBackgroundColor="#101010"
+          />
+        }
         ListHeaderComponent={
           <>
             <View style={styles.header}>
