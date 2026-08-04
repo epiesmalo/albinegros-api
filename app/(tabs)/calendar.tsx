@@ -5,6 +5,7 @@ import {
   Image,
   Modal,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -46,18 +47,29 @@ const isCastellonTeam = (team?: string) =>
 export default function CalendarScreen() {
   const [fixtures, setFixtures] = useState<FixtureItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [selectedRound, setSelectedRound] = useState<number | null>(null);
   const [filter, setFilter] = useState<'Todos' | 'Castellón'>('Todos');
   const [roundDropdownOpen, setRoundDropdownOpen] = useState(false);
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
 
-  const loadCalendar = async () => {
+  const loadCalendar = async (isRefresh = false) => {
     try {
-      setLoading(true);
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
       setError('');
 
       const response = await fetch('https://api.albinegroscastellon.com/calendar/first-team');
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
       const data = await response.json();
 
       if (!Array.isArray(data)) {
@@ -72,6 +84,7 @@ export default function CalendarScreen() {
       setFixtures([]);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -230,6 +243,17 @@ export default function CalendarScreen() {
         style={styles.container}
         contentContainerStyle={styles.content}
         scrollEnabled={!roundDropdownOpen && !filterDropdownOpen}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => loadCalendar(true)}
+            enabled={!roundDropdownOpen && !filterDropdownOpen}
+            tintColor={colors.accent}
+            colors={[colors.accent]}
+            progressBackgroundColor="#101010"
+          />
+        }
       >
         <View style={styles.heroCard}>
           <Text style={styles.kicker}>SEGUNDA DIVISIÓN</Text>
