@@ -289,6 +289,8 @@ const nextMatch = {
 
   teamLogo: match.homeLogo,
   opponentLogo: match.awayLogo,
+
+  updated_at: new Date().toISOString(),
 };
 
     const { error: upsertError } = await supabase

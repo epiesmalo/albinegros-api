@@ -29,6 +29,7 @@ type NextMatch = {
   competition: string;
   teamLogo: string;
   opponentLogo: string;
+  updatedAt?: string | null;
 };
 
 type AdItem = {
@@ -92,10 +93,38 @@ const getDisplayTeamName = (shortName?: string, fullName?: string) => {
   return selectedName.toUpperCase();
 };
 
+const formatUpdatedAgo = (date?: string | null, now = Date.now()) => {
+  if (!date) return '';
+
+  const updatedTime = new Date(date).getTime();
+
+  if (Number.isNaN(updatedTime)) return '';
+
+  const diffMs = Math.max(0, now - updatedTime);
+  const minutes = Math.floor(diffMs / 60_000);
+
+  if (minutes < 1) return 'Datos actualizados ahora';
+  if (minutes < 60) return `Datos actualizados hace ${minutes} min`;
+
+  const hours = Math.floor(minutes / 60);
+
+  if (hours < 24) {
+    return `Datos actualizados hace ${hours} ${hours === 1 ? 'hora' : 'horas'}`;
+  }
+
+  const days = Math.floor(hours / 24);
+
+  if (days === 1) return 'Datos actualizados ayer';
+
+  return `Datos actualizados hace ${days} días`;
+};
+
 export default function HomeScreen() {
   const [nextMatch, setNextMatch] = useState<NextMatch | null>(null);
   const [ads, setAds] = useState<AdItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(Date.now());
 
   const quickLinks = [
     { id: '1', title: 'Clasificación', route: '/(tabs)/explore', icon: 'trophy' },
@@ -110,6 +139,14 @@ export default function HomeScreen() {
     loadHomeData();
   }, []);
 
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 60_000);
+
+    return () => clearInterval(timer);
+  }, []);
+
   const loadHomeData = async () => {
     try {
       const [matchRes, adsRes] = await Promise.all([
@@ -121,6 +158,12 @@ export default function HomeScreen() {
       const adsData = await adsRes.json();
 
       setNextMatch(matchData);
+      setUpdatedAt(
+        typeof matchData?.updatedAt === 'string'
+          ? matchData.updatedAt
+          : new Date().toISOString()
+      );
+      setCurrentTime(Date.now());
       setAds(Array.isArray(adsData) ? adsData : []);
     } catch (error) {
       console.log('Error cargando datos del inicio:', error);
@@ -310,6 +353,15 @@ export default function HomeScreen() {
                     color={colors.accent}
                   />
                 </Pressable>
+
+                {!!updatedAt && (
+                  <View style={styles.updatedRow}>
+                    <View style={styles.updatedDot} />
+                    <Text style={styles.updatedText}>
+                      {formatUpdatedAgo(updatedAt, currentTime)}
+                    </Text>
+                  </View>
+                )}
               </View>
             </>
           )}
@@ -578,6 +630,29 @@ const styles = StyleSheet.create({
     color: colors.accent,
     marginRight: 7,
   },
+  updatedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 7,
+  },
+
+  updatedDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#46D17A',
+    marginRight: 6,
+  },
+
+  updatedText: {
+    color: '#A8A8A8',
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+
   sectionTitle: {
     fontSize: 20,
     fontWeight: '900',

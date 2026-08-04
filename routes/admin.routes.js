@@ -185,17 +185,23 @@ router.get('/api/admin/next-match', async (req, res) => {
       .eq('id', '1')
       .single();
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
 
     res.json({
       teamName: data.teamName,
+      teamShortName: data.teamShortName,
       opponent: data.opponent,
+      opponentShortName: data.opponentShortName,
+      isHome: data.isHome,
       date: data.date,
       time: data.time,
       stadium: data.stadium,
       competition: data.competition,
-      teamLogo: data.teamlogo,
+      teamLogo: data.teamLogo || data.teamlogo,
       opponentLogo: data.opponentLogo,
+      updatedAt: data.updated_at,
     });
   } catch (error) {
     res.status(500).json({
@@ -204,20 +210,20 @@ router.get('/api/admin/next-match', async (req, res) => {
     });
   }
 });
-
 router.post('/api/admin/next-match', adminAuth, async (req, res) => {
   try {
     const payload = {
-      id: '1',
-      teamName: req.body.teamName,
-      opponent: req.body.opponent,
-      date: req.body.date,
-      time: req.body.time,
-      stadium: req.body.stadium,
-      competition: req.body.competition,
-      teamlogo: req.body.teamLogo,
-      opponentLogo: req.body.opponentLogo,
-    };
+  id: '1',
+  teamName: req.body.teamName,
+  opponent: req.body.opponent,
+  date: req.body.date,
+  time: req.body.time,
+  stadium: req.body.stadium,
+  competition: req.body.competition,
+  teamLogo: req.body.teamLogo,
+  opponentLogo: req.body.opponentLogo,
+  updated_at: new Date().toISOString(),
+};
 
     const { error } = await supabase
       .from('next_match')
