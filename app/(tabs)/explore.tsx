@@ -1,8 +1,3 @@
-Biblioteca
-/
-explore_clasificacion_completa.tsx
-
-
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { colors } from '../../theme/colors';
@@ -194,23 +189,13 @@ export default function StandingsScreen() {
               })}
             </View>
           ) : (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.fullTableScroll}
-            >
-              <View style={[styles.tableCard, styles.fullTableCard]}>
-                <View style={[styles.headerRow, styles.fullHeaderRow]}>
+            <View style={styles.frozenTableCard}>
+              <View style={styles.frozenColumns}>
+                <View style={[styles.headerRow, styles.frozenHeaderRow]}>
                   <Text style={[styles.headerCell, styles.rankCell]}>#</Text>
-                  <Text style={[styles.headerCell, styles.fullTeamCell]}>Equipo</Text>
-                  <Text style={[styles.headerCell, styles.fullStatCell]}>PJ</Text>
-                  <Text style={[styles.headerCell, styles.fullStatCell]}>G</Text>
-                  <Text style={[styles.headerCell, styles.fullStatCell]}>E</Text>
-                  <Text style={[styles.headerCell, styles.fullStatCell]}>P</Text>
-                  <Text style={[styles.headerCell, styles.fullStatCell]}>GF</Text>
-                  <Text style={[styles.headerCell, styles.fullStatCell]}>GC</Text>
-                  <Text style={[styles.headerCell, styles.fullStatCell]}>DG</Text>
-                  <Text style={[styles.headerCell, styles.fullPointsCell]}>Pts</Text>
+                  <Text style={[styles.headerCell, styles.frozenTeamCell]}>
+                    Equipo
+                  </Text>
                 </View>
 
                 {standings.map((item, index) => {
@@ -218,17 +203,13 @@ export default function StandingsScreen() {
                   const isDirectPromotion = item.position <= 2;
                   const isPlayoff = item.position >= 3 && item.position <= 6;
                   const isRelegation = item.position >= standings.length - 3;
-                  const goalsFor = item.goalsFor ?? 0;
-                  const goalsAgainst = item.goalsAgainst ?? 0;
-                  const goalDiff =
-                    item.goalDifference ?? (goalsFor - goalsAgainst);
 
                   return (
                     <View
-                      key={`full-${item.team}-${index}`}
+                      key={`fixed-${item.team}-${index}`}
                       style={[
                         styles.row,
-                        styles.fullRow,
+                        styles.frozenRow,
                         isDirectPromotion && styles.directPromotionRow,
                         isPlayoff && styles.playoffRow,
                         isRelegation && styles.relegationRow,
@@ -239,7 +220,7 @@ export default function StandingsScreen() {
                         {item.position}
                       </Text>
 
-                      <View style={styles.fullTeamCell}>
+                      <View style={styles.frozenTeamCell}>
                         <View style={styles.teamInfo}>
                           {item.logo ? (
                             <Image
@@ -261,20 +242,65 @@ export default function StandingsScreen() {
                           </Text>
                         </View>
                       </View>
-
-                      <Text style={[styles.statText, styles.fullStatCell]}>{item.playedGames}</Text>
-                      <Text style={[styles.statText, styles.fullStatCell]}>{item.won}</Text>
-                      <Text style={[styles.statText, styles.fullStatCell]}>{item.draw}</Text>
-                      <Text style={[styles.statText, styles.fullStatCell]}>{item.lost}</Text>
-                      <Text style={[styles.statText, styles.fullStatCell]}>{goalsFor}</Text>
-                      <Text style={[styles.statText, styles.fullStatCell]}>{goalsAgainst}</Text>
-                      <Text style={[styles.statText, styles.fullStatCell]}>{goalDiff}</Text>
-                      <Text style={[styles.pointsText, styles.fullPointsCell]}>{item.points}</Text>
                     </View>
                   );
                 })}
               </View>
-            </ScrollView>
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.statsScroll}
+                contentContainerStyle={styles.statsScrollContent}
+              >
+                <View style={styles.statsTable}>
+                  <View style={[styles.headerRow, styles.statsHeaderRow]}>
+                    <Text style={[styles.headerCell, styles.fullStatCell]}>PJ</Text>
+                    <Text style={[styles.headerCell, styles.fullStatCell]}>G</Text>
+                    <Text style={[styles.headerCell, styles.fullStatCell]}>E</Text>
+                    <Text style={[styles.headerCell, styles.fullStatCell]}>P</Text>
+                    <Text style={[styles.headerCell, styles.fullStatCell]}>GF</Text>
+                    <Text style={[styles.headerCell, styles.fullStatCell]}>GC</Text>
+                    <Text style={[styles.headerCell, styles.fullStatCell]}>DG</Text>
+                    <Text style={[styles.headerCell, styles.fullPointsCell]}>Pts</Text>
+                  </View>
+
+                  {standings.map((item, index) => {
+                    const isCastellon = item.team.toLowerCase().includes('castell');
+                    const isDirectPromotion = item.position <= 2;
+                    const isPlayoff = item.position >= 3 && item.position <= 6;
+                    const isRelegation = item.position >= standings.length - 3;
+                    const goalsFor = item.goalsFor ?? 0;
+                    const goalsAgainst = item.goalsAgainst ?? 0;
+                    const goalDiff =
+                      item.goalDifference ?? (goalsFor - goalsAgainst);
+
+                    return (
+                      <View
+                        key={`stats-${item.team}-${index}`}
+                        style={[
+                          styles.row,
+                          styles.statsRow,
+                          isDirectPromotion && styles.directPromotionStatsRow,
+                          isPlayoff && styles.playoffStatsRow,
+                          isRelegation && styles.relegationStatsRow,
+                          isCastellon && styles.highlightStatsRow,
+                        ]}
+                      >
+                        <Text style={[styles.statText, styles.fullStatCell]}>{item.playedGames}</Text>
+                        <Text style={[styles.statText, styles.fullStatCell]}>{item.won}</Text>
+                        <Text style={[styles.statText, styles.fullStatCell]}>{item.draw}</Text>
+                        <Text style={[styles.statText, styles.fullStatCell]}>{item.lost}</Text>
+                        <Text style={[styles.statText, styles.fullStatCell]}>{goalsFor}</Text>
+                        <Text style={[styles.statText, styles.fullStatCell]}>{goalsAgainst}</Text>
+                        <Text style={[styles.statText, styles.fullStatCell]}>{goalDiff}</Text>
+                        <Text style={[styles.pointsText, styles.fullPointsCell]}>{item.points}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+            </View>
           )}
         </>
       )}
@@ -483,29 +509,97 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: '900',
   },
-  fullTableScroll: {
+  frozenTableCard: {
+    flexDirection: 'row',
+    backgroundColor: '#101010',
+    borderRadius: 18,
+    padding: 7,
+    borderWidth: 1,
+    borderColor: '#242424',
+    overflow: 'hidden',
+  },
+  frozenColumns: {
+    width: 210,
+    zIndex: 2,
+    backgroundColor: '#101010',
+  },
+  frozenHeaderRow: {
+    marginRight: 0,
+    marginBottom: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderTopRightRadius: 0,
+    borderBottomRightRadius: 0,
+    borderRightWidth: 0,
+    backgroundColor: '#1B1B1B',
+  },
+  frozenRow: {
+    minHeight: 52,
+    marginRight: 0,
+    marginBottom: 5,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderTopRightRadius: 0,
+    borderBottomRightRadius: 0,
+    borderRightWidth: 0,
+  },
+  frozenTeamCell: {
+    flex: 1,
+    paddingRight: 6,
+    justifyContent: 'center',
+  },
+  statsScroll: {
+    flex: 1,
+  },
+  statsScrollContent: {
+    paddingLeft: 0,
     paddingRight: 2,
   },
-  fullTableCard: {
-    width: 760,
+  statsTable: {
+    width: 390,
   },
-  fullHeaderRow: {
-    minWidth: 744,
+  statsHeaderRow: {
+    marginBottom: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 0,
+    borderTopLeftRadius: 0,
+    borderBottomLeftRadius: 0,
+    borderLeftWidth: 0,
+    backgroundColor: '#1B1B1B',
   },
-  fullRow: {
-    minWidth: 744,
+  statsRow: {
+    minHeight: 52,
+    marginBottom: 5,
+    paddingVertical: 10,
+    paddingHorizontal: 0,
+    borderTopLeftRadius: 0,
+    borderBottomLeftRadius: 0,
+    borderLeftWidth: 0,
   },
-  fullTeamCell: {
-    width: 190,
-    paddingRight: 8,
+  directPromotionStatsRow: {
+    borderLeftColor: 'transparent',
+  },
+  playoffStatsRow: {
+    borderLeftColor: 'transparent',
+  },
+  relegationStatsRow: {
+    borderLeftColor: 'transparent',
+  },
+  highlightStatsRow: {
+    backgroundColor: '#191714',
+    borderColor: colors.accent,
+    borderWidth: 0.5,
+    borderLeftWidth: 0,
   },
   fullStatCell: {
     width: 48,
     textAlign: 'center',
+    textAlignVertical: 'center',
   },
   fullPointsCell: {
-    width: 54,
+    width: 42,
     textAlign: 'center',
+    textAlignVertical: 'center',
   },
   errorText: {
     color: '#ff5c5c',
