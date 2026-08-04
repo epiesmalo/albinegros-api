@@ -346,22 +346,24 @@ export default function HomeScreen() {
                   style={styles.calendarButton}
                   onPress={() => router.push('/(tabs)/calendar' as any)}
                 >
-                  <Text style={styles.calendarButtonText}>Ver calendario</Text>
-                  <Ionicons
-                    name="arrow-forward"
-                    size={16}
-                    color={colors.accent}
-                  />
-                </Pressable>
-
-                {!!updatedAt && (
-                  <View style={styles.updatedRow}>
-                    <View style={styles.updatedDot} />
-                    <Text style={styles.updatedText}>
-                      {formatUpdatedAgo(updatedAt, currentTime)}
-                    </Text>
+                  <View style={styles.calendarButtonMain}>
+                    <Text style={styles.calendarButtonText}>Ver calendario</Text>
+                    <Ionicons
+                      name="arrow-forward"
+                      size={16}
+                      color={colors.accent}
+                    />
                   </View>
-                )}
+
+                  {!!updatedAt && (
+                    <View style={styles.updatedRow}>
+                      <View style={styles.updatedDot} />
+                      <Text style={styles.updatedText}>
+                        {formatUpdatedAgo(updatedAt, currentTime)}
+                      </Text>
+                    </View>
+                  )}
+                </Pressable>
               </View>
             </>
           )}
@@ -486,7 +488,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   matchCard: {
-    height: 430,
+    height: 444,
     borderRadius: 24,
     overflow: 'hidden',
     marginBottom: 20,
@@ -612,43 +614,51 @@ const styles = StyleSheet.create({
   },
   calendarButton: {
     alignSelf: 'center',
-    minWidth: 138,
-    height: 34,
-    borderRadius: 17,
+    minWidth: 196,
+    minHeight: 52,
+    borderRadius: 18,
     marginTop: 9,
-    backgroundColor: 'rgba(0, 0, 0, 0.68)',
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
     borderWidth: 1,
     borderColor: 'rgba(212, 175, 55, 0.75)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 7,
+    paddingHorizontal: 16,
+  },
+
+  calendarButtonMain: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 16,
   },
+
   calendarButtonText: {
     fontSize: 13,
     fontWeight: '900',
     color: colors.accent,
     marginRight: 7,
   },
+
   updatedRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 7,
+    marginTop: 4,
   },
 
   updatedDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
     backgroundColor: '#46D17A',
-    marginRight: 6,
+    marginRight: 5,
   },
 
   updatedText: {
     color: '#A8A8A8',
-    fontSize: 10,
-    lineHeight: 13,
+    fontSize: 9,
+    lineHeight: 11,
     fontWeight: '700',
     textAlign: 'center',
   },
