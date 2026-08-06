@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { colors } from '../../theme/colors';
+import AnimatedCard from '../../components/AnimatedCard';
 
 type NewsItem = {
   id: string;
@@ -192,58 +193,69 @@ export default function NewsScreen() {
         />
       }
     >
-      <View style={styles.header}>
-        <View style={styles.headerText}>
-          <Text style={styles.eyebrow}>ACTUALIDAD ALBINEGRA</Text>
-          <Text style={styles.screenTitle}>Noticias</Text>
-          <Text style={styles.headerDescription}>
-            Últimas noticias del C.D. Castellón.
-          </Text>
-        </View>
-
-        {!loading && !error && news.length > 0 ? (
-          <View style={styles.counterBadge}>
-            <Text style={styles.counterText}>{news.length}</Text>
+      <AnimatedCard delay={0}>
+        <View style={styles.header}>
+          <View style={styles.headerText}>
+            <Text style={styles.eyebrow}>ACTUALIDAD ALBINEGRA</Text>
+            <Text style={styles.screenTitle}>Noticias</Text>
+            <Text style={styles.headerDescription}>
+              Últimas noticias del C.D. Castellón.
+            </Text>
           </View>
-        ) : null}
-      </View>
+
+          {!loading && !error && news.length > 0 ? (
+            <View style={styles.counterBadge}>
+              <Text style={styles.counterText}>{news.length}</Text>
+            </View>
+          ) : null}
+        </View>
+      </AnimatedCard>
 
       {loading ? <NewsSkeleton /> : null}
 
       {!loading && error ? (
-        <View style={styles.messageCard}>
-          <Text style={styles.errorTitle}>
-            No se pudieron cargar
-          </Text>
+        <AnimatedCard delay={70}>
+          <View style={styles.messageCard}>
+            <Text style={styles.errorTitle}>
+              No se pudieron cargar
+            </Text>
 
-          <Text style={styles.errorText}>{error}</Text>
+            <Text style={styles.errorText}>{error}</Text>
 
-          <Pressable
-            style={({ pressed }) => [
-              styles.retryButton,
-              pressed && styles.buttonPressed,
-            ]}
-            onPress={() => loadNews()}
-          >
-            <Text style={styles.retryButtonText}>Reintentar</Text>
-          </Pressable>
-        </View>
+            <Pressable
+              style={({ pressed }) => [
+                styles.retryButton,
+                pressed && styles.buttonPressed,
+              ]}
+              onPress={() => loadNews()}
+            >
+              <Text style={styles.retryButtonText}>Reintentar</Text>
+            </Pressable>
+          </View>
+        </AnimatedCard>
       ) : null}
 
       {!loading && !error && news.length === 0 ? (
-        <View style={styles.messageCard}>
-          <Text style={styles.emptyTitle}>
-            Todavía no hay noticias
-          </Text>
+        <AnimatedCard delay={70}>
+          <View style={styles.messageCard}>
+            <Text style={styles.emptyTitle}>
+              Todavía no hay noticias
+            </Text>
 
-          <Text style={styles.emptyText}>
-            Las últimas novedades del C.D. Castellón aparecerán aquí.
-          </Text>
-        </View>
+            <Text style={styles.emptyText}>
+              Las últimas novedades del C.D. Castellón aparecerán aquí.
+            </Text>
+          </View>
+        </AnimatedCard>
       ) : null}
 
       {!loading && !error && featuredNews ? (
         <>
+          <AnimatedCard
+            style={styles.animatedFullWidth}
+            delay={80}
+            animateKey={currentPage}
+          >
           <Pressable
             style={({ pressed }) => [
               styles.featuredCard,
@@ -302,11 +314,17 @@ export default function NewsScreen() {
               </View>
             </View>
           </Pressable>
+          </AnimatedCard>
 
           <View style={styles.secondaryList}>
-            {secondaryNews.map((item) => (
-              <Pressable
+            {secondaryNews.map((item, index) => (
+              <AnimatedCard
                 key={item.id}
+                style={styles.animatedFullWidth}
+                delay={140 + index * 55}
+                animateKey={`${currentPage}-${item.id}`}
+              >
+                <Pressable
                 style={({ pressed }) => [
                   styles.compactCard,
                   pressed && styles.cardPressed,
@@ -359,12 +377,18 @@ export default function NewsScreen() {
                     Leer noticia →
                   </Text>
                 </View>
-              </Pressable>
+                </Pressable>
+              </AnimatedCard>
             ))}
           </View>
 
           {totalPages > 1 ? (
-            <View style={styles.paginationCard}>
+            <AnimatedCard
+              style={styles.animatedFullWidth}
+              delay={380}
+              animateKey={currentPage}
+            >
+              <View style={styles.paginationCard}>
               <Pressable
                 style={({ pressed }) => [
                   styles.pageButton,
@@ -417,7 +441,8 @@ export default function NewsScreen() {
                   ›
                 </Text>
               </Pressable>
-            </View>
+              </View>
+            </AnimatedCard>
           ) : null}
         </>
       ) : null}
@@ -426,6 +451,10 @@ export default function NewsScreen() {
 }
 
 const styles = StyleSheet.create({
+  animatedFullWidth: {
+    width: '100%',
+  },
+
   container: {
     flex: 1,
     backgroundColor: '#050505',
