@@ -4,7 +4,6 @@ import {
   Image,
   ImageBackground,
   Linking,
-  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -14,6 +13,7 @@ import {
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
+import AnimatedPressable from '../../components/AnimatedPressable';
 
 const NEXT_MATCH_BG = require('../../assets/images/next-match-bg.png');
 const CASTELLON_LOGO_URL = 'https://www.albinegroscastellon.com/cas.png';
@@ -229,27 +229,33 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.socialContainer}>
-        <Pressable
-          style={styles.socialButton}
-          onPress={() =>
-            Linking.openURL('https://www.albinegroscastellon.com')
-          }
-        >
-          <Ionicons name="globe-outline" size={20} color={colors.accent} />
-          <Text style={styles.socialText}>Web</Text>
-        </Pressable>
+        <View style={styles.socialButtonWrapper}>
+          <AnimatedPressable
+            style={[styles.socialButton, styles.animatedSocialButton]}
+            pressedScale={0.97}
+            onPress={() =>
+              Linking.openURL('https://www.albinegroscastellon.com')
+            }
+          >
+            <Ionicons name="globe-outline" size={20} color={colors.accent} />
+            <Text style={styles.socialText}>Web</Text>
+          </AnimatedPressable>
+        </View>
 
-        <Pressable
-          style={styles.socialButton}
-          onPress={() =>
-            Linking.openURL(
-              'https://www.instagram.com/albinegroscastellon'
-            )
-          }
-        >
-          <Ionicons name="logo-instagram" size={20} color={colors.accent} />
-          <Text style={styles.socialText}>Instagram</Text>
-        </Pressable>
+        <View style={styles.socialButtonWrapper}>
+          <AnimatedPressable
+            style={[styles.socialButton, styles.animatedSocialButton]}
+            pressedScale={0.97}
+            onPress={() =>
+              Linking.openURL(
+                'https://www.instagram.com/albinegroscastellon'
+              )
+            }
+          >
+            <Ionicons name="logo-instagram" size={20} color={colors.accent} />
+            <Text style={styles.socialText}>Instagram</Text>
+          </AnimatedPressable>
+        </View>
       </View>
 
       <ImageBackground
@@ -372,8 +378,9 @@ export default function HomeScreen() {
                   </View>
                 </View>
 
-                <Pressable
+                <AnimatedPressable
                   style={styles.calendarButton}
+                  pressedScale={0.975}
                   onPress={() => router.push('/(tabs)/calendar' as any)}
                 >
                   <View style={styles.calendarButtonMain}>
@@ -393,7 +400,7 @@ export default function HomeScreen() {
                       </Text>
                     </View>
                   )}
-                </Pressable>
+                </AnimatedPressable>
               </View>
             </>
           )}
@@ -408,9 +415,11 @@ export default function HomeScreen() {
         contentContainerStyle={styles.quickLinksContent}
       >
         {quickLinks.map((item) => (
-          <Pressable
+          <AnimatedPressable
             key={item.id}
             style={styles.quickLinkCard}
+            pressedScale={0.95}
+            animationDuration={110}
             onPress={() => router.push(item.route as any)}
           >
             <View style={styles.quickIconWrapper}>
@@ -424,7 +433,7 @@ export default function HomeScreen() {
             <Text style={styles.quickLinkTitle} numberOfLines={2}>
               {item.title}
             </Text>
-          </Pressable>
+          </AnimatedPressable>
         ))}
       </ScrollView>
 
@@ -437,9 +446,11 @@ export default function HomeScreen() {
           contentContainerStyle={styles.sponsorsContent}
         >
           {ads.map((ad) => (
-            <Pressable
+            <AnimatedPressable
               key={ad.id}
               style={styles.sponsorCard}
+              pressedScale={0.96}
+              animationDuration={110}
               onPress={() => openLink(ad.link)}
             >
               <Image source={{ uri: ad.image }} style={styles.sponsorImage} />
@@ -447,7 +458,7 @@ export default function HomeScreen() {
               <Text style={styles.sponsorTitle} numberOfLines={2}>
                 {ad.title}
               </Text>
-            </Pressable>
+            </AnimatedPressable>
           ))}
         </ScrollView>
       </View>
@@ -499,6 +510,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 14,
   },
+  socialButtonWrapper: {
+    flex: 1,
+    marginHorizontal: 4,
+  },
+
+  animatedSocialButton: {
+    flex: 0,
+    marginHorizontal: 0,
+    width: '100%',
+  },
+
   socialButton: {
     flex: 1,
     backgroundColor: '#101010',
