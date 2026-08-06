@@ -14,6 +14,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import AnimatedPressable from '../../components/AnimatedPressable';
+import AnimatedCard from '../../components/AnimatedCard';
 
 const NEXT_MATCH_BG = require('../../assets/images/next-match-bg.png');
 const CASTELLON_LOGO_URL = 'https://www.albinegroscastellon.com/cas.png';
@@ -214,20 +215,23 @@ export default function HomeScreen() {
         />
       }
     >
-      <View style={styles.headerCard}>
-        <Image
-          source={require('../../assets/images/escudo1.png')}
-          style={styles.logo}
-        />
+      <AnimatedCard delay={0}>
+        <View style={styles.headerCard}>
+          <Image
+            source={require('../../assets/images/escudo1.png')}
+            style={styles.logo}
+          />
 
-        <View style={styles.headerTextBox}>
-          <Text style={styles.title}>Albinegros Castellón</Text>
-          <Text style={styles.subtitle}>
-            Toda la información del club en una sola app
-          </Text>
+          <View style={styles.headerTextBox}>
+            <Text style={styles.title}>Albinegros Castellón</Text>
+            <Text style={styles.subtitle}>
+              Toda la información del club en una sola app
+            </Text>
+          </View>
         </View>
-      </View>
+      </AnimatedCard>
 
+      <AnimatedCard delay={70}>
       <View style={styles.socialContainer}>
         <View style={styles.socialButtonWrapper}>
           <AnimatedPressable
@@ -257,7 +261,9 @@ export default function HomeScreen() {
           </AnimatedPressable>
         </View>
       </View>
+      </AnimatedCard>
 
+      <AnimatedCard delay={140}>
       <ImageBackground
         source={NEXT_MATCH_BG}
         imageStyle={styles.matchBackgroundImage}
@@ -406,7 +412,9 @@ export default function HomeScreen() {
           )}
         </View>
       </ImageBackground>
+      </AnimatedCard>
 
+      <AnimatedCard delay={220}>
       <Text style={styles.sectionTitle}>Accesos rápidos</Text>
 
       <ScrollView
@@ -436,7 +444,9 @@ export default function HomeScreen() {
           </AnimatedPressable>
         ))}
       </ScrollView>
+      </AnimatedCard>
 
+      <AnimatedCard delay={300}>
       <Text style={styles.sectionTitle}>Patrocinadores oficiales</Text>
 
       <View style={styles.sponsorsStrip}>
@@ -462,6 +472,7 @@ export default function HomeScreen() {
           ))}
         </ScrollView>
       </View>
+      </AnimatedCard>
     </ScrollView>
   );
 }
