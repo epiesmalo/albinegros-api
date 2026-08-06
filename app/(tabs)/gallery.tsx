@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ImageZoom from 'react-native-image-pan-zoom';
 
 import { colors } from '../../theme/colors';
+import AnimatedCard from '../../components/AnimatedCard';
 
 type GalleryItem = {
   id: string;
@@ -302,15 +303,19 @@ export default function GalleryScreen() {
     item: GalleryItem;
     index: number;
   }) => (
-    <Pressable
+    <AnimatedCard
+      style={[
+        styles.animatedGridItem,
+        index % 2 === 0 ? styles.leftAnimatedItem : styles.rightAnimatedItem,
+      ]}
+      delay={Math.min(index, 8) * 45}
+      animateKey={`${selectedCategory}-${item.id}`}
+    >
+      <Pressable
   style={({ pressed }) => [
     selectedCategory === 'fondos'
       ? styles.wallpaperCard
       : styles.imageCard,
-
-    index % 2 === 0
-      ? styles.leftCard
-      : styles.rightCard,
 
     pressed && styles.cardPressed,
   ]}
@@ -354,7 +359,8 @@ export default function GalleryScreen() {
           </Text>
         </View>
       )}
-    </Pressable>
+      </Pressable>
+    </AnimatedCard>
   );
 
   return (
@@ -378,16 +384,23 @@ export default function GalleryScreen() {
         }
         ListHeaderComponent={
           <>
-            <View style={styles.header}>
-              <Text style={styles.eyebrow}>MOMENTOS ALBINEGROS</Text>
-              <Text style={styles.screenTitle}>Galería</Text>
-              <Text style={styles.headerDescription}>
-                Imágenes, recuerdos y fondos del C.D. Castellón.
-              </Text>
-            </View>
+            <AnimatedCard delay={0}>
+              <View style={styles.header}>
+                <Text style={styles.eyebrow}>MOMENTOS ALBINEGROS</Text>
+                <Text style={styles.screenTitle}>Galería</Text>
+                <Text style={styles.headerDescription}>
+                  Imágenes, recuerdos y fondos del C.D. Castellón.
+                </Text>
+              </View>
+            </AnimatedCard>
 
             {photoOfTheDay && (
-              <Pressable
+              <AnimatedCard
+                style={styles.animatedFullWidth}
+                delay={70}
+                animateKey={photoOfTheDay.id}
+              >
+                <Pressable
                   style={({ pressed }) => [
                     styles.photoOfDayCard,
                     pressed && styles.cardPressed,
@@ -426,13 +439,15 @@ export default function GalleryScreen() {
                 <Text style={styles.photoOfDayTitle}>
                   {photoOfTheDay.title}
                 </Text>
-              </Pressable>
+                </Pressable>
+              </AnimatedCard>
             )}
 
             <Text style={styles.sectionTitle}>
               Categorías
             </Text>
 
+            <AnimatedCard delay={140} animateKey={selectedCategory}>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -463,6 +478,7 @@ export default function GalleryScreen() {
                 </Pressable>
               ))}
             </ScrollView>
+            </AnimatedCard>
 
             <View style={styles.galleryHeader}>
               <Text style={styles.sectionTitle}>
@@ -612,6 +628,22 @@ export default function GalleryScreen() {
 }
 
 const styles = StyleSheet.create({
+  animatedFullWidth: {
+    width: '100%',
+  },
+
+  animatedGridItem: {
+    width: CARD_WIDTH,
+  },
+
+  leftAnimatedItem: {
+    marginRight: CARD_GAP / 2,
+  },
+
+  rightAnimatedItem: {
+    marginLeft: CARD_GAP / 2,
+  },
+
   container: {
     flex: 1,
     backgroundColor: '#050505',
