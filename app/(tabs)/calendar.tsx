@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { colors } from '../../theme/colors';
+import AnimatedCard from '../../components/AnimatedCard';
 
 type FixtureItem = {
   id: number;
@@ -173,10 +174,15 @@ export default function CalendarScreen() {
     const isCastellon = isCastellonTeam(item.homeTeam) || isCastellonTeam(item.awayTeam);
 
     return (
-      <View
+      <AnimatedCard
         key={item.id}
-        style={[styles.matchCard, isCastellon && styles.castellonMatchCard]}
+        style={styles.animatedFullWidth}
+        delay={180}
+        animateKey={`${selectedRound}-${item.id}`}
       >
+        <View
+          style={[styles.matchCard, isCastellon && styles.castellonMatchCard]}
+        >
         <View style={styles.teamsBlock}>
           <View style={styles.teamLine}>
             <Image source={{ uri: getLogoUrl(item.homeTeam, item.homeLogo) }} style={styles.teamLogo} />
@@ -214,7 +220,8 @@ export default function CalendarScreen() {
             {item.venue || 'Estadio por confirmar'}
           </Text>
         </View>
-      </View>
+        </View>
+      </AnimatedCard>
     );
   };
 
@@ -255,47 +262,53 @@ export default function CalendarScreen() {
           />
         }
       >
-        <View style={styles.heroCard}>
-          <Text style={styles.kicker}>SEGUNDA DIVISIÓN</Text>
-          <Text style={styles.subtitle}>Temporada 2026/27</Text>
-        </View>
+        <AnimatedCard delay={0}>
+          <View style={styles.heroCard}>
+            <Text style={styles.kicker}>SEGUNDA DIVISIÓN</Text>
+            <Text style={styles.subtitle}>Temporada 2026/27</Text>
+          </View>
+        </AnimatedCard>
 
-        <View style={styles.filterRow}>
-          <Text style={styles.sectionLabel}>Calendario</Text>
+        <AnimatedCard delay={70}>
+          <View style={styles.filterRow}>
+            <Text style={styles.sectionLabel}>Calendario</Text>
 
-          <TouchableOpacity
-            activeOpacity={0.85}
-            style={styles.compactFilter}
-            onPress={() => setFilterDropdownOpen(true)}
-          >
-            <Text style={styles.compactFilterText}>{filter}</Text>
-            <Text style={styles.compactChevron}>▾</Text>
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              style={styles.compactFilter}
+              onPress={() => setFilterDropdownOpen(true)}
+            >
+              <Text style={styles.compactFilterText}>{filter}</Text>
+              <Text style={styles.compactChevron}>▾</Text>
+            </TouchableOpacity>
+          </View>
+        </AnimatedCard>
 
-        <View style={styles.roundSelectorRow}>
-          <TouchableOpacity activeOpacity={0.85} style={styles.arrowButton} onPress={goPreviousRound}>
-            <Text style={styles.arrowText}>‹</Text>
-          </TouchableOpacity>
+        <AnimatedCard delay={140} animateKey={selectedRound ?? 0}>
+          <View style={styles.roundSelectorRow}>
+            <TouchableOpacity activeOpacity={0.85} style={styles.arrowButton} onPress={goPreviousRound}>
+              <Text style={styles.arrowText}>‹</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            activeOpacity={0.9}
-            style={styles.roundSelector}
-            onPress={() => setRoundDropdownOpen(true)}
-          >
-            <View>
-              <Text style={styles.roundSelectorTitle}>Jornada {selectedRound || '-'}</Text>
-              <Text style={styles.roundSelectorSubtitle}>
-                {selectedRoundMatches.length} partidos
-              </Text>
-            </View>
-            <Text style={styles.roundSelectorChevron}>▾</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              style={styles.roundSelector}
+              onPress={() => setRoundDropdownOpen(true)}
+            >
+              <View>
+                <Text style={styles.roundSelectorTitle}>Jornada {selectedRound || '-'}</Text>
+                <Text style={styles.roundSelectorSubtitle}>
+                  {selectedRoundMatches.length} partidos
+                </Text>
+              </View>
+              <Text style={styles.roundSelectorChevron}>▾</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity activeOpacity={0.85} style={styles.arrowButton} onPress={goNextRound}>
-            <Text style={styles.arrowText}>›</Text>
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity activeOpacity={0.85} style={styles.arrowButton} onPress={goNextRound}>
+              <Text style={styles.arrowText}>›</Text>
+            </TouchableOpacity>
+          </View>
+        </AnimatedCard>
 
         {loading && <ActivityIndicator size="large" color={colors.accent} style={styles.loader} />}
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -305,9 +318,11 @@ export default function CalendarScreen() {
             {selectedRoundMatches.length > 0 ? (
               selectedRoundMatches.map(renderMatch)
             ) : (
-              <View style={styles.emptyCard}>
-                <Text style={styles.emptyText}>No hay partidos para esta selección</Text>
-              </View>
+              <AnimatedCard delay={180} animateKey={`${selectedRound}-${filter}`}>
+                <View style={styles.emptyCard}>
+                  <Text style={styles.emptyText}>No hay partidos para esta selección</Text>
+                </View>
+              </AnimatedCard>
             )}
           </>
         )}
@@ -372,6 +387,10 @@ export default function CalendarScreen() {
 }
 
 const styles = StyleSheet.create({
+  animatedFullWidth: {
+    width: '100%',
+  },
+
   screen: {
     flex: 1,
     backgroundColor: '#080808',
