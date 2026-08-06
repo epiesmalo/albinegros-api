@@ -14,6 +14,10 @@ type AnimatedCardProps = PropsWithChildren<{
   duration?: number;
   translateY?: number;
   initialScale?: number;
+  /** Activa o desactiva completamente la animación */
+  enabled?: boolean;
+  /** Permite volver a lanzar la animación cuando cambie este valor */
+  animateKey?: string | number;
 }>;
 
 export default function AnimatedCard({
@@ -23,12 +27,26 @@ export default function AnimatedCard({
   duration = 240,
   translateY = 10,
   initialScale = 0.985,
+  enabled = true,
+  animateKey,
 }: AnimatedCardProps) {
-  const opacity = useSharedValue(0);
-  const offsetY = useSharedValue(translateY);
-  const scale = useSharedValue(initialScale);
+  const opacity = useSharedValue(enabled ? 0 : 1);
+  const offsetY = useSharedValue(enabled ? translateY : 0);
+  const scale = useSharedValue(enabled ? initialScale : 1);
 
   useEffect(() => {
+    if (!enabled) {
+      opacity.value = 1;
+      offsetY.value = 0;
+      scale.value = 1;
+      return;
+    }
+
+    // Reinicia para poder repetir la animación cuando cambie animateKey
+    opacity.value = 0;
+    offsetY.value = translateY;
+    scale.value = initialScale;
+
     opacity.value = withDelay(
       delay,
       withTiming(1, {
@@ -53,13 +71,12 @@ export default function AnimatedCard({
       })
     );
   }, [
+    animateKey,
+    enabled,
     delay,
     duration,
-    initialScale,
-    opacity,
-    offsetY,
-    scale,
     translateY,
+    initialScale,
   ]);
 
   const animatedStyle = useAnimatedStyle(() => ({
