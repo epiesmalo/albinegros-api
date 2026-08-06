@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { colors } from '../../theme/colors';
+import AnimatedCard from '../../components/AnimatedCard';
 
 type StandingItem = {
   position: number;
@@ -93,11 +94,14 @@ export default function StandingsScreen() {
         />
       }
     >
-      <View style={styles.heroCard}>
-        <Text style={styles.kicker}>SEGUNDA DIVISIÓN</Text>
-        <Text style={styles.subtitle}>Temporada 2026/27</Text>
-      </View>
+      <AnimatedCard delay={0}>
+        <View style={styles.heroCard}>
+          <Text style={styles.kicker}>SEGUNDA DIVISIÓN</Text>
+          <Text style={styles.subtitle}>Temporada 2026/27</Text>
+        </View>
+      </AnimatedCard>
 
+      <AnimatedCard delay={70}>
       <View style={styles.legendFiltersRow}>
         <View style={styles.legend}>
           <View style={styles.legendItem}>
@@ -152,14 +156,24 @@ export default function StandingsScreen() {
           </Pressable>
         </View>
       </View>
+      </AnimatedCard>
 
       {loading && <ActivityIndicator size="large" color={colors.accent} style={styles.loader} />}
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {error ? (
+        <AnimatedCard delay={140}>
+          <Text style={styles.errorText}>{error}</Text>
+        </AnimatedCard>
+      ) : null}
 
       {!loading && !error && (
         <>
           {viewMode === 'summary' ? (
-            <View style={styles.tableCard}>
+            <AnimatedCard
+              style={styles.animatedFullWidth}
+              delay={140}
+              animateKey={`summary-${standings.length}`}
+            >
+              <View style={styles.tableCard}>
               <View style={styles.headerRow}>
                 <Text style={[styles.headerCell, styles.rankCell]}>#</Text>
                 <Text style={[styles.headerCell, styles.teamCell]}>Equipo</Text>
@@ -227,9 +241,15 @@ export default function StandingsScreen() {
                   </View>
                 );
               })}
-            </View>
+              </View>
+            </AnimatedCard>
           ) : (
-            <View style={styles.frozenTableCard}>
+            <AnimatedCard
+              style={styles.animatedFullWidth}
+              delay={140}
+              animateKey={`full-${standings.length}`}
+            >
+              <View style={styles.frozenTableCard}>
               <View style={styles.frozenColumns}>
                 <View style={[styles.headerRow, styles.frozenHeaderRow]}>
                   <Text style={[styles.headerCell, styles.rankCell]}>#</Text>
@@ -340,7 +360,8 @@ export default function StandingsScreen() {
                   })}
                 </View>
               </ScrollView>
-            </View>
+              </View>
+            </AnimatedCard>
           )}
         </>
       )}
@@ -350,6 +371,10 @@ export default function StandingsScreen() {
 }
 
 const styles = StyleSheet.create({
+  animatedFullWidth: {
+    width: '100%',
+  },
+
   container: {
     flex: 1,
     backgroundColor: '#080808',
