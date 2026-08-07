@@ -23,6 +23,7 @@ import ImageZoom from 'react-native-image-pan-zoom';
 
 import { colors } from '../../theme/colors';
 import AnimatedCard from '../../components/AnimatedCard';
+import { CACHE_KEYS, formatCacheAge, getCache, saveCache } from '../../utils/cache';
 
 type GalleryItem = {
   id: string;
@@ -58,10 +59,21 @@ export default function GalleryScreen() {
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
+  const [usingCachedData, setUsingCachedData] = useState(false);
+  const [cacheSavedAt, setCacheSavedAt] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(Date.now());
 
   useEffect(() => {
     loadGallery();
     loadFavorites();
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 60_000);
+
+    return () => clearInterval(timer);
   }, []);
 
   const loadGallery = async (isRefresh = false) => {
@@ -91,8 +103,24 @@ export default function GalleryScreen() {
       );
 
       setGalleryItems(sortedData);
+      setUsingCachedData(false);
+      setCacheSavedAt(null);
+      setCurrentTime(Date.now());
+
+      await saveCache(CACHE_KEYS.GALLERY, sortedData);
     } catch (error) {
       console.log('Error cargando galería:', error);
+
+      const cachedGallery = await getCache<GalleryItem[]>(
+        CACHE_KEYS.GALLERY
+      );
+
+      if (Array.isArray(cachedGallery?.data) && cachedGallery.data.length > 0) {
+        setGalleryItems(cachedGallery.data);
+        setUsingCachedData(true);
+        setCacheSavedAt(cachedGallery.savedAt);
+        setCurrentTime(Date.now());
+      }
     } finally {
       setRefreshing(false);
     }
@@ -394,6 +422,20 @@ export default function GalleryScreen() {
               </View>
             </AnimatedCard>
 
+            {usingCachedData && (
+              <AnimatedCard delay={55}>
+                <View style={styles.cachedBanner}>
+                  <View style={styles.cachedDot} />
+                  <Text style={styles.cachedText}>
+                    Mostrando galería guardada
+                    {cacheSavedAt
+                      ? ` · ${formatCacheAge(cacheSavedAt, currentTime)}`
+                      : ''}
+                  </Text>
+                </View>
+              </AnimatedCard>
+            )}
+
             {photoOfTheDay && (
               <AnimatedCard
                 style={styles.animatedFullWidth}
@@ -630,6 +672,35 @@ export default function GalleryScreen() {
 const styles = StyleSheet.create({
   animatedFullWidth: {
     width: '100%',
+  },
+
+  cachedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(212, 175, 55, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.28)',
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+  },
+
+  cachedDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#D4AF37',
+    marginRight: 6,
+  },
+
+  cachedText: {
+    color: '#C9B46A',
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: '700',
+    textAlign: 'center',
   },
 
   animatedGridItem: {
