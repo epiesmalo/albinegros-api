@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Image,
   Pressable,
   RefreshControl,
@@ -34,6 +33,42 @@ const getLogoUrl = (teamName: string, logo?: string) => {
 
   return logo;
 };
+
+
+function StandingsSkeleton() {
+  return (
+    <View style={styles.skeletonTableCard}>
+      <View style={styles.skeletonHeaderRow}>
+        <View style={[styles.skeletonBlock, styles.skeletonRankHeader]} />
+        <View style={[styles.skeletonBlock, styles.skeletonTeamHeader]} />
+        <View style={[styles.skeletonBlock, styles.skeletonStatHeader]} />
+        <View style={[styles.skeletonBlock, styles.skeletonStatHeader]} />
+        <View style={[styles.skeletonBlock, styles.skeletonPointsHeader]} />
+      </View>
+
+      {Array.from({ length: 9 }).map((_, index) => (
+        <View key={index} style={styles.skeletonRow}>
+          <View style={[styles.skeletonBlock, styles.skeletonRank]} />
+
+          <View style={styles.skeletonTeamCell}>
+            <View style={styles.skeletonLogo} />
+            <View
+              style={[
+                styles.skeletonBlock,
+                styles.skeletonTeamName,
+                { width: index % 3 === 0 ? '72%' : index % 3 === 1 ? '58%' : '66%' },
+              ]}
+            />
+          </View>
+
+          <View style={[styles.skeletonBlock, styles.skeletonStat]} />
+          <View style={[styles.skeletonBlock, styles.skeletonStat]} />
+          <View style={[styles.skeletonBlock, styles.skeletonPoints]} />
+        </View>
+      ))}
+    </View>
+  );
+}
 
 export default function StandingsScreen() {
   const [standings, setStandings] = useState<StandingItem[]>([]);
@@ -203,7 +238,7 @@ export default function StandingsScreen() {
         </AnimatedCard>
       )}
 
-      {loading && <ActivityIndicator size="large" color={colors.accent} style={styles.loader} />}
+      {loading && <StandingsSkeleton />}
       {error ? (
         <AnimatedCard delay={140}>
           <Text style={styles.errorText}>{error}</Text>
@@ -540,8 +575,102 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
-  loader: {
-    marginTop: 30,
+  skeletonTableCard: {
+    backgroundColor: '#101010',
+    borderRadius: 18,
+    padding: 7,
+    borderWidth: 1,
+    borderColor: '#242424',
+  },
+
+  skeletonHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1B1B1B',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    marginBottom: 6,
+  },
+
+  skeletonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 52,
+    backgroundColor: '#161616',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    marginBottom: 5,
+    borderWidth: 1,
+    borderColor: '#222222',
+  },
+
+  skeletonBlock: {
+    backgroundColor: 'rgba(255, 255, 255, 0.09)',
+    borderRadius: 6,
+  },
+
+  skeletonRankHeader: {
+    width: 15,
+    height: 9,
+    marginRight: 13,
+  },
+
+  skeletonTeamHeader: {
+    flex: 1,
+    height: 9,
+    maxWidth: 54,
+  },
+
+  skeletonStatHeader: {
+    width: 18,
+    height: 9,
+    marginLeft: 16,
+  },
+
+  skeletonPointsHeader: {
+    width: 22,
+    height: 9,
+    marginLeft: 16,
+    marginRight: 6,
+  },
+
+  skeletonRank: {
+    width: 14,
+    height: 12,
+    marginRight: 14,
+  },
+
+  skeletonTeamCell: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingRight: 6,
+  },
+
+  skeletonLogo: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255, 255, 255, 0.09)',
+    marginRight: 8,
+  },
+
+  skeletonTeamName: {
+    height: 12,
+  },
+
+  skeletonStat: {
+    width: 18,
+    height: 12,
+    marginHorizontal: 8,
+  },
+
+  skeletonPoints: {
+    width: 22,
+    height: 13,
+    marginHorizontal: 10,
   },
   tableCard: {
     backgroundColor: '#101010',
