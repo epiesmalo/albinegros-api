@@ -50,6 +50,41 @@ const CARD_WIDTH = (width - 16 * 2 - CARD_GAP) / 2;
 const FAVORITES_STORAGE_KEY = 'albinegros_gallery_favorites';
 
 
+
+function GallerySkeleton() {
+  return (
+    <View style={styles.skeletonContainer}>
+      <View style={styles.skeletonFeaturedCard}>
+        <View style={styles.skeletonFeaturedBadge} />
+        <View style={styles.skeletonFeaturedImage} />
+        <View style={[styles.skeletonBlock, styles.skeletonFeaturedTitle]} />
+      </View>
+
+      <View style={styles.skeletonCategoryTitle} />
+      <View style={styles.skeletonCategoriesRow}>
+        {[1, 2, 3].map((item) => (
+          <View key={item} style={styles.skeletonCategoryPill} />
+        ))}
+      </View>
+
+      <View style={styles.skeletonGalleryHeader}>
+        <View style={[styles.skeletonBlock, styles.skeletonImagesTitle]} />
+        <View style={[styles.skeletonBlock, styles.skeletonCount]} />
+      </View>
+
+      <View style={styles.skeletonGrid}>
+        {[1, 2, 3, 4].map((item) => (
+          <View key={item} style={styles.skeletonGridCard}>
+            <View style={styles.skeletonGridImage} />
+            <View style={[styles.skeletonBlock, styles.skeletonGridTitle]} />
+            <View style={[styles.skeletonBlock, styles.skeletonGridTitleShort]} />
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 export default function GalleryScreen() {
   const insets = useSafeAreaInsets();
 
@@ -57,6 +92,7 @@ export default function GalleryScreen() {
 
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
   const [usingCachedData, setUsingCachedData] = useState(false);
@@ -80,6 +116,8 @@ export default function GalleryScreen() {
     try {
       if (isRefresh) {
         setRefreshing(true);
+      } else {
+        setLoading(true);
       }
 
       const response = await fetch(
@@ -122,6 +160,7 @@ export default function GalleryScreen() {
         setCurrentTime(Date.now());
       }
     } finally {
+      setLoading(false);
       setRefreshing(false);
     }
   };
@@ -395,7 +434,7 @@ export default function GalleryScreen() {
     <>
       <FlatList
         style={styles.container}
-        data={images}
+        data={loading ? [] : images}
         keyExtractor={(item) => item.id}
         renderItem={renderImage}
         numColumns={2}
@@ -422,7 +461,9 @@ export default function GalleryScreen() {
               </View>
             </AnimatedCard>
 
-            {usingCachedData && (
+            {loading && <GallerySkeleton />}
+
+            {usingCachedData && !loading && (
               <AnimatedCard delay={55}>
                 <View style={styles.cachedBanner}>
                   <View style={styles.cachedDot} />
@@ -436,7 +477,7 @@ export default function GalleryScreen() {
               </AnimatedCard>
             )}
 
-            {photoOfTheDay && (
+            {!loading && photoOfTheDay && (
               <AnimatedCard
                 style={styles.animatedFullWidth}
                 delay={70}
@@ -485,6 +526,8 @@ export default function GalleryScreen() {
               </AnimatedCard>
             )}
 
+            {!loading && (
+              <>
             <Text style={styles.sectionTitle}>
               Categorías
             </Text>
@@ -531,6 +574,8 @@ export default function GalleryScreen() {
                 {images.length} fotos
               </Text>
             </View>
+              </>
+            )}
           </>
         }
       />
@@ -672,6 +717,126 @@ export default function GalleryScreen() {
 const styles = StyleSheet.create({
   animatedFullWidth: {
     width: '100%',
+  },
+
+  skeletonContainer: {
+    width: '100%',
+  },
+
+  skeletonBlock: {
+    backgroundColor: 'rgba(255, 255, 255, 0.09)',
+    borderRadius: 6,
+  },
+
+  skeletonFeaturedCard: {
+    backgroundColor: '#111111',
+    borderRadius: 22,
+    padding: 10,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(215, 178, 67, 0.28)',
+  },
+
+  skeletonFeaturedBadge: {
+    width: 132,
+    height: 28,
+    borderRadius: 999,
+    backgroundColor: 'rgba(212, 175, 55, 0.14)',
+    marginBottom: 10,
+  },
+
+  skeletonFeaturedImage: {
+    width: '100%',
+    height: 360,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.07)',
+    marginBottom: 11,
+  },
+
+  skeletonFeaturedTitle: {
+    width: '62%',
+    height: 16,
+    marginHorizontal: 4,
+    marginBottom: 4,
+  },
+
+  skeletonCategoryTitle: {
+    width: 105,
+    height: 20,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.09)',
+    marginBottom: 12,
+  },
+
+  skeletonCategoriesRow: {
+    flexDirection: 'row',
+    marginBottom: 20,
+  },
+
+  skeletonCategoryPill: {
+    width: 92,
+    height: 42,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255, 255, 255, 0.07)',
+    borderWidth: 1,
+    borderColor: '#282828',
+    marginRight: 9,
+  },
+
+  skeletonGalleryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+
+  skeletonImagesTitle: {
+    width: 92,
+    height: 20,
+  },
+
+  skeletonCount: {
+    width: 52,
+    height: 11,
+    backgroundColor: 'rgba(212, 175, 55, 0.12)',
+  },
+
+  skeletonGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+
+  skeletonGridCard: {
+    width: CARD_WIDTH,
+    backgroundColor: '#111111',
+    borderRadius: 18,
+    padding: 7,
+    marginBottom: CARD_GAP,
+    borderWidth: 1,
+    borderColor: '#282828',
+  },
+
+  skeletonGridImage: {
+    width: '100%',
+    height: 164,
+    borderRadius: 13,
+    backgroundColor: 'rgba(255, 255, 255, 0.07)',
+    marginBottom: 9,
+  },
+
+  skeletonGridTitle: {
+    width: '78%',
+    height: 12,
+    marginHorizontal: 3,
+    marginBottom: 6,
+  },
+
+  skeletonGridTitleShort: {
+    width: '48%',
+    height: 10,
+    marginHorizontal: 3,
+    marginBottom: 5,
   },
 
   cachedBanner: {
