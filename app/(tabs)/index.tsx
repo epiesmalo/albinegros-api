@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Image,
   ImageBackground,
   Linking,
@@ -121,6 +120,39 @@ const formatUpdatedAgo = (date?: string | null, now = Date.now()) => {
 
   return `Datos actualizados hace ${days} días`;
 };
+
+
+function HomeMatchSkeleton() {
+  return (
+    <View style={styles.skeletonWrap}>
+      <View style={styles.skeletonTeamsRow}>
+        <View style={styles.skeletonTeam}>
+          <View style={styles.skeletonLogo} />
+          <View style={[styles.skeletonLine, styles.skeletonTeamName]} />
+        </View>
+
+        <View style={styles.skeletonVs} />
+
+        <View style={styles.skeletonTeam}>
+          <View style={styles.skeletonLogo} />
+          <View style={[styles.skeletonLine, styles.skeletonTeamName]} />
+        </View>
+      </View>
+
+      <View style={styles.skeletonInfoPanel}>
+        {[1, 2, 3].map((item) => (
+          <View key={item} style={styles.skeletonInfoItem}>
+            <View style={styles.skeletonIcon} />
+            <View style={[styles.skeletonLine, styles.skeletonInfoMain]} />
+            <View style={[styles.skeletonLine, styles.skeletonInfoSub]} />
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.skeletonButton} />
+    </View>
+  );
+}
 
 export default function HomeScreen() {
   const [nextMatch, setNextMatch] = useState<NextMatch | null>(null);
@@ -317,13 +349,7 @@ export default function HomeScreen() {
         <View style={styles.matchContent}>
           <Text style={styles.cardLabel}>PRÓXIMO PARTIDO</Text>
 
-          {loading && (
-            <ActivityIndicator
-              size="large"
-              color={colors.accent}
-              style={styles.loader}
-            />
-          )}
+          {loading && <HomeMatchSkeleton />}
 
           {!loading && nextMatch && (
             <>
@@ -633,8 +659,99 @@ const styles = StyleSheet.create({
     color: colors.accent,
     letterSpacing: 0.8,
   },
-  loader: {
-    marginVertical: 150,
+  skeletonWrap: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    paddingTop: 54,
+  },
+
+  skeletonTeamsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+    marginBottom: 12,
+  },
+
+  skeletonTeam: {
+    width: '39%',
+    alignItems: 'center',
+  },
+
+  skeletonLogo: {
+    width: 94,
+    height: 94,
+    borderRadius: 47,
+    backgroundColor: 'rgba(255, 255, 255, 0.09)',
+    marginBottom: 9,
+  },
+
+  skeletonVs: {
+    width: 42,
+    height: 24,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    marginHorizontal: 6,
+    marginBottom: 30,
+  },
+
+  skeletonLine: {
+    backgroundColor: 'rgba(255, 255, 255, 0.09)',
+    borderRadius: 6,
+  },
+
+  skeletonTeamName: {
+    width: '72%',
+    height: 13,
+  },
+
+  skeletonInfoPanel: {
+    minHeight: 92,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    backgroundColor: 'rgba(0, 0, 0, 0.68)',
+    borderRadius: 18,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.24)',
+  },
+
+  skeletonInfoItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+
+  skeletonIcon: {
+    width: 21,
+    height: 21,
+    borderRadius: 7,
+    backgroundColor: 'rgba(212, 175, 55, 0.16)',
+    marginBottom: 6,
+  },
+
+  skeletonInfoMain: {
+    width: '65%',
+    height: 12,
+    marginBottom: 5,
+  },
+
+  skeletonInfoSub: {
+    width: '48%',
+    height: 8,
+    backgroundColor: 'rgba(212, 175, 55, 0.12)',
+  },
+
+  skeletonButton: {
+    alignSelf: 'center',
+    width: 196,
+    height: 52,
+    borderRadius: 18,
+    marginTop: 9,
+    backgroundColor: 'rgba(255, 255, 255, 0.07)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.2)',
   },
   matchRow: {
     flexDirection: 'row',
