@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   Image,
   Modal,
@@ -45,6 +44,37 @@ const extractRoundNumber = (round?: string) => {
 
 const isCastellonTeam = (team?: string) =>
   (team || '').toLowerCase().includes('castell');
+
+
+function CalendarSkeleton() {
+  return (
+    <View>
+      {[1, 2, 3].map((item) => (
+        <View key={item} style={styles.skeletonMatchCard}>
+          <View style={styles.skeletonTeamsBlock}>
+            <View style={styles.skeletonTeamLine}>
+              <View style={styles.skeletonLogo} />
+              <View style={[styles.skeletonLine, styles.skeletonTeamName]} />
+            </View>
+
+            <View style={styles.skeletonScore} />
+
+            <View style={styles.skeletonTeamLine}>
+              <View style={styles.skeletonLogo} />
+              <View style={[styles.skeletonLine, styles.skeletonTeamName]} />
+            </View>
+          </View>
+
+          <View style={styles.skeletonFooter}>
+            <View style={[styles.skeletonLine, styles.skeletonDate]} />
+            <View style={styles.skeletonFooterDivider} />
+            <View style={[styles.skeletonLine, styles.skeletonVenue]} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
 
 export default function CalendarScreen() {
   const [fixtures, setFixtures] = useState<FixtureItem[]>([]);
@@ -355,7 +385,7 @@ export default function CalendarScreen() {
           </AnimatedCard>
         )}
 
-        {loading && <ActivityIndicator size="large" color={colors.accent} style={styles.loader} />}
+        {loading && <CalendarSkeleton />}
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
         {!loading && !error && (
@@ -584,8 +614,79 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     marginTop: -8,
   },
-  loader: {
-    marginTop: 30,
+  skeletonMatchCard: {
+    backgroundColor: '#111111',
+    borderRadius: 18,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#242424',
+  },
+
+  skeletonTeamsBlock: {
+    backgroundColor: '#161616',
+    borderRadius: 14,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#222222',
+  },
+
+  skeletonTeamLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 32,
+  },
+
+  skeletonLogo: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255, 255, 255, 0.09)',
+    marginRight: 10,
+  },
+
+  skeletonLine: {
+    backgroundColor: 'rgba(255, 255, 255, 0.09)',
+    borderRadius: 6,
+  },
+
+  skeletonTeamName: {
+    flex: 1,
+    height: 13,
+  },
+
+  skeletonScore: {
+    alignSelf: 'center',
+    width: 46,
+    height: 20,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    marginVertical: 8,
+  },
+
+  skeletonFooter: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  skeletonDate: {
+    width: 86,
+    height: 11,
+  },
+
+  skeletonFooterDivider: {
+    width: 1,
+    height: 14,
+    backgroundColor: '#3a3a3a',
+    marginHorizontal: 10,
+  },
+
+  skeletonVenue: {
+    width: 110,
+    height: 11,
   },
   matchCard: {
     backgroundColor: '#111111',
