@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import AnimatedPressable from '../../components/AnimatedPressable';
 import AnimatedCard from '../../components/AnimatedCard';
+import { CACHE_KEYS, formatCacheAge, getCache, saveCache } from '../../utils/cache';
 
 const NEXT_MATCH_BG = require('../../assets/images/next-match-bg.png');
 const CASTELLON_LOGO_URL = 'https://www.albinegroscastellon.com/cas.png';
@@ -128,6 +129,8 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(Date.now());
+  const [usingCachedData, setUsingCachedData] = useState(false);
+  const [cacheSavedAt, setCacheSavedAt] = useState<string | null>(null);
 
   const quickLinks = [
     { id: '1', title: 'Clasificación', route: '/(tabs)/explore', icon: 'trophy' },
@@ -163,16 +166,6 @@ export default function HomeScreen() {
         fetch('https://albinegros-api.onrender.com/api/admin/ads'),
       ]);
 
-      const matchData = await matchRes.json();
-      const adsData = await adsRes.json();
-
-      setNextMatch(matchData);
-      setUpdatedAt(
-        typeof matchData?.updatedAt === 'string'
-          ? matchData.updatedAt
-          : new Date().toISOString()
-      );
-      setCurrentTime(Date.now());
       if (!matchRes.ok) {
         throw new Error(`Error cargando próximo partido: HTTP ${matchRes.status}`);
       }
@@ -181,9 +174,59 @@ export default function HomeScreen() {
         throw new Error(`Error cargando patrocinadores: HTTP ${adsRes.status}`);
       }
 
-      setAds(Array.isArray(adsData) ? adsData : []);
+      const matchData = await matchRes.json();
+      const adsData = await adsRes.json();
+
+      if (!matchData || typeof matchData !== 'object') {
+        throw new Error('La respuesta del próximo partido no es válida.');
+      }
+
+      const normalizedAds = Array.isArray(adsData) ? adsData : [];
+
+      setNextMatch(matchData);
+      setAds(normalizedAds);
+      setUpdatedAt(
+        typeof matchData?.updatedAt === 'string'
+          ? matchData.updatedAt
+          : new Date().toISOString()
+      );
+      setCurrentTime(Date.now());
+      setUsingCachedData(false);
+      setCacheSavedAt(null);
+
+      await Promise.all([
+        saveCache(CACHE_KEYS.HOME_NEXT_MATCH, matchData),
+        saveCache(CACHE_KEYS.HOME_ADS, normalizedAds),
+      ]);
     } catch (error) {
       console.log('Error cargando datos del inicio:', error);
+
+      const [cachedMatch, cachedAds] = await Promise.all([
+        getCache<NextMatch>(CACHE_KEYS.HOME_NEXT_MATCH),
+        getCache<AdItem[]>(CACHE_KEYS.HOME_ADS),
+      ]);
+
+      if (cachedMatch?.data) {
+        setNextMatch(cachedMatch.data);
+        setUpdatedAt(
+          typeof cachedMatch.data.updatedAt === 'string'
+            ? cachedMatch.data.updatedAt
+            : cachedMatch.savedAt
+        );
+      }
+
+      if (Array.isArray(cachedAds?.data)) {
+        setAds(cachedAds.data);
+      }
+
+      const availableSavedAt =
+        cachedMatch?.savedAt || cachedAds?.savedAt || null;
+
+      if (cachedMatch?.data || cachedAds?.data) {
+        setUsingCachedData(true);
+        setCacheSavedAt(availableSavedAt);
+        setCurrentTime(Date.now());
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -398,11 +441,23 @@ export default function HomeScreen() {
                     />
                   </View>
 
-                  {!!updatedAt && (
+                  {!!updatedAt && !usingCachedData && (
                     <View style={styles.updatedRow}>
                       <View style={styles.updatedDot} />
                       <Text style={styles.updatedText}>
                         {formatUpdatedAgo(updatedAt, currentTime)}
+                      </Text>
+                    </View>
+                  )}
+
+                  {usingCachedData && (
+                    <View style={styles.cachedRow}>
+                      <View style={styles.cachedDot} />
+                      <Text style={styles.cachedText}>
+                        Mostrando datos guardados
+                        {cacheSavedAt
+                          ? ` · ${formatCacheAge(cacheSavedAt, currentTime)}`
+                          : ''}
                       </Text>
                     </View>
                   )}
@@ -720,6 +775,29 @@ const styles = StyleSheet.create({
 
   updatedText: {
     color: '#A8A8A8',
+    fontSize: 9,
+    lineHeight: 11,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+
+  cachedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+
+  cachedDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#D4AF37',
+    marginRight: 5,
+  },
+
+  cachedText: {
+    color: '#C9B46A',
     fontSize: 9,
     lineHeight: 11,
     fontWeight: '700',
