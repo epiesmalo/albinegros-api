@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { colors } from '../../theme/colors';
 import AnimatedCard from '../../components/AnimatedCard';
+import { CACHE_KEYS, formatCacheAge, getCache, saveCache } from '../../utils/cache';
 
 type NewsItem = {
   id: string;
@@ -99,6 +100,9 @@ export default function NewsScreen() {
   const [error, setError] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
+  const [usingCachedData, setUsingCachedData] = useState(false);
+  const [cacheSavedAt, setCacheSavedAt] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(Date.now());
 
   const loadNews = useCallback(async (isRefresh = false) => {
     try {
@@ -124,10 +128,28 @@ export default function NewsScreen() {
       setNews(normalizedNews);
       setCurrentPage(1);
       setFailedImages({});
+      setUsingCachedData(false);
+      setCacheSavedAt(null);
+      setCurrentTime(Date.now());
+
+      await saveCache(CACHE_KEYS.NEWS, normalizedNews);
     } catch (err) {
       console.error('Error cargando noticias:', err);
-      setError('No se pudieron cargar las noticias.');
-      setNews([]);
+
+      const cachedNews = await getCache<NewsItem[]>(CACHE_KEYS.NEWS);
+
+      if (Array.isArray(cachedNews?.data) && cachedNews.data.length > 0) {
+        setNews(cachedNews.data);
+        setCurrentPage(1);
+        setFailedImages({});
+        setUsingCachedData(true);
+        setCacheSavedAt(cachedNews.savedAt);
+        setCurrentTime(Date.now());
+        setError('');
+      } else {
+        setError('No se pudieron cargar las noticias.');
+        setNews([]);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -137,6 +159,14 @@ export default function NewsScreen() {
   useEffect(() => {
     loadNews();
   }, [loadNews]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 60_000);
+
+    return () => clearInterval(timer);
+  }, []);
 
   const totalPages = Math.max(
     1,
@@ -210,6 +240,20 @@ export default function NewsScreen() {
           ) : null}
         </View>
       </AnimatedCard>
+
+      {usingCachedData && (
+        <AnimatedCard delay={55}>
+          <View style={styles.cachedBanner}>
+            <View style={styles.cachedDot} />
+            <Text style={styles.cachedText}>
+              Mostrando noticias guardadas
+              {cacheSavedAt
+                ? ` · ${formatCacheAge(cacheSavedAt, currentTime)}`
+                : ''}
+            </Text>
+          </View>
+        </AnimatedCard>
+      )}
 
       {loading ? <NewsSkeleton /> : null}
 
@@ -453,6 +497,35 @@ export default function NewsScreen() {
 const styles = StyleSheet.create({
   animatedFullWidth: {
     width: '100%',
+  },
+
+  cachedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(212, 175, 55, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.28)',
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+  },
+
+  cachedDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#D4AF37',
+    marginRight: 6,
+  },
+
+  cachedText: {
+    color: '#C9B46A',
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: '700',
+    textAlign: 'center',
   },
 
   container: {
