@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { colors } from '../../theme/colors';
 import AnimatedCard from '../../components/AnimatedCard';
+import { CACHE_KEYS, formatCacheAge, getCache, saveCache } from '../../utils/cache';
 
 type StandingItem = {
   position: number;
@@ -40,6 +41,9 @@ export default function StandingsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState<'summary' | 'full'>('summary');
+  const [usingCachedData, setUsingCachedData] = useState(false);
+  const [cacheSavedAt, setCacheSavedAt] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(Date.now());
 
   const loadStandings = async (isRefresh = false) => {
     try {
@@ -66,9 +70,28 @@ export default function StandingsScreen() {
       }
 
       setStandings(data);
+      setUsingCachedData(false);
+      setCacheSavedAt(null);
+      setCurrentTime(Date.now());
+
+      await saveCache(CACHE_KEYS.STANDINGS, data);
     } catch (err) {
-      setError('No se pudo cargar la clasificación.');
-      setStandings([]);
+      console.log('Error cargando clasificación:', err);
+
+      const cachedStandings = await getCache<StandingItem[]>(
+        CACHE_KEYS.STANDINGS
+      );
+
+      if (Array.isArray(cachedStandings?.data) && cachedStandings.data.length > 0) {
+        setStandings(cachedStandings.data);
+        setUsingCachedData(true);
+        setCacheSavedAt(cachedStandings.savedAt);
+        setCurrentTime(Date.now());
+        setError('');
+      } else {
+        setError('No se pudo cargar la clasificación.');
+        setStandings([]);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -77,6 +100,14 @@ export default function StandingsScreen() {
 
   useEffect(() => {
     loadStandings();
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 60_000);
+
+    return () => clearInterval(timer);
   }, []);
 
   return (
@@ -157,6 +188,20 @@ export default function StandingsScreen() {
         </View>
       </View>
       </AnimatedCard>
+
+      {usingCachedData && (
+        <AnimatedCard delay={110}>
+          <View style={styles.cachedBanner}>
+            <View style={styles.cachedDot} />
+            <Text style={styles.cachedText}>
+              Mostrando datos guardados
+              {cacheSavedAt
+                ? ` · ${formatCacheAge(cacheSavedAt, currentTime)}`
+                : ''}
+            </Text>
+          </View>
+        </AnimatedCard>
+      )}
 
       {loading && <ActivityIndicator size="large" color={colors.accent} style={styles.loader} />}
       {error ? (
@@ -373,6 +418,35 @@ export default function StandingsScreen() {
 const styles = StyleSheet.create({
   animatedFullWidth: {
     width: '100%',
+  },
+
+  cachedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(212, 175, 55, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.28)',
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 10,
+  },
+
+  cachedDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#D4AF37',
+    marginRight: 6,
+  },
+
+  cachedText: {
+    color: '#C9B46A',
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: '700',
+    textAlign: 'center',
   },
 
   container: {
