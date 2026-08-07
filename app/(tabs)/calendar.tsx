@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { colors } from '../../theme/colors';
 import AnimatedCard from '../../components/AnimatedCard';
+import { CACHE_KEYS, formatCacheAge, getCache, saveCache } from '../../utils/cache';
 
 type FixtureItem = {
   id: number;
@@ -54,6 +55,9 @@ export default function CalendarScreen() {
   const [filter, setFilter] = useState<'Todos' | 'Castellón'>('Todos');
   const [roundDropdownOpen, setRoundDropdownOpen] = useState(false);
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
+  const [usingCachedData, setUsingCachedData] = useState(false);
+  const [cacheSavedAt, setCacheSavedAt] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(Date.now());
 
   const loadCalendar = async (isRefresh = false) => {
     try {
@@ -65,7 +69,9 @@ export default function CalendarScreen() {
 
       setError('');
 
-      const response = await fetch('https://api.albinegroscastellon.com/calendar/first-team');
+      const response = await fetch(
+        'https://api.albinegroscastellon.com/calendar/first-team'
+      );
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
@@ -74,15 +80,32 @@ export default function CalendarScreen() {
       const data = await response.json();
 
       if (!Array.isArray(data)) {
-        setError('La respuesta del calendario no es válida.');
-        setFixtures([]);
-        return;
+        throw new Error('La respuesta del calendario no es válida.');
       }
 
       setFixtures(data);
+      setUsingCachedData(false);
+      setCacheSavedAt(null);
+      setCurrentTime(Date.now());
+
+      await saveCache(CACHE_KEYS.CALENDAR, data);
     } catch (err) {
-      setError('No se pudo cargar el calendario.');
-      setFixtures([]);
+      console.log('Error cargando calendario:', err);
+
+      const cachedCalendar = await getCache<FixtureItem[]>(
+        CACHE_KEYS.CALENDAR
+      );
+
+      if (Array.isArray(cachedCalendar?.data) && cachedCalendar.data.length > 0) {
+        setFixtures(cachedCalendar.data);
+        setUsingCachedData(true);
+        setCacheSavedAt(cachedCalendar.savedAt);
+        setCurrentTime(Date.now());
+        setError('');
+      } else {
+        setError('No se pudo cargar el calendario.');
+        setFixtures([]);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -91,6 +114,14 @@ export default function CalendarScreen() {
 
   useEffect(() => {
     loadCalendar();
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 60_000);
+
+    return () => clearInterval(timer);
   }, []);
 
   const rounds = useMemo(() => {
@@ -310,6 +341,20 @@ export default function CalendarScreen() {
           </View>
         </AnimatedCard>
 
+        {usingCachedData && (
+          <AnimatedCard delay={165}>
+            <View style={styles.cachedBanner}>
+              <View style={styles.cachedDot} />
+              <Text style={styles.cachedText}>
+                Mostrando datos guardados
+                {cacheSavedAt
+                  ? ` · ${formatCacheAge(cacheSavedAt, currentTime)}`
+                  : ''}
+              </Text>
+            </View>
+          </AnimatedCard>
+        )}
+
         {loading && <ActivityIndicator size="large" color={colors.accent} style={styles.loader} />}
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
@@ -389,6 +434,35 @@ export default function CalendarScreen() {
 const styles = StyleSheet.create({
   animatedFullWidth: {
     width: '100%',
+  },
+
+  cachedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(212, 175, 55, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.28)',
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 10,
+  },
+
+  cachedDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#D4AF37',
+    marginRight: 6,
+  },
+
+  cachedText: {
+    color: '#C9B46A',
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: '700',
+    textAlign: 'center',
   },
 
   screen: {
