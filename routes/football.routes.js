@@ -428,6 +428,244 @@ router.get('/api/football/live', async (req, res) => {
   }
 });
 
+
+/**
+ * Detalle completo de un partido.
+ *
+ * Devuelve información base, eventos, alineaciones y estadísticas.
+ * Los bloques opcionales se degradan a [] si API-Football no dispone
+ * todavía de esa información para el encuentro.
+ *
+ * GET /api/football/fixture/:fixtureId/details
+ */
+router.get('/api/football/fixture/:fixtureId/details', async (req, res) => {
+  try {
+    const fixtureId = String(req.params.fixtureId || '').trim();
+
+    if (!/^\d+$/.test(fixtureId)) {
+      return res.status(400).json({
+        ok: false,
+        error: 'ID de partido no válido',
+      });
+    }
+
+    const safeFootballFetch = async (endpoint) => {
+      try {
+        return await footballFetch(endpoint);
+      } catch (error) {
+        console.warn(
+          `API-Football no devolvió datos para ${endpoint}:`,
+          error.message
+        );
+
+        return {
+          response: [],
+        };
+      }
+    };
+
+    const [
+      fixtureData,
+      eventsData,
+      lineupsData,
+      statisticsData,
+    ] = await Promise.all([
+      footballFetch(
+        `/fixtures?id=${encodeURIComponent(fixtureId)}&timezone=${encodeURIComponent(TIMEZONE)}`
+      ),
+      safeFootballFetch(
+        `/fixtures/events?fixture=${encodeURIComponent(fixtureId)}`
+      ),
+      safeFootballFetch(
+        `/fixtures/lineups?fixture=${encodeURIComponent(fixtureId)}`
+      ),
+      safeFootballFetch(
+        `/fixtures/statistics?fixture=${encodeURIComponent(fixtureId)}`
+      ),
+    ]);
+
+    const match = fixtureData.response?.[0];
+
+    if (!match) {
+      return res.status(404).json({
+        ok: false,
+        error: 'Partido no encontrado',
+      });
+    }
+
+    const homeApiName = match.teams?.home?.name || '';
+    const awayApiName = match.teams?.away?.name || '';
+
+    const normalizeTeam = (team, apiName) => ({
+      id: team?.id ?? null,
+      name: getDisplayTeamName(apiName),
+      shortName: getShortTeamName(apiName),
+      logo: getTeamLogo(apiName, team?.logo || ''),
+      winner: team?.winner ?? null,
+      isCastellon: isCastellon(apiName),
+    });
+
+    const events = Array.isArray(eventsData.response)
+      ? eventsData.response.map((event) => ({
+          time: {
+            elapsed: event.time?.elapsed ?? null,
+            extra: event.time?.extra ?? null,
+          },
+          team: {
+            id: event.team?.id ?? null,
+            name: getDisplayTeamName(event.team?.name || ''),
+            logo: getTeamLogo(
+              event.team?.name || '',
+              event.team?.logo || ''
+            ),
+          },
+          player: {
+            id: event.player?.id ?? null,
+            name: event.player?.name || '',
+          },
+          assist: {
+            id: event.assist?.id ?? null,
+            name: event.assist?.name || '',
+          },
+          type: event.type || '',
+          detail: event.detail || '',
+          comments: event.comments || '',
+        }))
+      : [];
+
+    const lineups = Array.isArray(lineupsData.response)
+      ? lineupsData.response.map((lineup) => ({
+          team: {
+            id: lineup.team?.id ?? null,
+            name: getDisplayTeamName(lineup.team?.name || ''),
+            logo: getTeamLogo(
+              lineup.team?.name || '',
+              lineup.team?.logo || ''
+            ),
+          },
+          coach: {
+            id: lineup.coach?.id ?? null,
+            name: lineup.coach?.name || '',
+            photo: lineup.coach?.photo || '',
+          },
+          formation: lineup.formation || '',
+          startXI: Array.isArray(lineup.startXI)
+            ? lineup.startXI.map((entry) => ({
+                id: entry.player?.id ?? null,
+                name: entry.player?.name || '',
+                number: entry.player?.number ?? null,
+                position: entry.player?.pos || '',
+                grid: entry.player?.grid || '',
+              }))
+            : [],
+          substitutes: Array.isArray(lineup.substitutes)
+            ? lineup.substitutes.map((entry) => ({
+                id: entry.player?.id ?? null,
+                name: entry.player?.name || '',
+                number: entry.player?.number ?? null,
+                position: entry.player?.pos || '',
+                grid: entry.player?.grid || '',
+              }))
+            : [],
+        }))
+      : [];
+
+    const statistics = Array.isArray(statisticsData.response)
+      ? statisticsData.response.map((item) => ({
+          team: {
+            id: item.team?.id ?? null,
+            name: getDisplayTeamName(item.team?.name || ''),
+            logo: getTeamLogo(
+              item.team?.name || '',
+              item.team?.logo || ''
+            ),
+          },
+          statistics: Array.isArray(item.statistics)
+            ? item.statistics.map((stat) => ({
+                type: stat.type || '',
+                value: stat.value ?? null,
+              }))
+            : [],
+        }))
+      : [];
+
+    return res.json({
+      ok: true,
+      updatedAt: new Date().toISOString(),
+
+      fixture: {
+        id: match.fixture?.id ?? Number(fixtureId),
+        date: match.fixture?.date || null,
+        timestamp: match.fixture?.timestamp ?? null,
+        referee: match.fixture?.referee || '',
+        timezone: match.fixture?.timezone || TIMEZONE,
+
+        status: {
+          short: match.fixture?.status?.short || '',
+          long: match.fixture?.status?.long || '',
+          elapsed: match.fixture?.status?.elapsed ?? null,
+          extra: match.fixture?.status?.extra ?? null,
+        },
+
+        venue: {
+          id: match.fixture?.venue?.id ?? null,
+          name: getCorrectVenue(
+            homeApiName,
+            match.fixture?.venue?.name || ''
+          ),
+          city: match.fixture?.venue?.city || '',
+        },
+      },
+
+      league: {
+        id: match.league?.id ?? null,
+        name: getCompetitionName(match.league?.name || ''),
+        round: match.league?.round || '',
+        logo: match.league?.logo || '',
+      },
+
+      home: normalizeTeam(match.teams?.home, homeApiName),
+      away: normalizeTeam(match.teams?.away, awayApiName),
+
+      goals: {
+        home: match.goals?.home ?? null,
+        away: match.goals?.away ?? null,
+      },
+
+      score: {
+        halftime: {
+          home: match.score?.halftime?.home ?? null,
+          away: match.score?.halftime?.away ?? null,
+        },
+        fulltime: {
+          home: match.score?.fulltime?.home ?? null,
+          away: match.score?.fulltime?.away ?? null,
+        },
+        extratime: {
+          home: match.score?.extratime?.home ?? null,
+          away: match.score?.extratime?.away ?? null,
+        },
+        penalty: {
+          home: match.score?.penalty?.home ?? null,
+          away: match.score?.penalty?.away ?? null,
+        },
+      },
+
+      events,
+      lineups,
+      statistics,
+    });
+  } catch (error) {
+    console.error('Error cargando detalle del partido:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'No se pudo cargar el detalle del partido',
+      detail: error.message,
+    });
+  }
+});
+
 /**
  * Sirve los escudos de API-Football a través de nuestro backend.
  *
