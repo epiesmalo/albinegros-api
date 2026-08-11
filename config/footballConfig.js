@@ -1,7 +1,7 @@
 // config/footballConfig.js
 
 const CASTELLON_LOGO =
-  'https://www.albinegroscastellon.com/castellon.png';
+  'https://www.albinegroscastellon.com/cas.png?v=2';
 
 /**
  * Convierte cualquier texto en una clave comparable.

@@ -13,10 +13,14 @@ import {
 } from 'react-native';
 import { colors } from '../../theme/colors';
 import AnimatedCard from '../../components/AnimatedCard';
+import { router } from 'expo-router';
 import { CACHE_KEYS, formatCacheAge, getCache, saveCache } from '../../utils/cache';
 
 type FixtureItem = {
   id: number;
+  fixtureId: number | null;
+  homeTeamId: number | null;
+  awayTeamId: number | null;
   date: string;
   round: string;
   homeTeam: string;
@@ -241,8 +245,21 @@ export default function CalendarScreen() {
         delay={180}
         animateKey={`${selectedRound}-${item.id}`}
       >
-        <View
-          style={[styles.matchCard, isCastellon && styles.castellonMatchCard]}
+        <Pressable
+          disabled={!item.fixtureId}
+          onPress={() => {
+            if (!item.fixtureId) return;
+
+            router.push({
+              pathname: '/match/[fixtureId]',
+              params: { fixtureId: String(item.fixtureId) },
+            });
+          }}
+          style={({ pressed }) => [
+            styles.matchCard,
+            isCastellon && styles.castellonMatchCard,
+            pressed && item.fixtureId && styles.matchCardPressed,
+          ]}
         >
         <View style={styles.teamsBlock}>
           <View style={styles.teamLine}>
@@ -280,8 +297,9 @@ export default function CalendarScreen() {
           <Text style={styles.venueText} numberOfLines={1}>
             {item.venue || 'Estadio por confirmar'}
           </Text>
+          {item.fixtureId ? <Text style={styles.detailChevron}>›</Text> : null}
         </View>
-        </View>
+        </Pressable>
       </AnimatedCard>
     );
   };
@@ -701,6 +719,10 @@ const styles = StyleSheet.create({
     borderColor: colors.accent,
     borderWidth: 0.5,
   },
+  matchCardPressed: {
+    opacity: 0.76,
+    transform: [{ scale: 0.99 }],
+  },
   teamsBlock: {
     backgroundColor: '#161616',
     borderRadius: 14,
@@ -768,6 +790,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     maxWidth: '52%',
+  },
+  detailChevron: {
+    color: colors.accent,
+    fontSize: 19,
+    fontWeight: '900',
+    marginLeft: 7,
+    marginTop: -1,
   },
   errorText: {
     color: '#ff5c5c',
