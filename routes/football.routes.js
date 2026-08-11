@@ -142,6 +142,10 @@ router.post('/api/football/sync-calendar', async (req, res) => {
       const awayApiName = match.teams.away.name;
 
       return {
+        fixtureId: match.fixture.id,
+        homeTeamId: match.teams.home.id,
+        awayTeamId: match.teams.away.id,
+
         date: match.fixture.date,
         status: match.fixture.status.short,
 
@@ -667,15 +671,6 @@ router.get('/api/football/fixture/:fixtureId/details', async (req, res) => {
   }
 });
 
-
-/**
- * Ficha completa de un equipo.
- *
- * Devuelve información general del club, estadio, entrenador,
- * plantilla y estadísticas de la temporada cuando estén disponibles.
- *
- * GET /api/football/team/:teamId/details
- */
 router.get('/api/football/team/:teamId/details', async (req, res) => {
   try {
     const teamId = String(req.params.teamId || '').trim();
@@ -1170,7 +1165,6 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
     });
   }
 });
-
 
 /**
  * Sirve los escudos de API-Football a través de nuestro backend.
