@@ -141,10 +141,6 @@ router.post('/api/football/sync-calendar', async (req, res) => {
       const awayApiName = match.teams.away.name;
 
       return {
-        fixtureId: match.fixture.id,
-        homeTeamId: match.teams.home.id,
-        awayTeamId: match.teams.away.id,
-
         date: match.fixture.date,
         status: match.fixture.status.short,
 
@@ -665,6 +661,263 @@ router.get('/api/football/fixture/:fixtureId/details', async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'No se pudo cargar el detalle del partido',
+      detail: error.message,
+    });
+  }
+});
+
+
+/**
+ * Ficha completa de un equipo.
+ *
+ * Devuelve información general del club, estadio, entrenador,
+ * plantilla y estadísticas de la temporada cuando estén disponibles.
+ *
+ * GET /api/football/team/:teamId/details
+ */
+router.get('/api/football/team/:teamId/details', async (req, res) => {
+  try {
+    const teamId = String(req.params.teamId || '').trim();
+
+    if (!/^\d+$/.test(teamId)) {
+      return res.status(400).json({
+        ok: false,
+        error: 'ID de equipo no válido',
+      });
+    }
+
+    const safeFootballFetch = async (endpoint) => {
+      try {
+        return await footballFetch(endpoint);
+      } catch (error) {
+        console.warn(
+          `API-Football no devolvió datos para ${endpoint}:`,
+          error.message
+        );
+
+        return {
+          response: [],
+        };
+      }
+    };
+
+    const [
+      teamData,
+      squadData,
+      coachData,
+      statisticsData,
+    ] = await Promise.all([
+      footballFetch(
+        `/teams?id=${encodeURIComponent(teamId)}`
+      ),
+      safeFootballFetch(
+        `/players/squads?team=${encodeURIComponent(teamId)}`
+      ),
+      safeFootballFetch(
+        `/coachs?team=${encodeURIComponent(teamId)}`
+      ),
+      LEAGUE_ID && SEASON
+        ? safeFootballFetch(
+            `/teams/statistics?league=${encodeURIComponent(LEAGUE_ID)}&season=${encodeURIComponent(SEASON)}&team=${encodeURIComponent(teamId)}`
+          )
+        : Promise.resolve({ response: [] }),
+    ]);
+
+    const teamEntry = teamData.response?.[0];
+
+    if (!teamEntry?.team) {
+      return res.status(404).json({
+        ok: false,
+        error: 'Equipo no encontrado',
+      });
+    }
+
+    const apiTeamName = teamEntry.team.name || '';
+    const team = teamEntry.team;
+    const venue = teamEntry.venue || {};
+
+    const squadEntry = Array.isArray(squadData.response)
+      ? squadData.response[0]
+      : null;
+
+    const squad = Array.isArray(squadEntry?.players)
+      ? squadEntry.players.map((player) => ({
+          id: player.id ?? null,
+          name: player.name || '',
+          age: player.age ?? null,
+          number: player.number ?? null,
+          position: player.position || '',
+          photo: player.photo || '',
+        }))
+      : [];
+
+    const coaches = Array.isArray(coachData.response)
+      ? coachData.response.map((coach) => ({
+          id: coach.id ?? null,
+          name: coach.name || '',
+          firstname: coach.firstname || '',
+          lastname: coach.lastname || '',
+          age: coach.age ?? null,
+          birth: {
+            date: coach.birth?.date || null,
+            place: coach.birth?.place || '',
+            country: coach.birth?.country || '',
+          },
+          nationality: coach.nationality || '',
+          height: coach.height || '',
+          weight: coach.weight || '',
+          photo: coach.photo || '',
+          career: Array.isArray(coach.career)
+            ? coach.career.map((item) => ({
+                team: {
+                  id: item.team?.id ?? null,
+                  name: item.team?.name || '',
+                  logo: item.team?.logo || '',
+                },
+                start: item.start || null,
+                end: item.end || null,
+              }))
+            : [],
+        }))
+      : [];
+
+    const teamStats =
+      statisticsData &&
+      statisticsData.response &&
+      !Array.isArray(statisticsData.response)
+        ? statisticsData.response
+        : null;
+
+    const normalizeFixtures = (fixtures) => ({
+      played: {
+        home: fixtures?.played?.home ?? 0,
+        away: fixtures?.played?.away ?? 0,
+        total: fixtures?.played?.total ?? 0,
+      },
+      wins: {
+        home: fixtures?.wins?.home ?? 0,
+        away: fixtures?.wins?.away ?? 0,
+        total: fixtures?.wins?.total ?? 0,
+      },
+      draws: {
+        home: fixtures?.draws?.home ?? 0,
+        away: fixtures?.draws?.away ?? 0,
+        total: fixtures?.draws?.total ?? 0,
+      },
+      loses: {
+        home: fixtures?.loses?.home ?? 0,
+        away: fixtures?.loses?.away ?? 0,
+        total: fixtures?.loses?.total ?? 0,
+      },
+    });
+
+    return res.json({
+      ok: true,
+      updatedAt: new Date().toISOString(),
+
+      team: {
+        id: team.id ?? Number(teamId),
+        name: getDisplayTeamName(apiTeamName),
+        shortName: getShortTeamName(apiTeamName),
+        code: team.code || '',
+        country: team.country || '',
+        founded: team.founded ?? null,
+        national: team.national ?? false,
+        logo: getTeamLogo(apiTeamName, team.logo || ''),
+        isCastellon: isCastellon(apiTeamName),
+      },
+
+      venue: {
+        id: venue.id ?? null,
+        name: getCorrectVenue(apiTeamName, venue.name || ''),
+        address: venue.address || '',
+        city: venue.city || '',
+        capacity: venue.capacity ?? null,
+        surface: venue.surface || '',
+        image: venue.image || '',
+      },
+
+      coach: coaches[0] || null,
+      coaches,
+      squad,
+
+      season: {
+        leagueId: LEAGUE_ID ? Number(LEAGUE_ID) : null,
+        season: SEASON || null,
+
+        form: teamStats?.form || '',
+
+        fixtures: normalizeFixtures(teamStats?.fixtures),
+
+        goals: {
+          for: {
+            total: {
+              home: teamStats?.goals?.for?.total?.home ?? 0,
+              away: teamStats?.goals?.for?.total?.away ?? 0,
+              total: teamStats?.goals?.for?.total?.total ?? 0,
+            },
+            average: {
+              home: teamStats?.goals?.for?.average?.home ?? null,
+              away: teamStats?.goals?.for?.average?.away ?? null,
+              total: teamStats?.goals?.for?.average?.total ?? null,
+            },
+          },
+          against: {
+            total: {
+              home: teamStats?.goals?.against?.total?.home ?? 0,
+              away: teamStats?.goals?.against?.total?.away ?? 0,
+              total: teamStats?.goals?.against?.total?.total ?? 0,
+            },
+            average: {
+              home: teamStats?.goals?.against?.average?.home ?? null,
+              away: teamStats?.goals?.against?.average?.away ?? null,
+              total: teamStats?.goals?.against?.average?.total ?? null,
+            },
+          },
+        },
+
+        biggest: {
+          streak: {
+            wins: teamStats?.biggest?.streak?.wins ?? 0,
+            draws: teamStats?.biggest?.streak?.draws ?? 0,
+            loses: teamStats?.biggest?.streak?.loses ?? 0,
+          },
+          wins: {
+            home: teamStats?.biggest?.wins?.home || null,
+            away: teamStats?.biggest?.wins?.away || null,
+          },
+          loses: {
+            home: teamStats?.biggest?.loses?.home || null,
+            away: teamStats?.biggest?.loses?.away || null,
+          },
+        },
+
+        cleanSheet: {
+          home: teamStats?.clean_sheet?.home ?? 0,
+          away: teamStats?.clean_sheet?.away ?? 0,
+          total: teamStats?.clean_sheet?.total ?? 0,
+        },
+
+        failedToScore: {
+          home: teamStats?.failed_to_score?.home ?? 0,
+          away: teamStats?.failed_to_score?.away ?? 0,
+          total: teamStats?.failed_to_score?.total ?? 0,
+        },
+
+        lineups: Array.isArray(teamStats?.lineups)
+          ? teamStats.lineups.map((lineup) => ({
+              formation: lineup.formation || '',
+              played: lineup.played ?? 0,
+            }))
+          : [],
+      },
+    });
+  } catch (error) {
+    console.error('Error cargando ficha del equipo:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'No se pudo cargar la ficha del equipo',
       detail: error.message,
     });
   }
