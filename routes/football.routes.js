@@ -74,6 +74,7 @@ router.post('/api/football/sync-standings', async (req, res) => {
       data.response?.[0]?.league?.standings?.[0] || [];
 
     const rows = standings.map((item) => ({
+      teamId: item.team.id,
       position: item.rank,
 
       team: getDisplayTeamName(item.team.name),
