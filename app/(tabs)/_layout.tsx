@@ -67,7 +67,7 @@ export default function TabLayout() {
               paddingBottom: 2,
             },
             tabBarLabelStyle: {
-              fontSize: 9,
+              fontSize: 8,
               fontWeight: '700',
               marginTop: -2,
             },
@@ -81,7 +81,7 @@ export default function TabLayout() {
             options={{
               title: 'Inicio',
               tabBarIcon: ({ color }) => (
-                <Ionicons name="home" size={22} color={color} />
+                <Ionicons name="home" size={21} color={color} />
               ),
             }}
           />
@@ -90,7 +90,7 @@ export default function TabLayout() {
             options={{
               title: 'Radio',
               tabBarIcon: ({ color }) => (
-                <Ionicons name="radio" size={22} color={color} />
+                <Ionicons name="radio" size={21} color={color} />
               ),
             }}
           />
@@ -99,7 +99,7 @@ export default function TabLayout() {
             options={{
               title: 'Clasific.',
               tabBarIcon: ({ color }) => (
-                <Ionicons name="trophy" size={22} color={color} />
+                <Ionicons name="trophy" size={21} color={color} />
               ),
             }}
           />
@@ -108,7 +108,16 @@ export default function TabLayout() {
             options={{
               title: 'Calend.',
               tabBarIcon: ({ color }) => (
-                <Ionicons name="calendar" size={22} color={color} />
+                <Ionicons name="calendar" size={21} color={color} />
+              ),
+            }}
+          />
+          <Tabs.Screen
+            name="live"
+            options={{
+              title: 'Directo',
+              tabBarIcon: ({ color }) => (
+                <Ionicons name="football" size={21} color={color} />
               ),
             }}
           />
@@ -117,7 +126,7 @@ export default function TabLayout() {
             options={{
               title: 'Noticias',
               tabBarIcon: ({ color }) => (
-                <Ionicons name="newspaper" size={22} color={color} />
+                <Ionicons name="newspaper" size={21} color={color} />
               ),
             }}
           />
@@ -126,7 +135,7 @@ export default function TabLayout() {
             options={{
               title: 'Media',
               tabBarIcon: ({ color }) => (
-                <Ionicons name="musical-notes" size={22} color={color} />
+                <Ionicons name="musical-notes" size={21} color={color} />
               ),
             }}
           />
@@ -135,7 +144,7 @@ export default function TabLayout() {
             options={{
               title: 'Galería',
               tabBarIcon: ({ color }) => (
-                <Ionicons name="images" size={22} color={color} />
+                <Ionicons name="images" size={21} color={color} />
               ),
             }}
           />
@@ -146,7 +155,7 @@ export default function TabLayout() {
               tabBarIcon: ({ color }) => (
                 <Ionicons
                   name="bag-handle-outline"
-                  size={22}
+                  size={21}
                   color={color}
                 />
               ),
