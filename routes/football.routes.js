@@ -934,6 +934,7 @@ router.get('/api/football/team/:teamId/details', async (req, res) => {
 router.get('/api/football/player/:playerId/details', async (req, res) => {
   try {
     const playerId = String(req.params.playerId || '').trim();
+    const requestedTeamId = String(req.query.teamId || '').trim();
 
     if (!/^\d+$/.test(playerId)) {
       return res.status(400).json({
@@ -949,119 +950,143 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
       });
     }
 
-    const data = await footballFetch(
+    // Primero intentamos obtener la ficha estadística de la temporada actual.
+    const seasonData = await footballFetch(
       `/players?id=${encodeURIComponent(playerId)}&season=${encodeURIComponent(SEASON)}`
     );
 
-    const entry = Array.isArray(data.response)
-      ? data.response[0]
+    let entry = Array.isArray(seasonData.response)
+      ? seasonData.response[0]
       : null;
 
-    if (!entry?.player) {
+    let player = entry?.player || null;
+    let rawStatistics = Array.isArray(entry?.statistics)
+      ? entry.statistics
+      : [];
+
+    // Al inicio de temporada API-Football puede incluir al jugador en /players/squads
+    // pero todavía no devolverlo en /players?season=2026.
+    // Si recibimos teamId desde la app, usamos la plantilla como fallback.
+    let squadPlayer = null;
+    let squadTeam = null;
+
+    if (!player && /^\d+$/.test(requestedTeamId)) {
+      try {
+        const squadData = await footballFetch(
+          `/players/squads?team=${encodeURIComponent(requestedTeamId)}`
+        );
+
+        const squadEntry = Array.isArray(squadData.response)
+          ? squadData.response[0]
+          : null;
+
+        squadTeam = squadEntry?.team || null;
+
+        squadPlayer = Array.isArray(squadEntry?.players)
+          ? squadEntry.players.find(
+              (item) => String(item.id) === String(playerId)
+            )
+          : null;
+      } catch (error) {
+        console.warn(
+          'No se pudo usar la plantilla como fallback del jugador:',
+          error.message
+        );
+      }
+    }
+
+    if (!player && !squadPlayer) {
       return res.status(404).json({
         ok: false,
-        error: 'Jugador no encontrado para la temporada configurada',
+        error: 'Jugador no encontrado',
+        hint:
+          'Si todavía no tiene estadísticas de la temporada, envía también ?teamId=ID_DEL_EQUIPO',
       });
     }
 
-    const player = entry.player;
-    const statistics = Array.isArray(entry.statistics)
-      ? entry.statistics.map((stat) => {
-          const teamApiName = stat.team?.name || '';
+    const normalizeStatistics = (statistics) =>
+      statistics.map((stat) => {
+        const teamApiName = stat.team?.name || '';
 
-          return {
-            team: {
-              id: stat.team?.id ?? null,
-              name: getDisplayTeamName(teamApiName),
-              shortName: getShortTeamName(teamApiName),
-              logo: getTeamLogo(
-                teamApiName,
-                stat.team?.logo || ''
-              ),
-              isCastellon: isCastellon(teamApiName),
-            },
+        return {
+          team: {
+            id: stat.team?.id ?? null,
+            name: getDisplayTeamName(teamApiName),
+            shortName: getShortTeamName(teamApiName),
+            logo: getTeamLogo(teamApiName, stat.team?.logo || ''),
+            isCastellon: isCastellon(teamApiName),
+          },
+          league: {
+            id: stat.league?.id ?? null,
+            name: getCompetitionName(stat.league?.name || ''),
+            country: stat.league?.country || '',
+            logo: stat.league?.logo || '',
+            flag: stat.league?.flag || '',
+            season: stat.league?.season ?? SEASON,
+          },
+          games: {
+            appearances: stat.games?.appearences ?? 0,
+            lineups: stat.games?.lineups ?? 0,
+            minutes: stat.games?.minutes ?? 0,
+            number: stat.games?.number ?? null,
+            position: stat.games?.position || '',
+            rating: stat.games?.rating || null,
+            captain: stat.games?.captain ?? false,
+          },
+          substitutes: {
+            in: stat.substitutes?.in ?? 0,
+            out: stat.substitutes?.out ?? 0,
+            bench: stat.substitutes?.bench ?? 0,
+          },
+          shots: {
+            total: stat.shots?.total ?? 0,
+            on: stat.shots?.on ?? 0,
+          },
+          goals: {
+            total: stat.goals?.total ?? 0,
+            conceded: stat.goals?.conceded ?? 0,
+            assists: stat.goals?.assists ?? 0,
+            saves: stat.goals?.saves ?? 0,
+          },
+          passes: {
+            total: stat.passes?.total ?? 0,
+            key: stat.passes?.key ?? 0,
+            accuracy: stat.passes?.accuracy ?? null,
+          },
+          tackles: {
+            total: stat.tackles?.total ?? 0,
+            blocks: stat.tackles?.blocks ?? 0,
+            interceptions: stat.tackles?.interceptions ?? 0,
+          },
+          duels: {
+            total: stat.duels?.total ?? 0,
+            won: stat.duels?.won ?? 0,
+          },
+          dribbles: {
+            attempts: stat.dribbles?.attempts ?? 0,
+            success: stat.dribbles?.success ?? 0,
+            past: stat.dribbles?.past ?? 0,
+          },
+          fouls: {
+            drawn: stat.fouls?.drawn ?? 0,
+            committed: stat.fouls?.committed ?? 0,
+          },
+          cards: {
+            yellow: stat.cards?.yellow ?? 0,
+            yellowRed: stat.cards?.yellowred ?? 0,
+            red: stat.cards?.red ?? 0,
+          },
+          penalty: {
+            won: stat.penalty?.won ?? 0,
+            committed: stat.penalty?.commited ?? 0,
+            scored: stat.penalty?.scored ?? 0,
+            missed: stat.penalty?.missed ?? 0,
+            saved: stat.penalty?.saved ?? 0,
+          },
+        };
+      });
 
-            league: {
-              id: stat.league?.id ?? null,
-              name: getCompetitionName(stat.league?.name || ''),
-              country: stat.league?.country || '',
-              logo: stat.league?.logo || '',
-              flag: stat.league?.flag || '',
-              season: stat.league?.season ?? SEASON,
-            },
-
-            games: {
-              appearances: stat.games?.appearences ?? 0,
-              lineups: stat.games?.lineups ?? 0,
-              minutes: stat.games?.minutes ?? 0,
-              number: stat.games?.number ?? null,
-              position: stat.games?.position || '',
-              rating: stat.games?.rating || null,
-              captain: stat.games?.captain ?? false,
-            },
-
-            substitutes: {
-              in: stat.substitutes?.in ?? 0,
-              out: stat.substitutes?.out ?? 0,
-              bench: stat.substitutes?.bench ?? 0,
-            },
-
-            shots: {
-              total: stat.shots?.total ?? 0,
-              on: stat.shots?.on ?? 0,
-            },
-
-            goals: {
-              total: stat.goals?.total ?? 0,
-              conceded: stat.goals?.conceded ?? 0,
-              assists: stat.goals?.assists ?? 0,
-              saves: stat.goals?.saves ?? 0,
-            },
-
-            passes: {
-              total: stat.passes?.total ?? 0,
-              key: stat.passes?.key ?? 0,
-              accuracy: stat.passes?.accuracy ?? null,
-            },
-
-            tackles: {
-              total: stat.tackles?.total ?? 0,
-              blocks: stat.tackles?.blocks ?? 0,
-              interceptions: stat.tackles?.interceptions ?? 0,
-            },
-
-            duels: {
-              total: stat.duels?.total ?? 0,
-              won: stat.duels?.won ?? 0,
-            },
-
-            dribbles: {
-              attempts: stat.dribbles?.attempts ?? 0,
-              success: stat.dribbles?.success ?? 0,
-              past: stat.dribbles?.past ?? 0,
-            },
-
-            fouls: {
-              drawn: stat.fouls?.drawn ?? 0,
-              committed: stat.fouls?.committed ?? 0,
-            },
-
-            cards: {
-              yellow: stat.cards?.yellow ?? 0,
-              yellowRed: stat.cards?.yellowred ?? 0,
-              red: stat.cards?.red ?? 0,
-            },
-
-            penalty: {
-              won: stat.penalty?.won ?? 0,
-              committed: stat.penalty?.commited ?? 0,
-              scored: stat.penalty?.scored ?? 0,
-              missed: stat.penalty?.missed ?? 0,
-              saved: stat.penalty?.saved ?? 0,
-            },
-          };
-        })
-      : [];
+    const statistics = normalizeStatistics(rawStatistics);
 
     const preferredStatistics =
       statistics.find((stat) =>
@@ -1072,30 +1097,64 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
       statistics[0] ||
       null;
 
+    const fallbackTeamName = squadTeam?.name || '';
+    const fallbackTeam = squadTeam
+      ? {
+          id: squadTeam.id ?? Number(requestedTeamId),
+          name: getDisplayTeamName(fallbackTeamName),
+          shortName: getShortTeamName(fallbackTeamName),
+          logo: getTeamLogo(fallbackTeamName, squadTeam.logo || ''),
+          isCastellon: isCastellon(fallbackTeamName),
+        }
+      : null;
+
     return res.json({
       ok: true,
       updatedAt: new Date().toISOString(),
+      profileSource: player ? 'season' : 'squad',
+      statisticsAvailable: statistics.length > 0,
 
-      player: {
-        id: player.id ?? Number(playerId),
-        name: player.name || '',
-        firstname: player.firstname || '',
-        lastname: player.lastname || '',
-        age: player.age ?? null,
+      player: player
+        ? {
+            id: player.id ?? Number(playerId),
+            name: player.name || '',
+            firstname: player.firstname || '',
+            lastname: player.lastname || '',
+            age: player.age ?? null,
+            birth: {
+              date: player.birth?.date || null,
+              place: player.birth?.place || '',
+              country: player.birth?.country || '',
+            },
+            nationality: player.nationality || '',
+            height: player.height || '',
+            weight: player.weight || '',
+            injured: player.injured ?? false,
+            photo: player.photo || '',
+            number: preferredStatistics?.games?.number ?? null,
+            position: preferredStatistics?.games?.position || '',
+          }
+        : {
+            id: squadPlayer.id ?? Number(playerId),
+            name: squadPlayer.name || '',
+            firstname: '',
+            lastname: '',
+            age: squadPlayer.age ?? null,
+            birth: {
+              date: null,
+              place: '',
+              country: '',
+            },
+            nationality: '',
+            height: '',
+            weight: '',
+            injured: false,
+            photo: squadPlayer.photo || '',
+            number: squadPlayer.number ?? null,
+            position: squadPlayer.position || '',
+          },
 
-        birth: {
-          date: player.birth?.date || null,
-          place: player.birth?.place || '',
-          country: player.birth?.country || '',
-        },
-
-        nationality: player.nationality || '',
-        height: player.height || '',
-        weight: player.weight || '',
-        injured: player.injured ?? false,
-        photo: player.photo || '',
-      },
-
+      team: preferredStatistics?.team || fallbackTeam,
       season: SEASON,
       preferredStatistics,
       statistics,
@@ -1110,6 +1169,7 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
     });
   }
 });
+
 
 /**
  * Sirve los escudos de API-Football a través de nuestro backend.
