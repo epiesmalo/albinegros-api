@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
 
 type SquadPlayer = {
   id: number | null;
@@ -301,6 +301,17 @@ export default function TeamDetailScreen() {
               <Pressable
                 key={String(player.id)}
                 disabled={!player.id}
+                onPress={() => {
+                  if (!player.id || !data.team.id) return;
+
+                  router.push({
+                    pathname: '/player/[playerId]',
+                    params: {
+                      playerId: String(player.id),
+                      teamId: String(data.team.id),
+                    },
+                  });
+                }}
                 style={({ pressed }) => [
                   styles.playerCard,
                   pressed && player.id && styles.playerCardPressed,
@@ -331,6 +342,15 @@ export default function TeamDetailScreen() {
                 <View style={styles.numberBox}>
                   <Text style={styles.playerNumber}>{player.number ?? '-'}</Text>
                 </View>
+
+                {player.id ? (
+                  <Ionicons
+                    name="chevron-forward"
+                    size={15}
+                    color="#D4AF37"
+                    style={styles.playerChevron}
+                  />
+                ) : null}
               </Pressable>
             ))}
           </View>
@@ -754,6 +774,9 @@ const styles = StyleSheet.create({
     color: '#D4AF37',
     fontSize: 12,
     fontWeight: '900',
+  },
+  playerChevron: {
+    marginLeft: 7,
   },
   statsGrid: {
     flexDirection: 'row',

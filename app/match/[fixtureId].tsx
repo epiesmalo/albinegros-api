@@ -352,22 +352,60 @@ export default function MatchDetailScreen() {
       <Text style={styles.lineupSectionTitle}>ONCE TITULAR</Text>
 
       {lineup.startXI.map((player, index) => (
-        <View key={`${player.id}-${index}`} style={styles.playerRow}>
+        <Pressable
+          key={`${player.id}-${index}`}
+          disabled={!player.id || !lineup.team.id}
+          onPress={() => {
+            if (!player.id || !lineup.team.id) return;
+
+            router.push({
+              pathname: '/player/[playerId]',
+              params: {
+                playerId: String(player.id),
+                teamId: String(lineup.team.id),
+              },
+            });
+          }}
+          style={({ pressed }) => [
+            styles.playerRow,
+            pressed && player.id && styles.playerRowPressed,
+          ]}
+        >
           <Text style={styles.playerNumber}>{player.number ?? '-'}</Text>
           <Text style={styles.playerName}>{player.name}</Text>
           <Text style={styles.playerPosition}>{player.position}</Text>
-        </View>
+          {player.id ? <Ionicons name="chevron-forward" size={14} color="#D4AF37" /> : null}
+        </Pressable>
       ))}
 
       {lineup.substitutes.length > 0 && (
         <>
           <Text style={styles.lineupSectionTitle}>SUPLENTES</Text>
           {lineup.substitutes.map((player, index) => (
-            <View key={`${player.id}-${index}`} style={styles.playerRow}>
+            <Pressable
+              key={`${player.id}-${index}`}
+              disabled={!player.id || !lineup.team.id}
+              onPress={() => {
+                if (!player.id || !lineup.team.id) return;
+
+                router.push({
+                  pathname: '/player/[playerId]',
+                  params: {
+                    playerId: String(player.id),
+                    teamId: String(lineup.team.id),
+                  },
+                });
+              }}
+              style={({ pressed }) => [
+                styles.playerRow,
+                pressed && player.id && styles.playerRowPressed,
+              ]}
+            >
               <Text style={styles.playerNumber}>{player.number ?? '-'}</Text>
               <Text style={styles.playerName}>{player.name}</Text>
               <Text style={styles.playerPosition}>{player.position}</Text>
-            </View>
+              {player.id ? <Ionicons name="chevron-forward" size={14} color="#D4AF37" /> : null}
+            </Pressable>
           ))}
         </>
       )}
@@ -666,6 +704,7 @@ const styles = StyleSheet.create({
   coachName: { color: '#DDD', fontSize: 10, fontWeight: '800', marginLeft: 'auto' },
   lineupSectionTitle: { color: '#D4AF37', fontSize: 9, fontWeight: '900', marginTop: 10, marginBottom: 6, letterSpacing: 0.6 },
   playerRow: { flexDirection: 'row', alignItems: 'center', minHeight: 36, borderBottomWidth: 1, borderBottomColor: '#1D1D1D' },
+  playerRowPressed: { opacity: 0.68 },
   playerNumber: { width: 32, color: '#D4AF37', fontSize: 10, fontWeight: '900', textAlign: 'center' },
   playerName: { flex: 1, color: '#E6E6E6', fontSize: 11, fontWeight: '700' },
   playerPosition: { color: '#777', fontSize: 9, fontWeight: '700' },
