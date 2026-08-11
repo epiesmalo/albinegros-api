@@ -320,6 +320,114 @@ const nextMatch = {
   }
 });
 
+
+/**
+ * Resultados en directo de la competición configurada.
+ * GET /api/football/live
+ */
+router.get('/api/football/live', async (req, res) => {
+  try {
+    if (!LEAGUE_ID) {
+      return res.status(500).json({
+        ok: false,
+        error: 'FOOTBALL_LEAGUE_ID no está configurado',
+      });
+    }
+
+    const data = await footballFetch(
+      `/fixtures?live=${encodeURIComponent(LEAGUE_ID)}&timezone=${encodeURIComponent(TIMEZONE)}`
+    );
+
+    const fixtures = Array.isArray(data.response) ? data.response : [];
+
+    const matches = fixtures.map((match) => {
+      const homeApiName = match.teams?.home?.name || '';
+      const awayApiName = match.teams?.away?.name || '';
+
+      return {
+        fixtureId: match.fixture?.id ?? null,
+        date: match.fixture?.date || null,
+        timestamp: match.fixture?.timestamp ?? null,
+        status: {
+          short: match.fixture?.status?.short || '',
+          long: match.fixture?.status?.long || '',
+          elapsed: match.fixture?.status?.elapsed ?? null,
+          extra: match.fixture?.status?.extra ?? null,
+        },
+        league: {
+          id: match.league?.id ?? null,
+          name: getCompetitionName(match.league?.name || ''),
+          round: match.league?.round || '',
+          logo: match.league?.logo || '',
+        },
+        venue: {
+          id: match.fixture?.venue?.id ?? null,
+          name: getCorrectVenue(homeApiName, match.fixture?.venue?.name || ''),
+          city: match.fixture?.venue?.city || '',
+        },
+        referee: match.fixture?.referee || '',
+        home: {
+          id: match.teams?.home?.id ?? null,
+          name: getDisplayTeamName(homeApiName),
+          shortName: getShortTeamName(homeApiName),
+          logo: getTeamLogo(homeApiName, match.teams?.home?.logo || ''),
+          winner: match.teams?.home?.winner ?? null,
+          isCastellon: isCastellon(homeApiName),
+        },
+        away: {
+          id: match.teams?.away?.id ?? null,
+          name: getDisplayTeamName(awayApiName),
+          shortName: getShortTeamName(awayApiName),
+          logo: getTeamLogo(awayApiName, match.teams?.away?.logo || ''),
+          winner: match.teams?.away?.winner ?? null,
+          isCastellon: isCastellon(awayApiName),
+        },
+        goals: {
+          home: match.goals?.home ?? null,
+          away: match.goals?.away ?? null,
+        },
+        score: {
+          halftime: {
+            home: match.score?.halftime?.home ?? null,
+            away: match.score?.halftime?.away ?? null,
+          },
+          fulltime: {
+            home: match.score?.fulltime?.home ?? null,
+            away: match.score?.fulltime?.away ?? null,
+          },
+          extratime: {
+            home: match.score?.extratime?.home ?? null,
+            away: match.score?.extratime?.away ?? null,
+          },
+          penalty: {
+            home: match.score?.penalty?.home ?? null,
+            away: match.score?.penalty?.away ?? null,
+          },
+        },
+      };
+    });
+
+    return res.json({
+      ok: true,
+      live: true,
+      league: Number(LEAGUE_ID),
+      season: SEASON || null,
+      timezone: TIMEZONE,
+      count: matches.length,
+      updatedAt: new Date().toISOString(),
+      matches,
+    });
+  } catch (error) {
+    console.error('Error cargando resultados en directo:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'No se pudieron cargar los resultados en directo',
+      detail: error.message,
+    });
+  }
+});
+
 /**
  * Sirve los escudos de API-Football a través de nuestro backend.
  *
