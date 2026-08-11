@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
 
 type Team = {
   id: number | null;
@@ -440,12 +440,27 @@ export default function MatchDetailScreen() {
               </View>
 
               <View style={styles.scoreTeams}>
-                <View style={styles.scoreTeam}>
+                <Pressable
+                  disabled={!data.home.id}
+                  onPress={() => {
+                    if (!data.home.id) return;
+
+                    router.push({
+                      pathname: '/team/[teamId]',
+                      params: { teamId: String(data.home.id) },
+                    });
+                  }}
+                  style={({ pressed }) => [
+                    styles.scoreTeam,
+                    pressed && data.home.id && styles.scoreTeamPressed,
+                  ]}
+                >
                   <Image source={{ uri: data.home.logo }} style={styles.bigLogo} contentFit="contain" cachePolicy="disk" />
                   <Text numberOfLines={2} style={[styles.scoreTeamName, data.home.isCastellon && styles.castellon]}>
                     {data.home.shortName || data.home.name}
                   </Text>
-                </View>
+                  {data.home.id ? <Text style={styles.teamLinkText}>Ver equipo</Text> : null}
+                </Pressable>
 
                 <View style={styles.scoreCenter}>
                   <Text style={styles.mainScore}>
@@ -458,12 +473,27 @@ export default function MatchDetailScreen() {
                   )}
                 </View>
 
-                <View style={styles.scoreTeam}>
+                <Pressable
+                  disabled={!data.away.id}
+                  onPress={() => {
+                    if (!data.away.id) return;
+
+                    router.push({
+                      pathname: '/team/[teamId]',
+                      params: { teamId: String(data.away.id) },
+                    });
+                  }}
+                  style={({ pressed }) => [
+                    styles.scoreTeam,
+                    pressed && data.away.id && styles.scoreTeamPressed,
+                  ]}
+                >
                   <Image source={{ uri: data.away.logo }} style={styles.bigLogo} contentFit="contain" cachePolicy="disk" />
                   <Text numberOfLines={2} style={[styles.scoreTeamName, data.away.isCastellon && styles.castellon]}>
                     {data.away.shortName || data.away.name}
                   </Text>
-                </View>
+                  {data.away.id ? <Text style={styles.teamLinkText}>Ver equipo</Text> : null}
+                </Pressable>
               </View>
 
               {(data.fixture.venue.name || data.fixture.referee) && (
@@ -551,6 +581,16 @@ const styles = StyleSheet.create({
   statusText: { color: '#D4AF37', fontSize: 10, fontWeight: '900' },
   scoreTeams: { flexDirection: 'row', alignItems: 'center', marginTop: 15 },
   scoreTeam: { flex: 1, alignItems: 'center' },
+  scoreTeamPressed: {
+    opacity: 0.72,
+    transform: [{ scale: 0.98 }],
+  },
+  teamLinkText: {
+    color: '#D4AF37',
+    fontSize: 8,
+    fontWeight: '800',
+    marginTop: 5,
+  },
   bigLogo: { width: 72, height: 72 },
   scoreTeamName: { color: '#EEE', fontSize: 11, fontWeight: '800', textAlign: 'center', marginTop: 8 },
   castellon: { color: '#D4AF37' },
