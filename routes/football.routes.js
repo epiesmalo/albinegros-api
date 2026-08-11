@@ -1166,6 +1166,126 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
   }
 });
 
+
+/**
+ * Importa a Supabase la plantilla actual del C.D. Castellón desde API-Football.
+ *
+ * IMPORTANTE:
+ * - Solo inserta jugadores que todavía no existen en castellon_squad.
+ * - No sobrescribe correcciones manuales ya realizadas en Supabase.
+ * - No reactiva automáticamente jugadores marcados como active=false.
+ *
+ * POST /api/football/sync-castellon-squad
+ */
+router.post('/api/football/sync-castellon-squad', async (req, res) => {
+  try {
+    const CASTELLON_TEAM_ID = 5254;
+
+    const squadData = await footballFetch(
+      `/players/squads?team=${encodeURIComponent(CASTELLON_TEAM_ID)}`
+    );
+
+    const squadEntry = Array.isArray(squadData.response)
+      ? squadData.response[0]
+      : null;
+
+    const apiPlayers = Array.isArray(squadEntry?.players)
+      ? squadEntry.players
+      : [];
+
+    if (!apiPlayers.length) {
+      return res.status(404).json({
+        ok: false,
+        error: 'API-Football no ha devuelto jugadores para el C.D. Castellón',
+      });
+    }
+
+    const { data: existingRows, error: existingError } = await supabase
+      .from('castellon_squad')
+      .select('player_id, active');
+
+    if (existingError) {
+      throw existingError;
+    }
+
+    const existingPlayerIds = new Set(
+      (existingRows || [])
+        .map((row) => row.player_id)
+        .filter((id) => id !== null && id !== undefined)
+        .map((id) => String(id))
+    );
+
+    const rowsToInsert = apiPlayers
+      .filter((player) => {
+        if (player.id === null || player.id === undefined) {
+          return false;
+        }
+
+        return !existingPlayerIds.has(String(player.id));
+      })
+      .map((player) => ({
+        player_id: player.id,
+        name: player.name || '',
+        firstname: null,
+        lastname: null,
+        number: player.number ?? null,
+        position: player.position || null,
+        age: player.age ?? null,
+        birth_date: null,
+        birth_place: null,
+        birth_country: null,
+        nationality: null,
+        height: null,
+        weight: null,
+        photo: player.photo || null,
+        active: true,
+      }));
+
+    if (rowsToInsert.length > 0) {
+      const { error: insertError } = await supabase
+        .from('castellon_squad')
+        .insert(rowsToInsert);
+
+      if (insertError) {
+        throw insertError;
+      }
+    }
+
+    return res.json({
+      ok: true,
+      teamId: CASTELLON_TEAM_ID,
+      team: getDisplayTeamName(
+        squadEntry?.team?.name || 'CD Castellón'
+      ),
+      apiCount: apiPlayers.length,
+      existingCount: existingPlayerIds.size,
+      inserted: rowsToInsert.length,
+      skipped: apiPlayers.length - rowsToInsert.length,
+      message:
+        rowsToInsert.length > 0
+          ? 'Plantilla importada. Las correcciones manuales existentes no se han sobrescrito.'
+          : 'No había jugadores nuevos que importar.',
+      playersInserted: rowsToInsert.map((player) => ({
+        playerId: player.player_id,
+        name: player.name,
+        number: player.number,
+        position: player.position,
+      })),
+    });
+  } catch (error) {
+    console.error(
+      'Error sincronizando plantilla propia del Castellón:',
+      error
+    );
+
+    return res.status(500).json({
+      ok: false,
+      error: 'No se pudo importar la plantilla del C.D. Castellón',
+      detail: error.message,
+    });
+  }
+});
+
 /**
  * Sirve los escudos de API-Football a través de nuestro backend.
  *
