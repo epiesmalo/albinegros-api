@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -8,6 +9,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 
 type LiveTeam = {
   id: number | null;
@@ -210,12 +212,22 @@ export default function LiveScreen() {
       ) : null}
 
       {!loading && !error && matches.map((match) => (
-        <View
+        <Pressable
           key={String(match.fixtureId)}
-          style={[
+          disabled={!match.fixtureId}
+          onPress={() => {
+            if (!match.fixtureId) return;
+
+            router.push({
+              pathname: '/match/[fixtureId]',
+              params: { fixtureId: String(match.fixtureId) },
+            });
+          }}
+          style={({ pressed }) => [
             styles.matchCard,
             (match.home.isCastellon || match.away.isCastellon) &&
               styles.castellonCard,
+            pressed && styles.matchCardPressed,
           ]}
         >
           <View style={styles.matchHeader}>
@@ -295,9 +307,14 @@ export default function LiveScreen() {
                   .filter(Boolean)
                   .join(' · ')}
               </Text>
+              <Ionicons
+                name="chevron-forward"
+                size={15}
+                color="#D4AF37"
+              />
             </View>
           )}
-        </View>
+        </Pressable>
       ))}
     </ScrollView>
   );
@@ -405,6 +422,10 @@ const styles = StyleSheet.create({
   },
   castellonCard: {
     borderColor: 'rgba(212,175,55,0.65)',
+  },
+  matchCardPressed: {
+    opacity: 0.72,
+    transform: [{ scale: 0.99 }],
   },
   matchHeader: {
     flexDirection: 'row',

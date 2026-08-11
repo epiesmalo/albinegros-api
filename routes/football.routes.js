@@ -141,6 +141,10 @@ router.post('/api/football/sync-calendar', async (req, res) => {
       const awayApiName = match.teams.away.name;
 
       return {
+        fixtureId: match.fixture.id,
+        homeTeamId: match.teams.home.id,
+        awayTeamId: match.teams.away.id,
+
         date: match.fixture.date,
         status: match.fixture.status.short,
 
