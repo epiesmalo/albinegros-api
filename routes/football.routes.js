@@ -808,6 +808,59 @@ router.get('/api/football/team/:teamId/details', async (req, res) => {
         }))
       : [];
 
+    // Para el C.D. Castellón, los datos propios de castellon_team
+    // tienen prioridad sobre API-Football (entrenador, estadio, etc.).
+    let customCastellonTeam = null;
+
+    if (Number(teamId) === 5254) {
+      const { data: customTeamRows, error: customTeamError } = await supabase
+        .from('castellon_team')
+        .select(
+          'team_id,name,founded,country,coach_name,coach_photo,stadium_name,stadium_city,stadium_capacity,stadium_surface,stadium_image'
+        )
+        .eq('team_id', 5254)
+        .limit(1);
+
+      if (customTeamError) {
+        throw customTeamError;
+      }
+
+      customCastellonTeam =
+        Array.isArray(customTeamRows) && customTeamRows.length > 0
+          ? customTeamRows[0]
+          : null;
+    }
+
+    const apiCoach = coaches[0] || null;
+
+    const resolvedCoach =
+      customCastellonTeam?.coach_name
+        ? {
+            ...(apiCoach || {}),
+            // El nombre de Supabase manda para evitar entrenadores desactualizados
+            // en API-Football.
+            name: customCastellonTeam.coach_name,
+            firstname: '',
+            lastname: '',
+            photo:
+              customCastellonTeam.coach_photo ||
+              apiCoach?.photo ||
+              '',
+          }
+        : apiCoach;
+
+    const resolvedCoaches =
+      resolvedCoach
+        ? [
+            resolvedCoach,
+            ...coaches.filter(
+              (coach) =>
+                String(coach?.name || '').trim().toLowerCase() !==
+                String(resolvedCoach?.name || '').trim().toLowerCase()
+            ),
+          ]
+        : coaches;
+
     const teamStats =
       statisticsData &&
       statisticsData.response &&
@@ -844,11 +897,21 @@ router.get('/api/football/team/:teamId/details', async (req, res) => {
 
       team: {
         id: team.id ?? Number(teamId),
-        name: getDisplayTeamName(apiTeamName),
-        shortName: getShortTeamName(apiTeamName),
+        name:
+          customCastellonTeam?.name ||
+          getDisplayTeamName(apiTeamName),
+        shortName: getShortTeamName(
+          customCastellonTeam?.name || apiTeamName
+        ),
         code: team.code || '',
-        country: team.country || '',
-        founded: team.founded ?? null,
+        country:
+          customCastellonTeam?.country ||
+          team.country ||
+          '',
+        founded:
+          customCastellonTeam?.founded ??
+          team.founded ??
+          null,
         national: team.national ?? false,
         logo: getTeamLogo(apiTeamName, team.logo || ''),
         isCastellon: isCastellon(apiTeamName),
@@ -856,16 +919,30 @@ router.get('/api/football/team/:teamId/details', async (req, res) => {
 
       venue: {
         id: venue.id ?? null,
-        name: getCorrectVenue(apiTeamName, venue.name || ''),
+        name:
+          customCastellonTeam?.stadium_name ||
+          getCorrectVenue(apiTeamName, venue.name || ''),
         address: venue.address || '',
-        city: venue.city || '',
-        capacity: venue.capacity ?? null,
-        surface: venue.surface || '',
-        image: venue.image || '',
+        city:
+          customCastellonTeam?.stadium_city ||
+          venue.city ||
+          '',
+        capacity:
+          customCastellonTeam?.stadium_capacity ??
+          venue.capacity ??
+          null,
+        surface:
+          customCastellonTeam?.stadium_surface ||
+          venue.surface ||
+          '',
+        image:
+          customCastellonTeam?.stadium_image ||
+          venue.image ||
+          '',
       },
 
-      coach: coaches[0] || null,
-      coaches,
+      coach: resolvedCoach,
+      coaches: resolvedCoaches,
       squad,
 
       season: {
