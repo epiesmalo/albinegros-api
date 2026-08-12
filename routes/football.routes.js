@@ -752,7 +752,7 @@ router.get('/api/football/team/:teamId/details', async (req, res) => {
     if (Number(teamId) === 5254) {
       const { data: castellonSquad, error: castellonSquadError } = await supabase
         .from('castellon_squad')
-        .select('player_id,name,age,number,position,photo,active')
+        .select('id,player_id,name,age,number,position,photo,active')
         .eq('active', true)
         .order('position', { ascending: true })
         .order('name', { ascending: true });
@@ -763,7 +763,12 @@ router.get('/api/football/team/:teamId/details', async (req, res) => {
 
       squad = Array.isArray(castellonSquad)
         ? castellonSquad.map((player) => ({
-            id: player.player_id ?? null,
+            // Si API-Football todavía no tiene player_id (p. ej. un fichaje),
+            // usamos un identificador local estable para poder abrir su ficha.
+            id:
+              player.player_id !== null && player.player_id !== undefined
+                ? player.player_id
+                : `local-${player.id}`,
             name: player.name || '',
             age: player.age ?? null,
             number: player.number ?? null,
@@ -958,7 +963,11 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
     const playerId = String(req.params.playerId || '').trim();
     const requestedTeamId = String(req.query.teamId || '').trim();
 
-    if (!/^\d+$/.test(playerId)) {
+    const isNumericPlayerId = /^\d+$/.test(playerId);
+    const localMatch = playerId.match(/^local-(\d+)$/);
+    const isLocalPlayerId = Boolean(localMatch);
+
+    if (!isNumericPlayerId && !isLocalPlayerId) {
       return res.status(400).json({
         ok: false,
         error: 'ID de jugador no válido',
@@ -972,27 +981,84 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
       });
     }
 
-    // Primero intentamos obtener la ficha estadística de la temporada actual.
-    const seasonData = await footballFetch(
-      `/players?id=${encodeURIComponent(playerId)}&season=${encodeURIComponent(SEASON)}`
-    );
+    const CASTELLON_TEAM_ID = 5254;
+    const isCastellonRequest =
+      String(requestedTeamId) === String(CASTELLON_TEAM_ID) ||
+      isLocalPlayerId;
 
-    let entry = Array.isArray(seasonData.response)
-      ? seasonData.response[0]
-      : null;
+    // ---------------------------------------------------------
+    // DATOS PROPIOS DEL C.D. CASTELLÓN
+    // ---------------------------------------------------------
+    // Si el jugador pertenece a nuestra plantilla curada,
+    // Supabase tiene prioridad para identidad, foto y datos personales.
+    let customPlayer = null;
 
-    let player = entry?.player || null;
-    let rawStatistics = Array.isArray(entry?.statistics)
-      ? entry.statistics
-      : [];
+    if (isCastellonRequest) {
+      let customQuery = supabase
+        .from('castellon_squad')
+        .select(
+          'id,player_id,name,firstname,lastname,number,position,age,birth_date,birth_place,birth_country,nationality,height,photo,active'
+        )
+        .eq('active', true);
 
-    // Al inicio de temporada API-Football puede incluir al jugador en /players/squads
-    // pero todavía no devolverlo en /players?season=2026.
-    // Si recibimos teamId desde la app, usamos la plantilla como fallback.
+      if (isLocalPlayerId) {
+        customQuery = customQuery.eq('id', Number(localMatch[1]));
+      } else {
+        customQuery = customQuery.eq('player_id', Number(playerId));
+      }
+
+      const { data: customRows, error: customError } = await customQuery.limit(1);
+
+      if (customError) {
+        throw customError;
+      }
+
+      customPlayer =
+        Array.isArray(customRows) && customRows.length > 0
+          ? customRows[0]
+          : null;
+    }
+
+    // ---------------------------------------------------------
+    // API-FOOTBALL: perfil + estadísticas
+    // ---------------------------------------------------------
+    let player = null;
+    let rawStatistics = [];
+
+    // Los jugadores locales todavía no existen en API-Football,
+    // por lo que no hacemos una petición con un ID inventado.
+    if (isNumericPlayerId) {
+      try {
+        const seasonData = await footballFetch(
+          `/players?id=${encodeURIComponent(playerId)}&season=${encodeURIComponent(SEASON)}`
+        );
+
+        const entry = Array.isArray(seasonData.response)
+          ? seasonData.response[0]
+          : null;
+
+        player = entry?.player || null;
+        rawStatistics = Array.isArray(entry?.statistics)
+          ? entry.statistics
+          : [];
+      } catch (error) {
+        console.warn(
+          'API-Football no devolvió ficha estadística del jugador:',
+          error.message
+        );
+      }
+    }
+
+    // Al inicio de temporada puede existir en /players/squads
+    // pero todavía no en /players?season=....
     let squadPlayer = null;
     let squadTeam = null;
 
-    if (!player && /^\d+$/.test(requestedTeamId)) {
+    if (
+      isNumericPlayerId &&
+      !player &&
+      /^\d+$/.test(requestedTeamId)
+    ) {
       try {
         const squadData = await footballFetch(
           `/players/squads?team=${encodeURIComponent(requestedTeamId)}`
@@ -1011,13 +1077,13 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
           : null;
       } catch (error) {
         console.warn(
-          'No se pudo usar la plantilla como fallback del jugador:',
+          'No se pudo usar la plantilla API como fallback del jugador:',
           error.message
         );
       }
     }
 
-    if (!player && !squadPlayer) {
+    if (!customPlayer && !player && !squadPlayer) {
       return res.status(404).json({
         ok: false,
         error: 'Jugador no encontrado',
@@ -1130,34 +1196,62 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
         }
       : null;
 
-    return res.json({
-      ok: true,
-      updatedAt: new Date().toISOString(),
-      profileSource: player ? 'season' : 'squad',
-      statisticsAvailable: statistics.length > 0,
+    const castellonTeam = {
+      id: CASTELLON_TEAM_ID,
+      name: getDisplayTeamName('CD Castellón'),
+      shortName: getShortTeamName('CD Castellón'),
+      logo: getTeamLogo('CD Castellón', ''),
+      isCastellon: true,
+    };
 
-      player: player
+    const calculateAge = (birthDate) => {
+      if (!birthDate) return null;
+
+      const birth = new Date(`${birthDate}T12:00:00Z`);
+
+      if (Number.isNaN(birth.getTime())) {
+        return null;
+      }
+
+      const today = new Date();
+      let age = today.getUTCFullYear() - birth.getUTCFullYear();
+
+      const hasNotHadBirthday =
+        today.getUTCMonth() < birth.getUTCMonth() ||
+        (
+          today.getUTCMonth() === birth.getUTCMonth() &&
+          today.getUTCDate() < birth.getUTCDate()
+        );
+
+      if (hasNotHadBirthday) {
+        age -= 1;
+      }
+
+      return age;
+    };
+
+    const apiBasePlayer = player
+      ? {
+          id: player.id ?? (isNumericPlayerId ? Number(playerId) : playerId),
+          name: player.name || '',
+          firstname: player.firstname || '',
+          lastname: player.lastname || '',
+          age: player.age ?? null,
+          birth: {
+            date: player.birth?.date || null,
+            place: player.birth?.place || '',
+            country: player.birth?.country || '',
+          },
+          nationality: player.nationality || '',
+          height: player.height || '',
+          injured: player.injured ?? false,
+          photo: player.photo || '',
+          number: preferredStatistics?.games?.number ?? null,
+          position: preferredStatistics?.games?.position || '',
+        }
+      : squadPlayer
         ? {
-            id: player.id ?? Number(playerId),
-            name: player.name || '',
-            firstname: player.firstname || '',
-            lastname: player.lastname || '',
-            age: player.age ?? null,
-            birth: {
-              date: player.birth?.date || null,
-              place: player.birth?.place || '',
-              country: player.birth?.country || '',
-            },
-            nationality: player.nationality || '',
-            height: player.height || '',
-            weight: player.weight || '',
-            injured: player.injured ?? false,
-            photo: player.photo || '',
-            number: preferredStatistics?.games?.number ?? null,
-            position: preferredStatistics?.games?.position || '',
-          }
-        : {
-            id: squadPlayer.id ?? Number(playerId),
+            id: squadPlayer.id ?? (isNumericPlayerId ? Number(playerId) : playerId),
             name: squadPlayer.name || '',
             firstname: '',
             lastname: '',
@@ -1169,14 +1263,100 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
             },
             nationality: '',
             height: '',
-            weight: '',
             injured: false,
             photo: squadPlayer.photo || '',
             number: squadPlayer.number ?? null,
             position: squadPlayer.position || '',
-          },
+          }
+        : {
+            id: playerId,
+            name: '',
+            firstname: '',
+            lastname: '',
+            age: null,
+            birth: {
+              date: null,
+              place: '',
+              country: '',
+            },
+            nationality: '',
+            height: '',
+            injured: false,
+            photo: '',
+            number: null,
+            position: '',
+          };
 
-      team: preferredStatistics?.team || fallbackTeam,
+    // Supabase manda únicamente cuando tenemos un dato propio.
+    const mergedPlayer = customPlayer
+      ? {
+          ...apiBasePlayer,
+          id:
+            customPlayer.player_id !== null &&
+            customPlayer.player_id !== undefined
+              ? customPlayer.player_id
+              : `local-${customPlayer.id}`,
+          name: customPlayer.name || apiBasePlayer.name,
+          firstname: customPlayer.firstname || apiBasePlayer.firstname,
+          lastname: customPlayer.lastname || apiBasePlayer.lastname,
+          age:
+            calculateAge(customPlayer.birth_date) ??
+            customPlayer.age ??
+            apiBasePlayer.age,
+          birth: {
+            date:
+              customPlayer.birth_date ||
+              apiBasePlayer.birth.date ||
+              null,
+            place:
+              customPlayer.birth_place ||
+              apiBasePlayer.birth.place ||
+              '',
+            country:
+              customPlayer.birth_country ||
+              apiBasePlayer.birth.country ||
+              '',
+          },
+          nationality:
+            customPlayer.nationality ||
+            apiBasePlayer.nationality ||
+            '',
+          height:
+            customPlayer.height ||
+            apiBasePlayer.height ||
+            '',
+          photo:
+            customPlayer.photo ||
+            apiBasePlayer.photo ||
+            '',
+          number:
+            customPlayer.number ??
+            apiBasePlayer.number ??
+            null,
+          position:
+            customPlayer.position ||
+            apiBasePlayer.position ||
+            '',
+        }
+      : apiBasePlayer;
+
+    return res.json({
+      ok: true,
+      updatedAt: new Date().toISOString(),
+      profileSource: customPlayer
+        ? 'castellon_squad'
+        : player
+          ? 'season'
+          : 'squad',
+      statisticsAvailable: statistics.length > 0,
+
+      player: mergedPlayer,
+
+      team:
+        customPlayer
+          ? castellonTeam
+          : preferredStatistics?.team || fallbackTeam,
+
       season: SEASON,
       preferredStatistics,
       statistics,

@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 
 type SquadPlayer = {
-  id: number | null;
+  id: number | string | null;
   name: string;
   age: number | null;
   number: number | null;

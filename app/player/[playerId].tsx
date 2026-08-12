@@ -60,7 +60,7 @@ type PlayerDetails = {
     birth: { date: string | null; place: string; country: string };
     nationality: string;
     height: string;
-    weight: string;
+    weight?: string;
     injured: boolean;
     photo: string;
     number: number | null;
@@ -208,7 +208,6 @@ export default function PlayerDetailScreen() {
             ['Lugar', [data.player.birth.place, data.player.birth.country].filter(Boolean).join(', ') || '-'],
             ['Nacionalidad', data.player.nationality || '-'],
             ['Altura', data.player.height || '-'],
-            ['Peso', data.player.weight || '-'],
           ].map(([label, value]) => (
             <View key={String(label)} style={styles.infoRow}>
               <Text style={styles.infoLabel}>{label}</Text>
