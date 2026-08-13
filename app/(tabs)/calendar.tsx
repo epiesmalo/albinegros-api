@@ -301,7 +301,22 @@ export default function CalendarScreen() {
           ]}
         >
         <View style={styles.teamsBlock}>
-          <View style={styles.teamLine}>
+          <Pressable
+            disabled={!item.homeTeamId}
+            onPress={(event) => {
+              event.stopPropagation();
+              if (!item.homeTeamId) return;
+
+              router.push({
+                pathname: '/team/[teamId]',
+                params: { teamId: String(item.homeTeamId) },
+              });
+            }}
+            style={({ pressed }) => [
+              styles.teamLine,
+              pressed && item.homeTeamId && styles.teamLinePressed,
+            ]}
+          >
             <Image source={{ uri: getLogoUrl(item.homeTeam, item.homeLogo) }} style={styles.teamLogo} />
             <Text
               style={[
@@ -312,12 +327,27 @@ export default function CalendarScreen() {
             >
               {item.homeTeam}
             </Text>
-          </View>
+          </Pressable>
 
           <View style={styles.scoreBox}>{renderScore(item)}</View>
 
-          <View style={styles.teamLine}>
-           <Image source={{ uri: getLogoUrl(item.awayTeam, item.awayLogo) }} style={styles.teamLogo} />
+          <Pressable
+            disabled={!item.awayTeamId}
+            onPress={(event) => {
+              event.stopPropagation();
+              if (!item.awayTeamId) return;
+
+              router.push({
+                pathname: '/team/[teamId]',
+                params: { teamId: String(item.awayTeamId) },
+              });
+            }}
+            style={({ pressed }) => [
+              styles.teamLine,
+              pressed && item.awayTeamId && styles.teamLinePressed,
+            ]}
+          >
+            <Image source={{ uri: getLogoUrl(item.awayTeam, item.awayLogo) }} style={styles.teamLogo} />
             <Text
               style={[
                 styles.teamName,
@@ -327,7 +357,7 @@ export default function CalendarScreen() {
             >
               {item.awayTeam}
             </Text>
-          </View>
+          </Pressable>
         </View>
 
         <View style={styles.matchFooter}>
@@ -797,6 +827,9 @@ const styles = StyleSheet.create({
   castellonTeamName: {
     color: colors.accent,
     fontWeight: '900',
+  },
+  teamLinePressed: {
+    opacity: 0.65,
   },
   scoreBox: {
     alignItems: 'center',

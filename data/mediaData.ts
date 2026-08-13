@@ -23,12 +23,12 @@ export const songs = [
   uri: "https://www.albinegroscastellon.com/audio/canciones/marquez.mp3",
 },
  },
- {
+    {
     id: '4',
-    title: 'Canción Flamenca Castellón',
-    subtitle: 'ERJESA',
+    title: 'Albinegros Castellón',
+    subtitle: 'CODI-CS',
     file: {
-  uri: "https://www.albinegroscastellon.com/audio/canciones/erjesa.mp3",
+  uri: "https://www.albinegroscastellon.com/audio/canciones/CODI-CS-ALBINEGROSCS.mp3",
 },
  },
   {
@@ -85,6 +85,15 @@ export const songs = [
     subtitle: 'Himno del Centenario del CD Castellón',
     file: {
   uri: "https://www.albinegroscastellon.com/audio/canciones/centcastofi.mp3",
+},
+ },
+
+  {
+    id: '12',
+    title: 'Canción Flamenca Castellón',
+    subtitle: 'ERJESA',
+    file: {
+  uri: "https://www.albinegroscastellon.com/audio/canciones/erjesa.mp3",
 },
  },
 
