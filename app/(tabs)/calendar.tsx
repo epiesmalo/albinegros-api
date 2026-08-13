@@ -92,6 +92,7 @@ export default function CalendarScreen() {
   const [usingCachedData, setUsingCachedData] = useState(false);
   const [cacheSavedAt, setCacheSavedAt] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(Date.now());
+  const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
 
   const loadCalendar = async (isRefresh = false) => {
     try {
@@ -181,6 +182,44 @@ export default function CalendarScreen() {
     const nextRound = nextMatch ? extractRoundNumber(nextMatch.round) : rounds[0];
     setSelectedRound(nextRound || 1);
   }, [fixtures, rounds, selectedRound]);
+
+  useEffect(() => {
+    const fixtureIds = fixtures
+      .map((item) => item.fixtureId)
+      .filter((id): id is number => typeof id === 'number' && id > 0);
+
+    if (fixtureIds.length === 0) {
+      setCommentCounts({});
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadCommentCounts = async () => {
+      try {
+        const response = await fetch(
+          `https://api.albinegroscastellon.com/api/football/comments/counts?fixtureIds=${fixtureIds.join(',')}`
+        );
+
+        const data = await response.json();
+
+        if (!cancelled && response.ok && data?.ok) {
+          setCommentCounts(data.counts || {});
+        }
+      } catch (countError) {
+        console.log('No se pudieron cargar los contadores de comentarios:', countError);
+      }
+    };
+
+    loadCommentCounts();
+
+    const interval = setInterval(loadCommentCounts, 15000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [fixtures]);
 
   const selectedRoundMatches = useMemo(() => {
     return fixtures
@@ -297,6 +336,13 @@ export default function CalendarScreen() {
           <Text style={styles.venueText} numberOfLines={1}>
             {item.venue || 'Estadio por confirmar'}
           </Text>
+          {item.fixtureId ? (
+            <View style={styles.commentCountBadge}>
+              <Text style={styles.commentCountText}>
+                💬 {commentCounts[String(item.fixtureId)] || 0}
+              </Text>
+            </View>
+          ) : null}
           {item.fixtureId ? <Text style={styles.detailChevron}>›</Text> : null}
         </View>
         </Pressable>
@@ -790,6 +836,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     maxWidth: '52%',
+  },
+  commentCountBadge: {
+    marginLeft: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: 'rgba(212,175,55,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(212,175,55,0.20)',
+  },
+  commentCountText: {
+    color: colors.accent,
+    fontSize: 9,
+    fontWeight: '900',
   },
   detailChevron: {
     color: colors.accent,

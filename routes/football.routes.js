@@ -1674,6 +1674,56 @@ router.post('/api/football/sync-castellon-squad', async (req, res) => {
 });
 
 
+
+/**
+ * Contador de comentarios para uno o varios partidos.
+ * GET /api/football/comments/counts?fixtureIds=123,456
+ */
+router.get('/api/football/comments/counts', async (req, res) => {
+  try {
+    const fixtureIds = String(req.query.fixtureIds || '')
+      .split(',')
+      .map((value) => Number(String(value).trim()))
+      .filter((value) => Number.isInteger(value) && value > 0)
+      .slice(0, 100);
+
+    if (fixtureIds.length === 0) {
+      return res.json({
+        ok: true,
+        counts: {},
+      });
+    }
+
+    const { data, error } = await supabase
+      .from('match_comments')
+      .select('fixture_id')
+      .in('fixture_id', fixtureIds)
+      .eq('is_deleted', false);
+
+    if (error) throw error;
+
+    const counts = {};
+
+    for (const row of data || []) {
+      const key = String(row.fixture_id);
+      counts[key] = (counts[key] || 0) + 1;
+    }
+
+    return res.json({
+      ok: true,
+      counts,
+    });
+  } catch (error) {
+    console.error('Error cargando contadores de comentarios:', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'No se pudieron cargar los contadores de comentarios',
+      detail: error.message,
+    });
+  }
+});
+
 /**
  * Comentarios de un partido.
  * GET /api/football/fixture/:fixtureId/comments

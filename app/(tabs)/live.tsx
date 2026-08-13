@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  Animated,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -81,6 +82,8 @@ export default function LiveScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
+  const [livePulse] = useState(() => new Animated.Value(1));
 
   const loadLive = useCallback(async (isRefresh = false) => {
     try {
@@ -118,6 +121,64 @@ export default function LiveScreen() {
   useEffect(() => {
     loadLive();
   }, [loadLive]);
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(livePulse, {
+          toValue: 0.2,
+          duration: 650,
+          useNativeDriver: true,
+        }),
+        Animated.timing(livePulse, {
+          toValue: 1,
+          duration: 650,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    animation.start();
+
+    return () => animation.stop();
+  }, [livePulse]);
+
+  useEffect(() => {
+    const fixtureIds = matches
+      .map((match) => match.fixtureId)
+      .filter((id): id is number => typeof id === 'number' && id > 0);
+
+    if (fixtureIds.length === 0) {
+      setCommentCounts({});
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadCommentCounts = async () => {
+      try {
+        const response = await fetch(
+          `https://api.albinegroscastellon.com/api/football/comments/counts?fixtureIds=${fixtureIds.join(',')}`
+        );
+
+        const data = await response.json();
+
+        if (!cancelled && response.ok && data?.ok) {
+          setCommentCounts(data.counts || {});
+        }
+      } catch (countError) {
+        console.log('No se pudieron cargar los contadores de comentarios:', countError);
+      }
+    };
+
+    loadCommentCounts();
+    const interval = setInterval(loadCommentCounts, 5000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [matches]);
 
   const getStatusText = (match: LiveMatch) => {
     const short = match.status.short;
@@ -227,7 +288,7 @@ export default function LiveScreen() {
             styles.matchCard,
             (match.home.isCastellon || match.away.isCastellon) &&
               styles.castellonCard,
-            pressed && styles.matchCardPressed,
+            pressed && match.fixtureId && styles.matchCardPressed,
           ]}
         >
           <View style={styles.matchHeader}>
@@ -307,13 +368,34 @@ export default function LiveScreen() {
                   .filter(Boolean)
                   .join(' · ')}
               </Text>
-              <Ionicons
-                name="chevron-forward"
-                size={15}
-                color="#D4AF37"
-              />
             </View>
           )}
+
+          <View style={styles.liveCommunityRow}>
+            <View style={styles.liveNowBadge}>
+              <Animated.View
+                style={[
+                  styles.redLiveDot,
+                  { opacity: livePulse },
+                ]}
+              />
+              <Text style={styles.liveNowText}>EN VIVO</Text>
+            </View>
+
+            <View style={styles.liveCommentBadge}>
+              <Text style={styles.liveCommentText}>
+                💬 {match.fixtureId
+                  ? commentCounts[String(match.fixtureId)] || 0
+                  : 0} comentarios
+              </Text>
+            </View>
+
+            <Ionicons
+              name="chevron-forward"
+              size={16}
+              color="#D4AF37"
+            />
+          </View>
         </Pressable>
       ))}
     </ScrollView>
@@ -420,12 +502,52 @@ const styles = StyleSheet.create({
     padding: 13,
     marginBottom: 12,
   },
+  matchCardPressed: {
+    opacity: 0.76,
+    transform: [{ scale: 0.995 }],
+  },
+  liveCommunityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 11,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#202020',
+  },
+  liveNowBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(230,45,45,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(230,45,45,0.28)',
+  },
+  redLiveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#E62D2D',
+    marginRight: 6,
+  },
+  liveNowText: {
+    color: '#F15A5A',
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  liveCommentBadge: {
+    flex: 1,
+    marginLeft: 8,
+  },
+  liveCommentText: {
+    color: '#D4AF37',
+    fontSize: 10,
+    fontWeight: '900',
+  },
   castellonCard: {
     borderColor: 'rgba(212,175,55,0.65)',
-  },
-  matchCardPressed: {
-    opacity: 0.72,
-    transform: [{ scale: 0.99 }],
   },
   matchHeader: {
     flexDirection: 'row',
