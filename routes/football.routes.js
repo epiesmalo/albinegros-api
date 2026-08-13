@@ -816,7 +816,7 @@ router.get('/api/football/team/:teamId/details', async (req, res) => {
       const { data: customTeamRows, error: customTeamError } = await supabase
         .from('castellon_team')
         .select(
-          'team_id,name,founded,country,coach_name,coach_photo,stadium_name,stadium_city,stadium_capacity,stadium_surface,stadium_image'
+          'team_id,name,founded,country,coach_name,coach_photo,coach_birth_date,coach_birth_place,coach_birth_country,coach_nationality,coach_height,stadium_name,stadium_city,stadium_capacity,stadium_surface,stadium_image'
         )
         .eq('team_id', 5254)
         .limit(1);
@@ -833,32 +833,73 @@ router.get('/api/football/team/:teamId/details', async (req, res) => {
 
     const apiCoach = coaches[0] || null;
 
+    const calculateCoachAge = (birthDate) => {
+      if (!birthDate) return null;
+
+      const birth = new Date(`${birthDate}T12:00:00Z`);
+
+      if (Number.isNaN(birth.getTime())) {
+        return null;
+      }
+
+      const today = new Date();
+      let age = today.getUTCFullYear() - birth.getUTCFullYear();
+
+      const hasNotHadBirthday =
+        today.getUTCMonth() < birth.getUTCMonth() ||
+        (
+          today.getUTCMonth() === birth.getUTCMonth() &&
+          today.getUTCDate() < birth.getUTCDate()
+        );
+
+      if (hasNotHadBirthday) {
+        age -= 1;
+      }
+
+      return age;
+    };
+
+    // Para el C.D. Castellón, si existe entrenador propio en Supabase,
+    // construimos su ficha SOLO con nuestros datos.
+    // No heredamos nada de Platt ni de ningún entrenador antiguo de API-Football.
     const resolvedCoach =
       customCastellonTeam?.coach_name
         ? {
-            ...(apiCoach || {}),
-            // El nombre de Supabase manda para evitar entrenadores desactualizados
-            // en API-Football.
+            id: null,
             name: customCastellonTeam.coach_name,
-            firstname: '',
-            lastname: '',
+            firstname: 'Pablo',
+            lastname: 'Hernández',
+            age: calculateCoachAge(
+              customCastellonTeam.coach_birth_date
+            ),
+            birth: {
+              date:
+                customCastellonTeam.coach_birth_date ||
+                null,
+              place:
+                customCastellonTeam.coach_birth_place ||
+                '',
+              country:
+                customCastellonTeam.coach_birth_country ||
+                '',
+            },
+            nationality:
+              customCastellonTeam.coach_nationality ||
+              '',
+            height:
+              customCastellonTeam.coach_height ||
+              '',
+            weight: '',
             photo:
               customCastellonTeam.coach_photo ||
-              apiCoach?.photo ||
               '',
+            career: [],
           }
         : apiCoach;
 
     const resolvedCoaches =
-      resolvedCoach
-        ? [
-            resolvedCoach,
-            ...coaches.filter(
-              (coach) =>
-                String(coach?.name || '').trim().toLowerCase() !==
-                String(resolvedCoach?.name || '').trim().toLowerCase()
-            ),
-          ]
+      customCastellonTeam?.coach_name && resolvedCoach
+        ? [resolvedCoach]
         : coaches;
 
     const teamStats =
