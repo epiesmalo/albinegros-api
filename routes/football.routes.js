@@ -1142,6 +1142,7 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
     // ---------------------------------------------------------
     let player = null;
     let rawStatistics = [];
+    let career = [];
 
     // Los jugadores locales todavía no existen en API-Football,
     // por lo que no hacemos una petición con un ID inventado.
@@ -1164,6 +1165,67 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
           'API-Football no devolvió ficha estadística del jugador:',
           error.message
         );
+      }
+    }
+
+    // Trayectoria completa del jugador.
+    // API-Football devuelve los equipos y temporadas en los que ha jugado.
+    if (isNumericPlayerId) {
+      try {
+        const careerData = await footballFetch(
+          `/players/teams?player=${encodeURIComponent(playerId)}`
+        );
+
+        const rawCareer = Array.isArray(careerData.response)
+          ? careerData.response
+          : [];
+
+        career = rawCareer
+          .map((entry) => {
+            const apiTeamName = entry.team?.name || '';
+            const seasons = Array.isArray(entry.seasons)
+              ? entry.seasons
+                  .map((season) => {
+                    if (
+                      season &&
+                      typeof season === 'object' &&
+                      season.season !== undefined
+                    ) {
+                      return season.season;
+                    }
+
+                    return season;
+                  })
+                  .filter(
+                    (season) =>
+                      season !== null &&
+                      season !== undefined &&
+                      String(season).trim() !== ''
+                  )
+              : [];
+
+            return {
+              team: {
+                id: entry.team?.id ?? null,
+                name: getDisplayTeamName(apiTeamName),
+                shortName: getShortTeamName(apiTeamName),
+                logo: getTeamLogo(
+                  apiTeamName,
+                  entry.team?.logo || ''
+                ),
+                isCastellon: isCastellon(apiTeamName),
+              },
+              seasons,
+            };
+          })
+          .filter((entry) => entry.team.id || entry.team.name);
+      } catch (error) {
+        console.warn(
+          'No se pudo cargar la trayectoria del jugador:',
+          error.message
+        );
+
+        career = [];
       }
     }
 
@@ -1478,6 +1540,7 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
       season: SEASON,
       preferredStatistics,
       statistics,
+      career,
     });
   } catch (error) {
     console.error('Error cargando ficha del jugador:', error);

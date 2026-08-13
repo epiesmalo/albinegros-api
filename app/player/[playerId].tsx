@@ -47,6 +47,17 @@ type PlayerStat = {
   penalty: { won: number; committed: number; scored: number; missed: number; saved: number };
 };
 
+type CareerEntry = {
+  team: {
+    id: number | null;
+    name: string;
+    shortName: string;
+    logo: string;
+    isCastellon: boolean;
+  };
+  seasons: Array<string | number>;
+};
+
 type PlayerDetails = {
   ok: boolean;
   profileSource: 'season' | 'squad';
@@ -76,9 +87,10 @@ type PlayerDetails = {
   season: string | null;
   preferredStatistics: PlayerStat | null;
   statistics: PlayerStat[];
+  career: CareerEntry[];
 };
 
-type Section = 'profile' | 'stats';
+type Section = 'profile' | 'stats' | 'career';
 
 const API_BASE = 'https://api.albinegroscastellon.com/api/football';
 
@@ -295,6 +307,106 @@ export default function PlayerDetailScreen() {
     );
   };
 
+  const formatSeason = (season: string | number) => {
+    const raw = String(season);
+
+    if (/^\d{4}$/.test(raw)) {
+      const start = Number(raw);
+      const end = String(start + 1).slice(-2);
+      return `${start}/${end}`;
+    }
+
+    return raw;
+  };
+
+  const renderCareer = () => {
+    if (!data) return null;
+
+    if (!data.career?.length) {
+      return (
+        <View style={styles.emptyCard}>
+          <Ionicons name="time-outline" size={32} color="#D4AF37" />
+          <Text style={styles.emptyTitle}>Trayectoria no disponible</Text>
+          <Text style={styles.emptyText}>
+            Todavía no hay historial de clubes disponible para este jugador.
+          </Text>
+        </View>
+      );
+    }
+
+    return (
+      <View>
+        <Text style={styles.careerIntro}>
+          Clubes y temporadas en los que ha jugado
+        </Text>
+
+        {data.career.map((entry, index) => (
+          <Pressable
+            key={`${entry.team.id ?? entry.team.name}-${index}`}
+            disabled={!entry.team.id}
+            onPress={() => {
+              if (!entry.team.id) return;
+
+              router.push({
+                pathname: '/team/[teamId]',
+                params: { teamId: String(entry.team.id) },
+              });
+            }}
+            style={({ pressed }) => [
+              styles.careerCard,
+              pressed && entry.team.id && styles.pressed,
+            ]}
+          >
+            {entry.team.logo ? (
+              <Image
+                source={{ uri: entry.team.logo }}
+                style={styles.careerLogo}
+                contentFit="contain"
+                cachePolicy="disk"
+              />
+            ) : (
+              <View style={styles.careerLogoFallback}>
+                <Ionicons name="shield-outline" size={24} color="#777" />
+              </View>
+            )}
+
+            <View style={styles.careerContent}>
+              <Text
+                style={[
+                  styles.careerTeam,
+                  entry.team.isCastellon && styles.castellonText,
+                ]}
+              >
+                {entry.team.name}
+              </Text>
+
+              <View style={styles.seasonsWrap}>
+                {entry.seasons.length > 0 ? (
+                  entry.seasons
+                    .slice()
+                    .sort((a, b) => Number(b) - Number(a))
+                    .map((season) => (
+                      <View key={String(season)} style={styles.seasonBadge}>
+                        <Text style={styles.seasonText}>
+                          {formatSeason(season)}
+                        </Text>
+                      </View>
+                    ))
+                ) : (
+                  <Text style={styles.careerNoSeason}>Temporada no disponible</Text>
+                )}
+              </View>
+            </View>
+
+            {entry.team.id ? (
+              <Ionicons name="chevron-forward" size={18} color="#D4AF37" />
+            ) : null}
+          </Pressable>
+        ))}
+      </View>
+    );
+  };
+
   return (
     <>
       <Stack.Screen
@@ -373,6 +485,7 @@ export default function PlayerDetailScreen() {
               {[
                 ['profile', 'Jugador'],
                 ['stats', 'Estadísticas'],
+                ['career', 'Trayectoria'],
               ].map(([key, label]) => (
                 <Pressable
                   key={key}
@@ -391,6 +504,7 @@ export default function PlayerDetailScreen() {
 
             {section === 'profile' && renderProfile()}
             {section === 'stats' && renderStats()}
+            {section === 'career' && renderCareer()}
           </>
         ) : null}
       </ScrollView>
@@ -538,6 +652,70 @@ const styles = StyleSheet.create({
   },
   statValue: { color: '#FFF', fontSize: 18, fontWeight: '900' },
   statLabel: { color: '#D4AF37', fontSize: 8, fontWeight: '900', marginTop: 3 },
+  careerIntro: {
+    color: '#888',
+    fontSize: 10,
+    fontWeight: '700',
+    marginBottom: 10,
+    marginLeft: 3,
+  },
+  careerCard: {
+    minHeight: 78,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#101010',
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: '#242424',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 8,
+  },
+  careerLogo: {
+    width: 48,
+    height: 48,
+    marginRight: 12,
+  },
+  careerLogoFallback: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#181818',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  careerContent: {
+    flex: 1,
+  },
+  careerTeam: {
+    color: '#EEEEEE',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  seasonsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 5,
+    marginTop: 7,
+  },
+  seasonBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: 'rgba(212,175,55,0.09)',
+    borderWidth: 1,
+    borderColor: 'rgba(212,175,55,0.22)',
+  },
+  seasonText: {
+    color: '#D4AF37',
+    fontSize: 8,
+    fontWeight: '900',
+  },
+  careerNoSeason: {
+    color: '#777',
+    fontSize: 9,
+  },
   emptyCard: {
     minHeight: 190,
     backgroundColor: '#101010',
