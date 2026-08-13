@@ -1673,6 +1673,164 @@ router.post('/api/football/sync-castellon-squad', async (req, res) => {
   }
 });
 
+
+/**
+ * Comentarios de un partido.
+ * GET /api/football/fixture/:fixtureId/comments
+ */
+router.get('/api/football/fixture/:fixtureId/comments', async (req, res) => {
+  try {
+    const fixtureId = String(req.params.fixtureId || '').trim();
+
+    if (!/^\d+$/.test(fixtureId)) {
+      return res.status(400).json({ ok: false, error: 'ID de partido no válido' });
+    }
+
+    const { data, error } = await supabase
+      .from('match_comments')
+      .select('id,fixture_id,nickname,message,created_at,is_reported')
+      .eq('fixture_id', Number(fixtureId))
+      .eq('is_deleted', false)
+      .order('created_at', { ascending: true })
+      .limit(200);
+
+    if (error) throw error;
+
+    return res.json({
+      ok: true,
+      fixtureId: Number(fixtureId),
+      count: Array.isArray(data) ? data.length : 0,
+      comments: Array.isArray(data) ? data : [],
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Error cargando comentarios del partido:', error);
+    return res.status(500).json({
+      ok: false,
+      error: 'No se pudieron cargar los comentarios',
+      detail: error.message,
+    });
+  }
+});
+
+/**
+ * Publica un comentario.
+ * POST /api/football/fixture/:fixtureId/comments
+ */
+router.post('/api/football/fixture/:fixtureId/comments', async (req, res) => {
+  try {
+    const fixtureId = String(req.params.fixtureId || '').trim();
+
+    if (!/^\d+$/.test(fixtureId)) {
+      return res.status(400).json({ ok: false, error: 'ID de partido no válido' });
+    }
+
+    const nickname = String(req.body?.nickname || '').trim();
+    const message = String(req.body?.message || '').trim();
+    const deviceId = String(req.body?.deviceId || '').trim();
+
+    if (nickname.length < 2 || nickname.length > 30) {
+      return res.status(400).json({
+        ok: false,
+        error: 'El nick debe tener entre 2 y 30 caracteres',
+      });
+    }
+
+    if (!message || message.length > 300) {
+      return res.status(400).json({
+        ok: false,
+        error: 'El comentario debe tener entre 1 y 300 caracteres',
+      });
+    }
+
+    if (deviceId.length < 8 || deviceId.length > 120) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Identificador del dispositivo no válido',
+      });
+    }
+
+    const threeSecondsAgo = new Date(Date.now() - 3000).toISOString();
+
+    const { data: recentComments, error: recentError } = await supabase
+      .from('match_comments')
+      .select('id')
+      .eq('fixture_id', Number(fixtureId))
+      .eq('device_id', deviceId)
+      .gte('created_at', threeSecondsAgo)
+      .limit(1);
+
+    if (recentError) throw recentError;
+
+    if (Array.isArray(recentComments) && recentComments.length > 0) {
+      return res.status(429).json({
+        ok: false,
+        error: 'Espera unos segundos antes de volver a comentar',
+      });
+    }
+
+    const { data: inserted, error: insertError } = await supabase
+      .from('match_comments')
+      .insert({
+        fixture_id: Number(fixtureId),
+        nickname,
+        message,
+        device_id: deviceId,
+      })
+      .select('id,fixture_id,nickname,message,created_at,is_reported')
+      .single();
+
+    if (insertError) throw insertError;
+
+    return res.status(201).json({
+      ok: true,
+      comment: inserted,
+    });
+  } catch (error) {
+    console.error('Error publicando comentario:', error);
+    return res.status(500).json({
+      ok: false,
+      error: 'No se pudo publicar el comentario',
+      detail: error.message,
+    });
+  }
+});
+
+/**
+ * Reporta un comentario.
+ * POST /api/football/comments/:commentId/report
+ */
+router.post('/api/football/comments/:commentId/report', async (req, res) => {
+  try {
+    const commentId = String(req.params.commentId || '').trim();
+
+    if (!/^\d+$/.test(commentId)) {
+      return res.status(400).json({
+        ok: false,
+        error: 'ID de comentario no válido',
+      });
+    }
+
+    const { error } = await supabase.rpc('report_match_comment', {
+      comment_id: Number(commentId),
+    });
+
+    if (error) throw error;
+
+    return res.json({
+      ok: true,
+      message: 'Comentario reportado',
+    });
+  } catch (error) {
+    console.error('Error reportando comentario:', error);
+    return res.status(500).json({
+      ok: false,
+      error: 'No se pudo reportar el comentario',
+      detail: error.message,
+    });
+  }
+});
+
 /**
  * Sirve los escudos de API-Football a través de nuestro backend.
  *

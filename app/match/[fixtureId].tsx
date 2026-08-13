@@ -1,15 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Team = {
   id: number | null;
@@ -82,7 +86,16 @@ type MatchDetail = {
   statistics: TeamStatistics[];
 };
 
-type Section = 'summary' | 'stats' | 'lineups';
+type MatchComment = {
+  id: number;
+  fixture_id: number;
+  nickname: string;
+  message: string;
+  created_at: string;
+  is_reported: boolean;
+};
+
+type Section = 'summary' | 'stats' | 'lineups' | 'comments';
 
 const API_BASE = 'https://api.albinegroscastellon.com/api/football';
 
@@ -127,6 +140,15 @@ export default function MatchDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
 
+  const [comments, setComments] = useState<MatchComment[]>([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [commentsError, setCommentsError] = useState('');
+  const [commentText, setCommentText] = useState('');
+  const [sendingComment, setSendingComment] = useState(false);
+  const [nickname, setNickname] = useState('');
+  const [nicknameDraft, setNicknameDraft] = useState('');
+  const [deviceId, setDeviceId] = useState('');
+
   const loadDetails = useCallback(async (isRefresh = false) => {
     if (!fixtureId) {
       setError('No se ha recibido el identificador del partido.');
@@ -163,6 +185,186 @@ export default function MatchDetailScreen() {
   useEffect(() => {
     loadDetails();
   }, [loadDetails]);
+
+  const loadCommentIdentity = useCallback(async () => {
+    try {
+      const storedNickname = await AsyncStorage.getItem('match_chat_nickname');
+      let storedDeviceId = await AsyncStorage.getItem('match_chat_device_id');
+
+      if (!storedDeviceId) {
+        storedDeviceId =
+          `device-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+
+        await AsyncStorage.setItem(
+          'match_chat_device_id',
+          storedDeviceId
+        );
+      }
+
+      setDeviceId(storedDeviceId);
+
+      if (storedNickname) {
+        setNickname(storedNickname);
+        setNicknameDraft(storedNickname);
+      }
+    } catch (identityError) {
+      console.error('Error cargando identidad del chat:', identityError);
+    }
+  }, []);
+
+  const loadComments = useCallback(
+    async (showLoader = false) => {
+      if (!fixtureId) return;
+
+      try {
+        if (showLoader) setCommentsLoading(true);
+        setCommentsError('');
+
+        const response = await fetch(
+          `${API_BASE}/fixture/${encodeURIComponent(fixtureId)}/comments`
+        );
+
+        const json = await response.json();
+
+        if (!response.ok || !json?.ok) {
+          throw new Error(json?.error || `HTTP ${response.status}`);
+        }
+
+        setComments(Array.isArray(json.comments) ? json.comments : []);
+      } catch (commentsLoadError) {
+        console.error('Error cargando comentarios:', commentsLoadError);
+
+        if (showLoader) {
+          setCommentsError('No se pudieron cargar los comentarios.');
+        }
+      } finally {
+        if (showLoader) setCommentsLoading(false);
+      }
+    },
+    [fixtureId]
+  );
+
+  useEffect(() => {
+    loadCommentIdentity();
+  }, [loadCommentIdentity]);
+
+  useEffect(() => {
+    if (!fixtureId) return;
+
+    loadComments(true);
+
+    const interval = setInterval(() => {
+      loadComments(false);
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [fixtureId, loadComments]);
+
+  const saveNickname = useCallback(async () => {
+    const cleanNickname = nicknameDraft.trim();
+
+    if (cleanNickname.length < 2 || cleanNickname.length > 30) {
+      Alert.alert(
+        'Nick no válido',
+        'Elige un nick de entre 2 y 30 caracteres.'
+      );
+      return;
+    }
+
+    try {
+      await AsyncStorage.setItem('match_chat_nickname', cleanNickname);
+      setNickname(cleanNickname);
+    } catch {
+      Alert.alert(
+        'Error',
+        'No se pudo guardar el nick en este dispositivo.'
+      );
+    }
+  }, [nicknameDraft]);
+
+  const sendComment = useCallback(async () => {
+    const cleanMessage = commentText.trim();
+
+    if (!fixtureId || !nickname || !deviceId || !cleanMessage) return;
+
+    try {
+      setSendingComment(true);
+
+      const response = await fetch(
+        `${API_BASE}/fixture/${encodeURIComponent(fixtureId)}/comments`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            nickname,
+            message: cleanMessage,
+            deviceId,
+          }),
+        }
+      );
+
+      const json = await response.json();
+
+      if (!response.ok || !json?.ok) {
+        throw new Error(json?.error || `HTTP ${response.status}`);
+      }
+
+      setCommentText('');
+
+      if (json.comment) {
+        setComments((previous) =>
+          previous.some((item) => item.id === json.comment.id)
+            ? previous
+            : [...previous, json.comment]
+        );
+      }
+    } catch (sendError: any) {
+      Alert.alert(
+        'No se pudo enviar',
+        sendError?.message || 'Inténtalo de nuevo en unos segundos.'
+      );
+    } finally {
+      setSendingComment(false);
+    }
+  }, [commentText, deviceId, fixtureId, nickname]);
+
+  const reportComment = useCallback((comment: MatchComment) => {
+    Alert.alert(
+      'Reportar comentario',
+      `¿Quieres reportar el comentario de ${comment.nickname}?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Reportar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const response = await fetch(
+                `${API_BASE}/comments/${comment.id}/report`,
+                { method: 'POST' }
+              );
+
+              const json = await response.json();
+
+              if (!response.ok || !json?.ok) {
+                throw new Error(json?.error || `HTTP ${response.status}`);
+              }
+
+              Alert.alert(
+                'Gracias',
+                'El comentario ha sido marcado para revisión.'
+              );
+            } catch {
+              Alert.alert(
+                'Error',
+                'No se pudo reportar el comentario.'
+              );
+            }
+          },
+        },
+      ]
+    );
+  }, []);
 
   const statusText = useMemo(() => {
     if (!data) return '';
@@ -352,60 +554,22 @@ export default function MatchDetailScreen() {
       <Text style={styles.lineupSectionTitle}>ONCE TITULAR</Text>
 
       {lineup.startXI.map((player, index) => (
-        <Pressable
-          key={`${player.id}-${index}`}
-          disabled={!player.id || !lineup.team.id}
-          onPress={() => {
-            if (!player.id || !lineup.team.id) return;
-
-            router.push({
-              pathname: '/player/[playerId]',
-              params: {
-                playerId: String(player.id),
-                teamId: String(lineup.team.id),
-              },
-            });
-          }}
-          style={({ pressed }) => [
-            styles.playerRow,
-            pressed && player.id && styles.playerRowPressed,
-          ]}
-        >
+        <View key={`${player.id}-${index}`} style={styles.playerRow}>
           <Text style={styles.playerNumber}>{player.number ?? '-'}</Text>
           <Text style={styles.playerName}>{player.name}</Text>
           <Text style={styles.playerPosition}>{player.position}</Text>
-          {player.id ? <Ionicons name="chevron-forward" size={14} color="#D4AF37" /> : null}
-        </Pressable>
+        </View>
       ))}
 
       {lineup.substitutes.length > 0 && (
         <>
           <Text style={styles.lineupSectionTitle}>SUPLENTES</Text>
           {lineup.substitutes.map((player, index) => (
-            <Pressable
-              key={`${player.id}-${index}`}
-              disabled={!player.id || !lineup.team.id}
-              onPress={() => {
-                if (!player.id || !lineup.team.id) return;
-
-                router.push({
-                  pathname: '/player/[playerId]',
-                  params: {
-                    playerId: String(player.id),
-                    teamId: String(lineup.team.id),
-                  },
-                });
-              }}
-              style={({ pressed }) => [
-                styles.playerRow,
-                pressed && player.id && styles.playerRowPressed,
-              ]}
-            >
+            <View key={`${player.id}-${index}`} style={styles.playerRow}>
               <Text style={styles.playerNumber}>{player.number ?? '-'}</Text>
               <Text style={styles.playerName}>{player.name}</Text>
               <Text style={styles.playerPosition}>{player.position}</Text>
-              {player.id ? <Ionicons name="chevron-forward" size={14} color="#D4AF37" /> : null}
-            </Pressable>
+            </View>
           ))}
         </>
       )}
@@ -428,6 +592,145 @@ export default function MatchDetailScreen() {
     }
 
     return <View>{data.lineups.map(renderLineupTeam)}</View>;
+  };
+
+  const formatCommentTime = (value: string) => {
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) return '';
+
+    return date.toLocaleTimeString('es-ES', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const renderComments = () => {
+    if (!nickname) {
+      return (
+        <View style={styles.chatWelcomeCard}>
+          <Ionicons name="chatbubbles-outline" size={34} color="#D4AF37" />
+          <Text style={styles.chatWelcomeTitle}>Únete a la conversación</Text>
+          <Text style={styles.chatWelcomeText}>
+            Elige un nick. Se guardará en este dispositivo y no necesitas crear ninguna cuenta.
+          </Text>
+
+          <TextInput
+            value={nicknameDraft}
+            onChangeText={setNicknameDraft}
+            placeholder="Tu nick..."
+            placeholderTextColor="#666"
+            maxLength={30}
+            autoCorrect={false}
+            style={styles.nicknameInput}
+          />
+
+          <Pressable
+            onPress={saveNickname}
+            style={({ pressed }) => [
+              styles.nicknameButton,
+              pressed && styles.chatPressed,
+            ]}
+          >
+            <Text style={styles.nicknameButtonText}>ENTRAR AL CHAT</Text>
+          </Pressable>
+        </View>
+      );
+    }
+
+    return (
+      <View>
+        <View style={styles.chatHeaderCard}>
+          <View>
+            <Text style={styles.chatEyebrow}>CONVERSACIÓN DEL PARTIDO</Text>
+            <Text style={styles.chatTitle}>💬 {comments.length} comentarios</Text>
+          </View>
+
+          <Text style={styles.changeNick}>@{nickname}</Text>
+        </View>
+
+        <Text style={styles.chatRules}>
+          Respeta al resto de orelluts. El spam y los mensajes ofensivos podrán ser eliminados.
+        </Text>
+
+        {commentsLoading ? (
+          <View style={styles.commentsLoader}>
+            <ActivityIndicator color="#D4AF37" />
+          </View>
+        ) : commentsError ? (
+          <View style={styles.chatEmptyCard}>
+            <Text style={styles.chatEmptyText}>{commentsError}</Text>
+          </View>
+        ) : comments.length === 0 ? (
+          <View style={styles.chatEmptyCard}>
+            <Ionicons name="chatbubble-ellipses-outline" size={30} color="#D4AF37" />
+            <Text style={styles.chatEmptyTitle}>Sé el primero en comentar</Text>
+            <Text style={styles.chatEmptyText}>
+              La conversación de este partido todavía está vacía.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.commentsList}>
+            {comments.map((comment) => (
+              <View key={comment.id} style={styles.commentCard}>
+                <View style={styles.commentTopRow}>
+                  <Text style={styles.commentNickname}>{comment.nickname}</Text>
+                  <Text style={styles.commentTime}>
+                    {formatCommentTime(comment.created_at)}
+                  </Text>
+                </View>
+
+                <Text style={styles.commentMessage}>{comment.message}</Text>
+
+                <Pressable
+                  onPress={() => reportComment(comment)}
+                  hitSlop={8}
+                  style={styles.reportButton}
+                >
+                  <Ionicons name="flag-outline" size={12} color="#696969" />
+                  <Text style={styles.reportText}>Reportar</Text>
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        )}
+
+        <View style={styles.composerCard}>
+          <View style={styles.composerTop}>
+            <Text style={styles.composerNick}>@{nickname}</Text>
+            <Text style={styles.characters}>{commentText.length}/300</Text>
+          </View>
+
+          <View style={styles.composerRow}>
+            <TextInput
+              value={commentText}
+              onChangeText={setCommentText}
+              placeholder="Escribe un comentario..."
+              placeholderTextColor="#666"
+              multiline
+              maxLength={300}
+              style={styles.commentInput}
+            />
+
+            <Pressable
+              onPress={sendComment}
+              disabled={sendingComment || !commentText.trim()}
+              style={({ pressed }) => [
+                styles.sendButton,
+                (sendingComment || !commentText.trim()) && styles.sendButtonDisabled,
+                pressed && !sendingComment && !!commentText.trim() && styles.chatPressed,
+              ]}
+            >
+              {sendingComment ? (
+                <ActivityIndicator size="small" color="#050505" />
+              ) : (
+                <Ionicons name="send" size={18} color="#050505" />
+              )}
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    );
   };
 
   return (
@@ -478,27 +781,12 @@ export default function MatchDetailScreen() {
               </View>
 
               <View style={styles.scoreTeams}>
-                <Pressable
-                  disabled={!data.home.id}
-                  onPress={() => {
-                    if (!data.home.id) return;
-
-                    router.push({
-                      pathname: '/team/[teamId]',
-                      params: { teamId: String(data.home.id) },
-                    });
-                  }}
-                  style={({ pressed }) => [
-                    styles.scoreTeam,
-                    pressed && data.home.id && styles.scoreTeamPressed,
-                  ]}
-                >
+                <View style={styles.scoreTeam}>
                   <Image source={{ uri: data.home.logo }} style={styles.bigLogo} contentFit="contain" cachePolicy="disk" />
                   <Text numberOfLines={2} style={[styles.scoreTeamName, data.home.isCastellon && styles.castellon]}>
                     {data.home.shortName || data.home.name}
                   </Text>
-                  {data.home.id ? <Text style={styles.teamLinkText}>Ver equipo</Text> : null}
-                </Pressable>
+                </View>
 
                 <View style={styles.scoreCenter}>
                   <Text style={styles.mainScore}>
@@ -511,27 +799,12 @@ export default function MatchDetailScreen() {
                   )}
                 </View>
 
-                <Pressable
-                  disabled={!data.away.id}
-                  onPress={() => {
-                    if (!data.away.id) return;
-
-                    router.push({
-                      pathname: '/team/[teamId]',
-                      params: { teamId: String(data.away.id) },
-                    });
-                  }}
-                  style={({ pressed }) => [
-                    styles.scoreTeam,
-                    pressed && data.away.id && styles.scoreTeamPressed,
-                  ]}
-                >
+                <View style={styles.scoreTeam}>
                   <Image source={{ uri: data.away.logo }} style={styles.bigLogo} contentFit="contain" cachePolicy="disk" />
                   <Text numberOfLines={2} style={[styles.scoreTeamName, data.away.isCastellon && styles.castellon]}>
                     {data.away.shortName || data.away.name}
                   </Text>
-                  {data.away.id ? <Text style={styles.teamLinkText}>Ver equipo</Text> : null}
-                </Pressable>
+                </View>
               </View>
 
               {(data.fixture.venue.name || data.fixture.referee) && (
@@ -560,6 +833,7 @@ export default function MatchDetailScreen() {
                 ['summary', 'Resumen'],
                 ['stats', 'Estadísticas'],
                 ['lineups', 'Alineaciones'],
+                ['comments', `💬 ${comments.length}`],
               ].map(([key, label]) => (
                 <Pressable
                   key={key}
@@ -582,6 +856,7 @@ export default function MatchDetailScreen() {
             {section === 'summary' && renderSummary()}
             {section === 'stats' && renderStats()}
             {section === 'lineups' && renderLineups()}
+            {section === 'comments' && renderComments()}
           </>
         ) : null}
       </ScrollView>
@@ -619,16 +894,6 @@ const styles = StyleSheet.create({
   statusText: { color: '#D4AF37', fontSize: 10, fontWeight: '900' },
   scoreTeams: { flexDirection: 'row', alignItems: 'center', marginTop: 15 },
   scoreTeam: { flex: 1, alignItems: 'center' },
-  scoreTeamPressed: {
-    opacity: 0.72,
-    transform: [{ scale: 0.98 }],
-  },
-  teamLinkText: {
-    color: '#D4AF37',
-    fontSize: 8,
-    fontWeight: '800',
-    marginTop: 5,
-  },
   bigLogo: { width: 72, height: 72 },
   scoreTeamName: { color: '#EEE', fontSize: 11, fontWeight: '800', textAlign: 'center', marginTop: 8 },
   castellon: { color: '#D4AF37' },
@@ -704,10 +969,120 @@ const styles = StyleSheet.create({
   coachName: { color: '#DDD', fontSize: 10, fontWeight: '800', marginLeft: 'auto' },
   lineupSectionTitle: { color: '#D4AF37', fontSize: 9, fontWeight: '900', marginTop: 10, marginBottom: 6, letterSpacing: 0.6 },
   playerRow: { flexDirection: 'row', alignItems: 'center', minHeight: 36, borderBottomWidth: 1, borderBottomColor: '#1D1D1D' },
-  playerRowPressed: { opacity: 0.68 },
   playerNumber: { width: 32, color: '#D4AF37', fontSize: 10, fontWeight: '900', textAlign: 'center' },
   playerName: { flex: 1, color: '#E6E6E6', fontSize: 11, fontWeight: '700' },
   playerPosition: { color: '#777', fontSize: 9, fontWeight: '700' },
+  chatWelcomeCard: {
+    backgroundColor: '#101010',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#242424',
+    padding: 20,
+    alignItems: 'center',
+  },
+  chatWelcomeTitle: { color: '#FFF', fontSize: 17, fontWeight: '900', marginTop: 10 },
+  chatWelcomeText: { color: '#858585', fontSize: 11, lineHeight: 17, textAlign: 'center', marginTop: 7 },
+  nicknameInput: {
+    width: '100%',
+    minHeight: 48,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: '#303030',
+    backgroundColor: '#080808',
+    color: '#FFF',
+    paddingHorizontal: 13,
+    marginTop: 16,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  nicknameButton: {
+    width: '100%',
+    minHeight: 46,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#D4AF37',
+    marginTop: 9,
+  },
+  nicknameButtonText: { color: '#050505', fontSize: 10, fontWeight: '900', letterSpacing: 0.6 },
+  chatHeaderCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#101010',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#242424',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  chatEyebrow: { color: '#777', fontSize: 8, fontWeight: '900', letterSpacing: 0.8 },
+  chatTitle: { color: '#FFF', fontSize: 14, fontWeight: '900', marginTop: 3 },
+  changeNick: { color: '#D4AF37', fontSize: 10, fontWeight: '900' },
+  chatRules: { color: '#686868', fontSize: 9, lineHeight: 14, paddingHorizontal: 5, marginTop: 8, marginBottom: 9 },
+  commentsLoader: { minHeight: 120, alignItems: 'center', justifyContent: 'center' },
+  commentsList: { gap: 8 },
+  commentCard: {
+    backgroundColor: '#101010',
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: '#242424',
+    padding: 12,
+  },
+  commentTopRow: { flexDirection: 'row', alignItems: 'center' },
+  commentNickname: { flex: 1, color: '#D4AF37', fontSize: 10, fontWeight: '900' },
+  commentTime: { color: '#666', fontSize: 8, fontWeight: '700' },
+  commentMessage: { color: '#E7E7E7', fontSize: 12, lineHeight: 18, marginTop: 6 },
+  reportButton: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', marginTop: 9, gap: 4 },
+  reportText: { color: '#696969', fontSize: 8, fontWeight: '700' },
+  chatEmptyCard: {
+    minHeight: 145,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#101010',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#242424',
+    padding: 18,
+  },
+  chatEmptyTitle: { color: '#FFF', fontSize: 13, fontWeight: '900', marginTop: 8 },
+  chatEmptyText: { color: '#777', fontSize: 10, lineHeight: 16, textAlign: 'center', marginTop: 5 },
+  composerCard: {
+    backgroundColor: '#101010',
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
+    padding: 10,
+    marginTop: 10,
+  },
+  composerTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 7 },
+  composerNick: { flex: 1, color: '#D4AF37', fontSize: 9, fontWeight: '900' },
+  characters: { color: '#5F5F5F', fontSize: 8, fontWeight: '700' },
+  composerRow: { flexDirection: 'row', alignItems: 'flex-end' },
+  commentInput: {
+    flex: 1,
+    minHeight: 44,
+    maxHeight: 110,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: '#2E2E2E',
+    backgroundColor: '#080808',
+    color: '#FFF',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 11,
+  },
+  sendButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#D4AF37',
+    marginLeft: 8,
+  },
+  sendButtonDisabled: { opacity: 0.35 },
+  chatPressed: { opacity: 0.72 },
   skeletonScoreCard: { height: 255, backgroundColor: '#101010', borderRadius: 22, marginBottom: 12, borderWidth: 1, borderColor: '#242424' },
   skeletonTabs: { height: 48, backgroundColor: '#101010', borderRadius: 16, marginBottom: 12 },
   skeletonRow: { height: 58, backgroundColor: '#101010', borderRadius: 14, marginBottom: 7 },
