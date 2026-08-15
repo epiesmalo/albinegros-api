@@ -338,12 +338,51 @@ router.get('/api/football/live', async (req, res) => {
         error: 'FOOTBALL_LEAGUE_ID no está configurado',
       });
     }
+const today = new Intl.DateTimeFormat('en-CA', {
+  timeZone: TIMEZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+}).format(new Date());
 
-    const data = await footballFetch(
-      `/fixtures?live=${encodeURIComponent(LEAGUE_ID)}&timezone=${encodeURIComponent(TIMEZONE)}`
-    );
+const startOfDay = `${today}T00:00:00+02:00`;
+const endOfDay = `${today}T23:59:59+02:00`;
 
-    const fixtures = Array.isArray(data.response) ? data.response : [];
+const { data: calendarMatches, error: calendarError } = await supabase
+  .from('calendar')
+  .select('*')
+  .gte('date', startOfDay)
+  .lte('date', endOfDay)
+  .order('date', { ascending: true });
+
+if (calendarError) {
+  throw calendarError;
+}
+
+const fixtureIds = (calendarMatches || [])
+  .map((match) => match.fixtureId)
+  .filter((id) => id !== null && id !== undefined);
+
+const fixtureResponses = await Promise.all(
+  fixtureIds.map(async (fixtureId) => {
+    try {
+      const data = await footballFetch(
+        `/fixtures?id=${encodeURIComponent(fixtureId)}&timezone=${encodeURIComponent(TIMEZONE)}`
+      );
+
+      return data.response?.[0] || null;
+    } catch (error) {
+      console.warn(
+        `No se pudo actualizar el partido ${fixtureId}:`,
+        error.message
+      );
+
+      return null;
+    }
+  })
+);
+
+const fixtures = fixtureResponses.filter(Boolean);
 
     const matches = fixtures.map((match) => {
       const homeApiName = match.teams?.home?.name || '';
