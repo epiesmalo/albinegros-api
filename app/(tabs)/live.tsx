@@ -1,3 +1,6 @@
+import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Animated,
@@ -8,9 +11,6 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Image } from 'expo-image';
-import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
 
 type LiveTeam = {
   id: number | null;
@@ -208,6 +208,47 @@ export default function LiveScreen() {
     });
   };
 
+  const getMatchState = (short?: string, long?: string) => {
+    const status = short || '';
+
+    const liveStatuses = ['1H', '2H', 'ET', 'P', 'LIVE'];
+    const finishedStatuses = ['FT', 'AET', 'PEN'];
+    const pausedStatuses = ['HT', 'BT'];
+
+    if (liveStatuses.includes(status)) {
+      return {
+        type: 'live',
+        label: 'EN VIVO',
+      };
+    }
+
+    if (pausedStatuses.includes(status)) {
+      return {
+        type: 'break',
+        label: 'DESCANSO',
+      };
+    }
+
+    if (finishedStatuses.includes(status)) {
+      return {
+        type: 'finished',
+        label: 'FINAL',
+      };
+    }
+
+    if (status === 'NS') {
+      return {
+        type: 'scheduled',
+        label: long || 'PRÓXIMAMENTE',
+      };
+    }
+
+    return {
+      type: 'other',
+      label: long || status || '',
+    };
+  };
+
   return (
     <ScrollView
       style={styles.container}
@@ -285,11 +326,14 @@ export default function LiveScreen() {
             });
           }}
           style={({ pressed }) => [
-            styles.matchCard,
-            (match.home.isCastellon || match.away.isCastellon) &&
-              styles.castellonCard,
-            pressed && match.fixtureId && styles.matchCardPressed,
-          ]}
+  styles.matchCard,
+  (match.home.isCastellon || match.away.isCastellon)
+    ? styles.castellonCard
+    : null,
+  pressed && !!match.fixtureId
+    ? styles.matchCardPressed
+    : null,
+]}
         >
           <View style={styles.matchHeader}>
             <View style={styles.liveBadge}>
@@ -372,15 +416,56 @@ export default function LiveScreen() {
           )}
 
           <View style={styles.liveCommunityRow}>
-            <View style={styles.liveNowBadge}>
-              <Animated.View
-                style={[
-                  styles.redLiveDot,
-                  { opacity: livePulse },
-                ]}
-              />
-              <Text style={styles.liveNowText}>EN VIVO</Text>
-            </View>
+{(() => {
+  const matchState = getMatchState(
+    match.status?.short,
+    match.status?.long
+  );
+
+  if (matchState.type === 'live') {
+    return (
+      <View style={styles.liveNowBadge}>
+        <Animated.View
+          style={[
+            styles.redLiveDot,
+            { opacity: livePulse },
+          ]}
+        />
+        <Text style={styles.liveNowText}>
+          EN VIVO
+        </Text>
+      </View>
+    );
+  }
+
+  if (matchState.type === 'break') {
+    return (
+      <View style={styles.breakBadge}>
+        <Text style={styles.breakText}>
+          DESCANSO
+        </Text>
+      </View>
+    );
+  }
+
+  if (matchState.type === 'finished') {
+    return (
+      <View style={styles.finishedBadge}>
+        <Text style={styles.finishedText}>
+          FINAL
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.scheduledBadge}>
+      <Text style={styles.scheduledText}>
+        {matchState.label}
+      </Text>
+    </View>
+  );
+})()}
 
             <View style={styles.liveCommentBadge}>
               <Text style={styles.liveCommentText}>
@@ -536,7 +621,57 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '900',
     letterSpacing: 0.5,
+    
   },
+
+    breakBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(212,175,55,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(212,175,55,0.28)',
+  },
+  breakText: {
+    color: '#D4AF37',
+    fontSize: 9,
+    fontWeight: '900',
+  },
+
+  finishedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: '#2F2F2F',
+  },
+  finishedText: {
+    color: '#AAAAAA',
+    fontSize: 9,
+    fontWeight: '900',
+  },
+
+  scheduledBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(212,175,55,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(212,175,55,0.18)',
+  },
+  scheduledText: {
+    color: '#D4AF37',
+    fontSize: 9,
+    fontWeight: '900',
+  },
+  
   liveCommentBadge: {
     flex: 1,
     marginLeft: 8,
