@@ -374,6 +374,12 @@ const fixtureResponses = await Promise.all(
       const data = await footballFetch(
         `/fixtures?id=${encodeURIComponent(fixtureId)}&timezone=${encodeURIComponent(TIMEZONE)}`
       );
+      
+console.log('FIXTURE DEBUG:', {
+  fixtureId,
+  responseCount: Array.isArray(data.response) ? data.response.length : 'no-array',
+  errors: data.errors || null,
+});
 
       return data.response?.[0] || null;
     } catch (error) {
