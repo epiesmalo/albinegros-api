@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -9,9 +10,8 @@ import {
   Text,
   View,
 } from 'react-native';
-import { colors } from '../../theme/colors';
 import AnimatedCard from '../../components/AnimatedCard';
-import { router } from 'expo-router';
+import { colors } from '../../theme/colors';
 import { CACHE_KEYS, formatCacheAge, getCache, saveCache } from '../../utils/cache';
 
 type StandingItem = {
@@ -56,6 +56,19 @@ export default function StandingsScreen() {
       }
 
       setError('');
+try {
+  await fetch(
+    'https://api.albinegroscastellon.com/api/football/sync-standings',
+    {
+      method: 'POST',
+    }
+  );
+} catch (syncError) {
+  console.log(
+    'No se pudo sincronizar la clasificación:',
+    syncError
+  );
+}
 
       const response = await fetch(
         'https://api.albinegroscastellon.com/standings/first-team'
@@ -101,8 +114,14 @@ export default function StandingsScreen() {
   };
 
   useEffect(() => {
-    loadStandings();
-  }, []);
+  loadStandings();
+
+  const interval = setInterval(() => {
+    loadStandings(true);
+  }, 5 * 60 * 1000);
+
+  return () => clearInterval(interval);
+}, []);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -251,13 +270,15 @@ export default function StandingsScreen() {
                       });
                     }}
                     style={({ pressed }) => [
-                      styles.row,
-                      isDirectPromotion && styles.directPromotionRow,
-                      isPlayoff && styles.playoffRow,
-                      isRelegation && styles.relegationRow,
-                      isCastellon && styles.highlightRow,
-                      pressed && item.teamId && styles.rowPressed,
-                    ]}
+  styles.row,
+  isDirectPromotion ? styles.directPromotionRow : null,
+  isPlayoff ? styles.playoffRow : null,
+  isRelegation ? styles.relegationRow : null,
+  isCastellon ? styles.highlightRow : null,
+  pressed && !!item.teamId
+    ? styles.rowPressed
+    : null,
+]}
                   >
                     <Text style={[styles.rankText, styles.rankCell]}>
                       {item.position}
@@ -333,15 +354,17 @@ export default function StandingsScreen() {
                           params: { teamId: String(item.teamId) },
                         });
                       }}
-                      style={({ pressed }) => [
-                        styles.row,
-                        styles.frozenRow,
-                        isDirectPromotion && styles.directPromotionRow,
-                        isPlayoff && styles.playoffRow,
-                        isRelegation && styles.relegationRow,
-                        isCastellon && styles.highlightRow,
-                        pressed && item.teamId && styles.rowPressed,
-                      ]}
+                 style={({ pressed }) => [
+  styles.row,
+  styles.frozenRow,
+  isDirectPromotion ? styles.directPromotionRow : null,
+  isPlayoff ? styles.playoffRow : null,
+  isRelegation ? styles.relegationRow : null,
+  isCastellon ? styles.highlightRow : null,
+  pressed && !!item.teamId
+    ? styles.rowPressed
+    : null,
+]}
                     >
                       <Text style={[styles.rankText, styles.rankCell]}>
                         {item.position}
