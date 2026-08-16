@@ -362,6 +362,12 @@ if (calendarError) {
 const fixtureIds = (calendarMatches || [])
   .map((match) => match.fixtureId)
   .filter((id) => id !== null && id !== undefined);
+console.log('DIRECTO DEBUG:', {
+  today,
+  totalCalendar: allCalendarMatches?.length || 0,
+  todayMatches: calendarMatches.length,
+  fixtureIds,
+});
 
 const fixtureResponses = await Promise.all(
   fixtureIds.map(async (fixtureId) => {
