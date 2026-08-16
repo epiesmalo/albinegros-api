@@ -156,6 +156,15 @@ await saveCache(CACHE_KEYS.CALENDAR, updatedData);
         month: '2-digit',
         day: '2-digit',
       }).format(new Date());
+      const yesterdayDate = new Date();
+yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+
+const yesterday = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Europe/Madrid',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+}).format(yesterdayDate);
 
       const updatedFixtures = await Promise.all(
         calendarData.map(async (item) => {
@@ -170,9 +179,9 @@ await saveCache(CACHE_KEYS.CALENDAR, updatedData);
             day: '2-digit',
           }).format(new Date(item.date));
 
-          if (matchDate !== today) {
-            return item;
-          }
+          if (matchDate !== today && matchDate !== yesterday) {
+  return item;
+}
 
           try {
             const response = await fetch(
