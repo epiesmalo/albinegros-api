@@ -374,7 +374,7 @@ const fixtureResponses = await Promise.all(
       const data = await footballFetch(
         `/fixtures?id=${encodeURIComponent(fixtureId)}&timezone=${encodeURIComponent(TIMEZONE)}`
       );
-      
+
 console.log('FIXTURE DEBUG:', {
   fixtureId,
   responseCount: Array.isArray(data.response) ? data.response.length : 'no-array',
@@ -394,6 +394,11 @@ console.log('FIXTURE DEBUG:', {
 );
 
 const fixtures = fixtureResponses.filter(Boolean);
+console.log('FIXTURES DEBUG:', {
+  fixtureResponses: fixtureResponses.length,
+  fixtures: fixtures.length,
+  ids: fixtures.map((match) => match.fixture?.id),
+});
 
     const matches = fixtures.map((match) => {
       const homeApiName = match.teams?.home?.name || '';
