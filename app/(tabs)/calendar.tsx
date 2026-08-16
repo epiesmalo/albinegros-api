@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
@@ -11,9 +12,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { colors } from '../../theme/colors';
 import AnimatedCard from '../../components/AnimatedCard';
-import { router } from 'expo-router';
+import { colors } from '../../theme/colors';
 import { CACHE_KEYS, formatCacheAge, getCache, saveCache } from '../../utils/cache';
 
 type FixtureItem = {
@@ -118,12 +118,14 @@ export default function CalendarScreen() {
         throw new Error('La respuesta del calendario no es válida.');
       }
 
-      setFixtures(data);
-      setUsingCachedData(false);
-      setCacheSavedAt(null);
-      setCurrentTime(Date.now());
+  const updatedData = await refreshTodayFixtures(data);
 
-      await saveCache(CACHE_KEYS.CALENDAR, data);
+setFixtures(updatedData);
+setUsingCachedData(false);
+setCacheSavedAt(null);
+setCurrentTime(Date.now());
+
+await saveCache(CACHE_KEYS.CALENDAR, updatedData);
     } catch (err) {
       console.log('Error cargando calendario:', err);
 
@@ -146,10 +148,74 @@ export default function CalendarScreen() {
       setRefreshing(false);
     }
   };
+  const refreshTodayFixtures = async (calendarData: FixtureItem[]) => {
+    try {
+      const today = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Europe/Madrid',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date());
+
+      const updatedFixtures = await Promise.all(
+        calendarData.map(async (item) => {
+          if (!item.fixtureId || !item.date) {
+            return item;
+          }
+
+          const matchDate = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Europe/Madrid',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+          }).format(new Date(item.date));
+
+          if (matchDate !== today) {
+            return item;
+          }
+
+          try {
+            const response = await fetch(
+              `https://api.albinegroscastellon.com/api/football/fixture/${item.fixtureId}/details`
+            );
+
+            if (!response.ok) {
+              return item;
+            }
+
+            const detail = await response.json();
+
+            if (!detail?.ok) {
+              return item;
+            }
+
+            return {
+              ...item,
+              homeGoals: detail.goals?.home ?? item.homeGoals,
+              awayGoals: detail.goals?.away ?? item.awayGoals,
+            };
+          } catch {
+            return item;
+          }
+        })
+      );
+
+      return updatedFixtures;
+    } catch (error) {
+      console.log('Error actualizando partidos de hoy:', error);
+      return calendarData;
+    }
+  };
 
   useEffect(() => {
-    loadCalendar();
-  }, []);
+  loadCalendar();
+
+  const interval = setInterval(() => {
+    loadCalendar(true);
+  }, 30_000);
+
+  return () => clearInterval(interval);
+}, []);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -294,12 +360,16 @@ export default function CalendarScreen() {
               params: { fixtureId: String(item.fixtureId) },
             });
           }}
-          style={({ pressed }) => [
-            styles.matchCard,
-            isCastellon && styles.castellonMatchCard,
-            pressed && item.fixtureId && styles.matchCardPressed,
-          ]}
-        >
+  style={({ pressed }) => [
+  styles.matchCard,
+  isCastellon
+    ? styles.castellonMatchCard
+    : null,
+  pressed && !!item.fixtureId
+    ? styles.matchCardPressed
+    : null,
+]}
+>
         <View style={styles.teamsBlock}>
           <Pressable
             disabled={!item.homeTeamId}
@@ -313,9 +383,11 @@ export default function CalendarScreen() {
               });
             }}
             style={({ pressed }) => [
-              styles.teamLine,
-              pressed && item.homeTeamId && styles.teamLinePressed,
-            ]}
+  styles.teamLine,
+  pressed && !!item.homeTeamId
+    ? styles.teamLinePressed
+    : null,
+]}
           >
             <Image source={{ uri: getLogoUrl(item.homeTeam, item.homeLogo) }} style={styles.teamLogo} />
             <Text
@@ -343,9 +415,11 @@ export default function CalendarScreen() {
               });
             }}
             style={({ pressed }) => [
-              styles.teamLine,
-              pressed && item.awayTeamId && styles.teamLinePressed,
-            ]}
+  styles.teamLine,
+  pressed && !!item.awayTeamId
+    ? styles.teamLinePressed
+    : null,
+]}
           >
             <Image source={{ uri: getLogoUrl(item.awayTeam, item.awayLogo) }} style={styles.teamLogo} />
             <Text
