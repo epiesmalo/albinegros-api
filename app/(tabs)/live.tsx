@@ -119,8 +119,16 @@ export default function LiveScreen() {
   }, []);
 
   useEffect(() => {
+  loadLive();
+
+  const interval = setInterval(() => {
     loadLive();
-  }, [loadLive]);
+  }, 30000);
+
+  return () => {
+    clearInterval(interval);
+  };
+}, [loadLive]);
 
   useEffect(() => {
     const animation = Animated.loop(
