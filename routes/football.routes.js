@@ -364,8 +364,7 @@ const fixtureIds = (calendarMatches || [])
   .filter((id) => id !== null && id !== undefined);
 console.log('DIRECTO DEBUG:', {
   today,
-  totalCalendar: allCalendarMatches?.length || 0,
-  todayMatches: calendarMatches.length,
+  todayMatches: calendarMatches?.length || 0,
   fixtureIds,
 });
 
