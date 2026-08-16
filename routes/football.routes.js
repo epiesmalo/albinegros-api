@@ -362,11 +362,7 @@ if (calendarError) {
 const fixtureIds = (calendarMatches || [])
   .map((match) => match.fixtureId)
   .filter((id) => id !== null && id !== undefined);
-console.log('DIRECTO DEBUG:', {
-  today,
-  todayMatches: calendarMatches?.length || 0,
-  fixtureIds,
-});
+
 
 const fixtureResponses = await Promise.all(
   fixtureIds.map(async (fixtureId) => {
@@ -375,11 +371,7 @@ const fixtureResponses = await Promise.all(
         `/fixtures?id=${encodeURIComponent(fixtureId)}&timezone=${encodeURIComponent(TIMEZONE)}`
       );
 
-console.log('FIXTURE DEBUG:', {
-  fixtureId,
-  responseCount: Array.isArray(data.response) ? data.response.length : 'no-array',
-  errors: data.errors || null,
-});
+
 
       return data.response?.[0] || null;
     } catch (error) {
@@ -394,11 +386,7 @@ console.log('FIXTURE DEBUG:', {
 );
 
 const fixtures = fixtureResponses.filter(Boolean);
-console.log('FIXTURES DEBUG:', {
-  fixtureResponses: fixtureResponses.length,
-  fixtures: fixtures.length,
-  ids: fixtures.map((match) => match.fixture?.id),
-});
+
 
     const matches = fixtures.map((match) => {
       const homeApiName = match.teams?.home?.name || '';
