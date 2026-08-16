@@ -188,22 +188,35 @@ export default function LiveScreen() {
     };
   }, [matches]);
 
-  const getStatusText = (match: LiveMatch) => {
-    const short = match.status.short;
-    const elapsed = match.status.elapsed;
-    const extra = match.status.extra;
+const getStatusText = (match: LiveMatch) => {
+  const short = match.status.short;
+  const elapsed = match.status.elapsed;
+  const extra = match.status.extra;
 
-    if (short === 'HT') return 'DESCANSO';
-    if (short === 'ET') return elapsed ? `PRÓRROGA · ${elapsed}'` : 'PRÓRROGA';
-    if (short === 'P') return 'PENALTIS';
-    if (short === 'BT') return 'DESCANSO PRÓRROGA';
+  if (short === 'NS') return 'POR COMENZAR';
+  if (short === 'HT') return 'DESCANSO';
+  if (short === 'FT') return 'FINAL';
+  if (short === 'AET') return 'FINAL PRÓRROGA';
+  if (short === 'PEN') return 'FINAL PENALTIS';
+  if (short === 'ET') {
+    return elapsed ? `PRÓRROGA · ${elapsed}'` : 'PRÓRROGA';
+  }
+  if (short === 'P') return 'PENALTIS';
+  if (short === 'BT') return 'DESCANSO PRÓRROGA';
 
-    if (elapsed !== null) {
-      return extra ? `${elapsed}+${extra}'` : `${elapsed}'`;
-    }
+  if (short === 'PST') return 'APLAZADO';
+  if (short === 'SUSP') return 'SUSPENDIDO';
+  if (short === 'CANC') return 'CANCELADO';
+  if (short === 'ABD') return 'ABANDONADO';
+  if (short === 'AWD') return 'RESULTADO ADMINISTRATIVO';
+  if (short === 'WO') return 'NO DISPUTADO';
 
-    return match.status.long || 'EN DIRECTO';
-  };
+  if (elapsed !== null) {
+    return extra ? `${elapsed}+${extra}'` : `${elapsed}'`;
+  }
+
+  return 'ESTADO PENDIENTE';
+};
 
   const formatUpdatedAt = () => {
     if (!updatedAt) return '';
@@ -216,7 +229,12 @@ export default function LiveScreen() {
     });
   };
 
-  const getMatchState = (short?: string, long?: string) => {
+  const getMatchState = (
+  short?: string,
+  long?: string,
+  date?: string | null
+) => {
+
     const status = short || '';
 
     const liveStatuses = ['1H', '2H', 'ET', 'P', 'LIVE'];
@@ -245,11 +263,18 @@ export default function LiveScreen() {
     }
 
     if (status === 'NS') {
-      return {
-        type: 'scheduled',
-        label: long || 'PRÓXIMAMENTE',
-      };
-    }
+  const time = date
+    ? new Date(date).toLocaleTimeString('es-ES', {
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : '';
+
+  return {
+    type: 'scheduled',
+    label: time ? `PRÓXIMO · ${time}` : 'PRÓXIMO',
+  };
+}
 
     return {
       type: 'other',
@@ -427,7 +452,8 @@ export default function LiveScreen() {
 {(() => {
   const matchState = getMatchState(
     match.status?.short,
-    match.status?.long
+    match.status?.long,
+    match.date
   );
 
   if (matchState.type === 'live') {
