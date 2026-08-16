@@ -228,6 +228,19 @@ const getStatusText = (match: LiveMatch) => {
       minute: '2-digit',
     });
   };
+  const getRoundText = (round?: string) => {
+    if (!round) return '';
+
+    const regularSeasonMatch = round.match(/Regular Season\s*-\s*(\d+)/i);
+
+    if (regularSeasonMatch) {
+      return `JORNADA ${regularSeasonMatch[1]}`;
+    }
+
+    return round;
+  };
+
+  
 
   const getMatchState = (
   short?: string,
@@ -377,8 +390,8 @@ const getStatusText = (match: LiveMatch) => {
             </View>
 
             <Text style={styles.roundText}>
-              {match.league.round}
-            </Text>
+  {getRoundText(match.league.round)}
+</Text>
           </View>
 
           <View style={styles.teamRow}>
