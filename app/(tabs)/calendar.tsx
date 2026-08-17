@@ -1,5 +1,5 @@
-import { router } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
   Image,
@@ -216,23 +216,29 @@ const yesterday = new Intl.DateTimeFormat('en-CA', {
     }
   };
 
-  useEffect(() => {
-  loadCalendar();
+  
 
-  const interval = setInterval(() => {
+useFocusEffect(
+  useCallback(() => {
     loadCalendar(true);
-  }, 30_000);
 
-  return () => clearInterval(interval);
+    const interval = setInterval(() => {
+      loadCalendar(true);
+    }, 30_000);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [])
+);
+
+useEffect(() => {
+  const timer = setInterval(() => {
+    setCurrentTime(Date.now());
+  }, 60_000);
+
+  return () => clearInterval(timer);
 }, []);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(Date.now());
-    }, 60_000);
-
-    return () => clearInterval(timer);
-  }, []);
 
   const rounds = useMemo(() => {
     const uniqueRounds = Array.from(
