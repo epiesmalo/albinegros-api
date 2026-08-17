@@ -85,10 +85,13 @@ router.post('/api/football/sync-standings', async (req, res) => {
       ),
 
       points: item.points,
-      playedgames: item.all.played,
-      won: item.all.win,
-      draw: item.all.draw,
-      lost: item.all.lose,
+playedgames: item.all.played,
+won: item.all.win,
+draw: item.all.draw,
+lost: item.all.lose,
+goalsfor: item.all.goals.for,
+goalsagainst: item.all.goals.against,
+goaldiff: item.goalsDiff,
     }));
 
     const { error: deleteError } = await supabase
