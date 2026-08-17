@@ -20,13 +20,13 @@ type StandingItem = {
   team: string;
   logo?: string;
   points: number;
-  playedGames: number;
+  playedgames: number;
   won: number;
   draw: number;
   lost: number;
-  goalsFor?: number;
-  goalsAgainst?: number;
-  goalDifference?: number;
+  goalsfor: number;
+goalsagainst: number;
+goaldiff: number;
 };
 
 const getLogoUrl = (teamName: string, logo?: string) => {
@@ -254,8 +254,8 @@ try {
                 const isPlayoff = item.position >= 3 && item.position <= 6;
                 const isRelegation = item.position >= standings.length - 3;
                 const goalDiff =
-                  item.goalDifference ??
-                  ((item.goalsFor ?? 0) - (item.goalsAgainst ?? 0));
+                  item.goaldiff ??
+                  ((item.goalsfor ?? 0) - (item.goalsagainst ?? 0));
 
                 return (
                   <Pressable
@@ -308,7 +308,7 @@ try {
                     </View>
 
                     <Text style={[styles.statText, styles.smallCell]}>
-                      {item.playedGames}
+                      {item.playedgames}
                     </Text>
                     <Text style={[styles.statText, styles.smallCell]}>
                       {goalDiff}
@@ -420,10 +420,10 @@ try {
                     const isDirectPromotion = item.position <= 2;
                     const isPlayoff = item.position >= 3 && item.position <= 6;
                     const isRelegation = item.position >= standings.length - 3;
-                    const goalsFor = item.goalsFor ?? 0;
-                    const goalsAgainst = item.goalsAgainst ?? 0;
+                    const goalsfor = item.goalsfor ?? 0;
+                    const goalsagainst = item.goalsagainst ?? 0;
                     const goalDiff =
-                      item.goalDifference ?? (goalsFor - goalsAgainst);
+                      item.goaldiff ?? (goalsfor - goalsagainst);
 
                     return (
                       <View
@@ -437,12 +437,12 @@ try {
                           isCastellon && styles.highlightStatsRow,
                         ]}
                       >
-                        <Text style={[styles.statText, styles.fullStatCell]}>{item.playedGames}</Text>
+                        <Text style={[styles.statText, styles.fullStatCell]}>{item.playedgames}</Text>
                         <Text style={[styles.statText, styles.fullStatCell]}>{item.won}</Text>
                         <Text style={[styles.statText, styles.fullStatCell]}>{item.draw}</Text>
                         <Text style={[styles.statText, styles.fullStatCell]}>{item.lost}</Text>
-                        <Text style={[styles.statText, styles.fullStatCell]}>{goalsFor}</Text>
-                        <Text style={[styles.statText, styles.fullStatCell]}>{goalsAgainst}</Text>
+                        <Text style={[styles.statText, styles.fullStatCell]}>{goalsfor}</Text>
+                        <Text style={[styles.statText, styles.fullStatCell]}>{goalsagainst}</Text>
                         <Text style={[styles.statText, styles.fullStatCell]}>{goalDiff}</Text>
                         <Text style={[styles.pointsText, styles.fullPointsCell]}>{item.points}</Text>
                       </View>
