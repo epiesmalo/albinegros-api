@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Image,
   Linking,
@@ -8,18 +8,57 @@ import {
   Text,
   View,
 } from 'react-native';
+import { setAudioModeAsync, useAudioPlayer } from 'expo-audio';
 import { colors } from '../../theme/colors';
 
 type RadioSection = 'directo' | 'podcasts' | 'otros';
 
 const SIGNO_LOGO = require('../../assets/radio/signo-radio.png');
 const ALBINEGROS_LOGO = require('../../assets/radio/albinegros-logo.png');
-const SIGNO_LIVE_URL = 'https://zeno.fm/player/signo-radio-castellon';
+const LA_GRADA_LOGO = require('../../assets/radio/la-grada-albinegra.jpg');
+const CONEXION_ORELLUT_LOGO = require('../../assets/radio/conexion-orellut.jpg');
+const LA_TRIBUNA_LOGO = require('../../assets/radio/la-tribuna-castello.jpg');
+const SIGNO_STREAM_URL = 'https://stream.zeno.fm/ckalyapuggxuv';
 const SIGNO_PATREON_URL = 'https://www.patreon.com/cw/signoradiocastellon';
 const SIGNO_PODCASTS_URL = 'https://www.patreon.com/cw/signoradiocastellon?utm_source=ig&utm_medium=social&utm_content=link_in_bio&fbclid=PAcGRvZgJleHRuA2FlbQIxMQBzcnRjBmFwcF9pZA85MzY2MTk3NDMzOTI0NTkAAadB_hnN-Ct4RidKIAZiFKOLrvWajB6OklSGHKhUzvxBfqdozoBO7jD0vYBotQ_aem_Nr_YX0NYFph09juqTkj0Vg';
+const LA_GRADA_URL = 'https://www.youtube.com/@TeveQuatre/videos';
+const CONEXION_ORELLUT_URL = 'https://www.youtube.com/playlist?list=PLZkcFc2Lc6OjtYvC4ts5zsuy6jW-UoVWt';
+const LA_TRIBUNA_URL = 'https://proximiatv.com/collection/YVbCiokZu69dpmjM8zng9w';
 
 export default function RadioScreen() {
   const [activeSection, setActiveSection] = useState<RadioSection>('directo');
+
+  const [isRadioPlaying, setIsRadioPlaying] = useState(false);
+
+  const radioPlayer = useAudioPlayer(SIGNO_STREAM_URL);
+
+  useEffect(() => {
+    setAudioModeAsync({
+      playsInSilentMode: true,
+      shouldPlayInBackground: true,
+      interruptionMode: 'doNotMix',
+    }).catch((error) => {
+      console.log('Error configurando audio en segundo plano:', error);
+    });
+  }, []);
+
+  const toggleRadio = () => {
+    if (isRadioPlaying) {
+      radioPlayer.pause();
+      radioPlayer.setActiveForLockScreen(false);
+      setIsRadioPlaying(false);
+      return;
+    }
+
+    radioPlayer.setActiveForLockScreen(true, {
+      title: 'Signo Radio Castellón',
+      artist: 'Radio oficial de Albinegros Castellón',
+      albumTitle: 'En directo',
+    });
+
+    radioPlayer.play();
+    setIsRadioPlaying(true);
+  };
 
   const openUrl = async (url: string) => {
     try {
@@ -98,11 +137,19 @@ export default function RadioScreen() {
                 styles.listenButton,
                 pressed ? styles.buttonPressed : null,
               ]}
-              onPress={() => openUrl(SIGNO_LIVE_URL)}
+              onPress={toggleRadio}
             >
-              <Text style={styles.listenIcon}>▶</Text>
-              <Text style={styles.listenButtonText}>Escuchar en directo</Text>
+              <Text style={styles.listenIcon}>
+                {isRadioPlaying ? 'Ⅱ' : '▶'}
+              </Text>
+              <Text style={styles.listenButtonText}>
+                {isRadioPlaying ? 'Pausar directo' : 'Escuchar en directo'}
+              </Text>
             </Pressable>
+
+            {isRadioPlaying ? (
+              <Text style={styles.streamStatus}>● EMITIENDO EN LA APP</Text>
+            ) : null}
           </View>
 
           <View style={styles.infoCard}>
@@ -176,18 +223,85 @@ export default function RadioScreen() {
       ) : null}
 
       {activeSection === 'otros' ? (
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionEyebrow}>MÁS CONTENIDO ALBINEGRO</Text>
-          <Text style={styles.sectionTitle}>Otros podcasts</Text>
-          <Text style={styles.sectionDescription}>
-            Aquí reuniremos otros programas y canales dedicados al C.D. Castellón.
-            Añadiremos sus logos y accesos directos, manteniendo a Signo Radio como
-            radio oficial de Albinegros Castellón.
-          </Text>
-          <View style={styles.comingSoonBadge}>
-            <Text style={styles.comingSoonText}>PRÓXIMAMENTE</Text>
+        <>
+          <View style={styles.otherIntroCard}>
+            <Text style={styles.sectionEyebrow}>MÁS CONTENIDO ALBINEGRO</Text>
+            <Text style={styles.sectionTitle}>Otros programas</Text>
+            <Text style={styles.sectionDescription}>
+              Más espacios para seguir la actualidad del C.D. Castellón. Signo Radio
+              mantiene el protagonismo como radio oficial de Albinegros Castellón.
+            </Text>
           </View>
-        </View>
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.mediaCard,
+              pressed ? styles.buttonPressed : null,
+            ]}
+            onPress={() => openUrl(LA_GRADA_URL)}
+          >
+            <Image
+              source={LA_GRADA_LOGO}
+              style={styles.mediaLogo}
+              resizeMode="cover"
+            />
+            <View style={styles.mediaTextWrap}>
+              <Text style={styles.mediaTitle}>La Grada Albinegra</Text>
+              <Text style={styles.mediaMeta}>TeVe4 · Lunes a las 20:00</Text>
+              <Text style={styles.mediaDescription}>
+                Programa de tertulia albinegra con análisis, opinión y actualidad del
+                C.D. Castellón.
+              </Text>
+              <Text style={styles.mediaAction}>VER PROGRAMAS →</Text>
+            </View>
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.mediaCard,
+              pressed ? styles.buttonPressed : null,
+            ]}
+            onPress={() => openUrl(CONEXION_ORELLUT_URL)}
+          >
+            <Image
+              source={CONEXION_ORELLUT_LOGO}
+              style={styles.mediaLogo}
+              resizeMode="cover"
+            />
+            <View style={styles.mediaTextWrap}>
+              <Text style={styles.mediaTitle}>Conexión Orellut</Text>
+              <Text style={styles.mediaMeta}>El Periódico Mediterráneo</Text>
+              <Text style={styles.mediaDescription}>
+                Dos episodios semanales con José Luis Gual: partidos, claves,
+                actualidad y voces del entorno orellut.
+              </Text>
+              <Text style={styles.mediaAction}>VER PODCASTS →</Text>
+            </View>
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.mediaCard,
+              pressed ? styles.buttonPressed : null,
+            ]}
+            onPress={() => openUrl(LA_TRIBUNA_URL)}
+          >
+            <Image
+              source={LA_TRIBUNA_LOGO}
+              style={styles.mediaLogo}
+              resizeMode="cover"
+            />
+            <View style={styles.mediaTextWrap}>
+              <Text style={styles.mediaTitle}>La Tribuna de Castelló</Text>
+              <Text style={styles.mediaMeta}>#MeletaDeRomer</Text>
+              <Text style={styles.mediaDescription}>
+                Información, opinión, debate y actualidad deportiva del C.D.
+                Castellón con rigor, pasión y sentimiento orellut.
+              </Text>
+              <Text style={styles.mediaAction}>VER PROGRAMAS →</Text>
+            </View>
+          </Pressable>
+        </>
       ) : null}
     </ScrollView>
   );
@@ -318,6 +432,13 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   listenButtonText: { color: '#101010', fontSize: 15, fontWeight: '900' },
+  streamStatus: {
+    color: colors.accent,
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+    marginTop: 12,
+  },
   infoCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -449,21 +570,57 @@ const styles = StyleSheet.create({
     width: 96,
     height: 82,
   },
-  comingSoonBadge: {
-    alignSelf: 'flex-start',
-    marginTop: 18,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: 'rgba(215, 178, 67, 0.10)',
+  otherIntroCard: {
+    backgroundColor: '#111111',
+    borderRadius: 22,
     borderWidth: 1,
-    borderColor: 'rgba(215, 178, 67, 0.35)',
+    borderColor: '#282828',
+    padding: 20,
+    marginBottom: 14,
   },
-  comingSoonText: {
-    color: colors.accent,
-    fontSize: 9,
+  mediaCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#111111',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#282828',
+    padding: 12,
+    marginBottom: 12,
+  },
+  mediaLogo: {
+    width: 92,
+    height: 92,
+    borderRadius: 16,
+    backgroundColor: '#080808',
+    marginRight: 14,
+  },
+  mediaTextWrap: {
+    flex: 1,
+  },
+  mediaTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
     fontWeight: '900',
-    letterSpacing: 0.8,
+  },
+  mediaMeta: {
+    color: colors.accent,
+    fontSize: 10,
+    fontWeight: '800',
+    marginTop: 4,
+  },
+  mediaDescription: {
+    color: '#969696',
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 6,
+  },
+  mediaAction: {
+    color: colors.accent,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.4,
+    marginTop: 8,
   },
   buttonPressed: { opacity: 0.76, transform: [{ scale: 0.992 }] },
 });
