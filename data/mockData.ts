@@ -6,7 +6,7 @@ export const nextMatches = {
     time: '18:30',
     stadium: 'SkyFi Castalia',
     competition: 'LaLiga Hypermotion',
-    teamLogo: 'https://www.albinegroscastellon.com/cas.png',
+    teamLogo: 'https://archivos.albinegroscastellon.com/cas.png',
 opponentLogo: 'https://www.albinegroscastellon.com/burgos.png',
   },
   bTeam: {

@@ -21,9 +21,9 @@ const chants: Chant[] = [
     id: "cantico-1",
     title: "HIMNO OFICIAL C.D.CASTELLÓN",
     subtitle: "CDCS",
-    logo: "https://www.albinegroscastellon.com/cas.png",
+    logo: "https://archivos.albinegroscastellon.com/cas.png",
     file: {
-      uri: "https://www.albinegroscastellon.com/audio/canticos/himno.mp3",
+      uri: "https://archivos.albinegroscastellon.com/audio/canticos/himno.mp3",
     },
     lyrics: `En el escudo de tu historia
 Club Deportivo Castellón;
@@ -43,9 +43,9 @@ del viejo campo del Sequiol.
     id: "cantico-2",
     title: "BAJO EL SOL",
     subtitle: "FONDO 1922",
-    logo: "https://www.albinegroscastellon.com/images/Fondo1922.png",
+    logo: "https://archivos.albinegroscastellon.com/images/Fondo1922.png",
     file: {
-      uri: "https://www.albinegroscastellon.com/audio/canticos/bajo-el-sol.mp3",
+      uri: "https://archivos.albinegroscastellon.com/audio/canticos/bajo-el-sol.mp3",
     },
     lyrics: `Bajo el sol se alzarán las banderas y las palmas volverán a sonar, en el Fondo solo un grito se oirá:
 
@@ -62,9 +62,9 @@ Castellón, Castellón, Castellón
     id: "cantico-3",
     title: "NO PUEDES PERDER",
     subtitle: "FONDO 1922",
-    logo: "https://www.albinegroscastellon.com/images/Fondo1922.png",
+    logo: "https://archivos.albinegroscastellon.com/images/Fondo1922.png",
     file: {
-      uri: "https://www.albinegroscastellon.com/audio/canticos/Nopuedesperder.mp3",
+      uri: "https://archivos.albinegroscastellon.com/audio/canticos/Nopuedesperder.mp3",
     },
     lyrics: `ALE ALE ALE OH
 ALE ALE ALE OH
@@ -80,9 +80,9 @@ VAMOS CAMPEÓN`,
     id: "cantico-4",
     title: "REMONTANDO EL VUELO",
     subtitle: "FONDO 1922",
-    logo: "https://www.albinegroscastellon.com/images/Fondo1922.png",
+    logo: "https://archivos.albinegroscastellon.com/images/Fondo1922.png",
     file: {
-      uri: "https://www.albinegroscastellon.com/audio/canticos/remontando.mp3",
+      uri: "https://archivos.albinegroscastellon.com/audio/canticos/remontando.mp3",
     },
     lyrics: `Entre un te quiero y te quiero
 Vamos remontando el vuelo
@@ -95,9 +95,9 @@ lololololololoo lolololololololo lololololololoo lololololololo`,
     id: "cantico-5",
     title: "CADA DOMINGO",
     subtitle: "FONDO 1922",
-    logo: "https://www.albinegroscastellon.com/images/Fondo1922.png",
+    logo: "https://archivos.albinegroscastellon.com/images/Fondo1922.png",
     file: {
-      uri: "https://www.albinegroscastellon.com/audio/canticos/cadadomingo.mp3",
+      uri: "https://archivos.albinegroscastellon.com/audio/canticos/cadadomingo.mp3",
     },
     lyrics: `Cada domingo vengo a ver al Campeón
 porque ésta es mi locura, saco los trapos, el bombo y el corazón,
@@ -114,9 +114,9 @@ lo lo lo lo, lo lo lo lo, lo lo lo lo, lo lo lo lo, lo lo lo lo…`,
     id: "cantico-6",
     title: "LOS AÑOS VAN PASANDO",
     subtitle: "FONDO 1922",
-    logo: "https://www.albinegroscastellon.com/images/Fondo1922.png",
+    logo: "https://archivos.albinegroscastellon.com/images/Fondo1922.png",
     file: {
-      uri: "https://www.albinegroscastellon.com/audio/canticos/vanpasando.mp3",
+      uri: "https://archivos.albinegroscastellon.com/audio/canticos/vanpasando.mp3",
     },
     lyrics: `Los años van pasando,
 y el Frente sigue igual,
@@ -130,9 +130,9 @@ Ale ale ale, Ale Ale Ale, Ale Ale Ale, Ale Ale Ale`,
     id: "cantico-7",
     title: "MOVERSE ALBINEGROS",
     subtitle: "FONDO 1922",
-    logo: "https://www.albinegroscastellon.com/images/Fondo1922.png",
+    logo: "https://archivos.albinegroscastellon.com/images/Fondo1922.png",
     file: {
-      uri: "https://www.albinegroscastellon.com/audio/canticos/moverse.mp3",
+      uri: "https://archivos.albinegroscastellon.com/audio/canticos/moverse.mp3",
     },
     lyrics: `Moverse albinegros moverse,
 moverse Albinegros joder,
@@ -148,9 +148,9 @@ loca por verte ascender.`,
     id: "cantico-8",
     title: "¡¡MUCHACHOS!!",
     subtitle: "FONDO 1922",
-    logo: "https://www.albinegroscastellon.com/images/Fondo1922.png",
+    logo: "https://archivos.albinegroscastellon.com/images/Fondo1922.png",
     file: {
-      uri: "https://www.albinegroscastellon.com/audio/canticos/muchachos.mp3",
+      uri: "https://archivos.albinegroscastellon.com/audio/canticos/muchachos.mp3",
     },
     lyrics: `Muchachos, aquí estamos juntos otra vez,
 enamorados del glorioso,
@@ -164,9 +164,9 @@ no lo puedes entender.`,
     id: "cantico-9",
     title: "MOVIENDO TUS BANDERAS",
     subtitle: "FONDO 1922",
-    logo: "https://www.albinegroscastellon.com/images/Fondo1922.png",
+    logo: "https://archivos.albinegroscastellon.com/images/Fondo1922.png",
     file: {
-      uri: "https://www.albinegroscastellon.com/audio/canticos/todoelestadiomoviendotusbanderas.mp3",
+      uri: "https://archivos.albinegroscastellon.com/audio/canticos/todoelestadiomoviendotusbanderas.mp3",
     },
     lyrics: `Todo el estadio,
 moviendo sus banderas,
@@ -187,9 +187,9 @@ lololololololo...`,
     id: "cantico-10",
     title: "NOS VAN A VER VOLVER",
     subtitle: "FONDO 1922",
-    logo: "https://www.albinegroscastellon.com/images/Fondo1922.png",
+    logo: "https://archivos.albinegroscastellon.com/images/Fondo1922.png",
     file: {
-      uri: "https://www.albinegroscastellon.com/audio/canticos/nosvanavervolver.mp3",
+      uri: "https://archivos.albinegroscastellon.com/audio/canticos/nosvanavervolver.mp3",
     },
     lyrics: `Alé, alé...
 Alé, alé...

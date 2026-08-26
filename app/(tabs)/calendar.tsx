@@ -34,7 +34,7 @@ type FixtureItem = {
 
 const getLogoUrl = (teamName: string, logo?: string) => {
   if (teamName.toLowerCase().includes('castell')) {
-    return 'https://www.albinegroscastellon.com/cas.png?v=2';
+    return 'https://archivos.albinegroscastellon.com/cas.png?v=2';
   }
 
   return logo;

@@ -17,7 +17,7 @@ import AnimatedCard from '../../components/AnimatedCard';
 import { CACHE_KEYS, formatCacheAge, getCache, saveCache } from '../../utils/cache';
 
 const NEXT_MATCH_BG = require('../../assets/images/next-match-bg.png');
-const CASTELLON_LOGO_URL = 'https://www.albinegroscastellon.com/cas.png';
+const CASTELLON_LOGO_URL = 'https://archivos.albinegroscastellon.com/cas.png';
 
 type NextMatch = {
   teamName: string;
