@@ -44,3 +44,4 @@ app-example
 # local env files
 .env
 .env*.local
+.env.backup
