@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { Audio } from "expo-av";
 import Slider from "@react-native-community/slider";
+import { Audio } from "expo-av";
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { songs } from "../../data/mediaData";
 import { colors } from "../../theme/colors";
 
@@ -403,22 +404,35 @@ export default function MediaScreen() {
     return `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`;
   };
 
-  useEffect(() => {
-    Audio.setAudioModeAsync({
-      playsInSilentModeIOS: true,
-      staysActiveInBackground: false,
-      shouldDuckAndroid: true,
-    });
+useEffect(() => {
+  Audio.setAudioModeAsync({
+    playsInSilentModeIOS: true,
+    staysActiveInBackground: false,
+    shouldDuckAndroid: true,
+  });
 
+  return () => {
+    if (soundRef.current) {
+      soundRef.current.unloadAsync();
+    }
+  };
+}, []);
+
+useFocusEffect(
+  useCallback(() => {
     return () => {
       if (soundRef.current) {
         soundRef.current.unloadAsync();
+        soundRef.current = null;
       }
-    };
-  }, []);
 
-  return (
-    <ScrollView
+      resetPlayerState();
+    };
+  }, [])
+);
+
+return (
+  <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}

@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Animated,
@@ -11,6 +11,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { CACHE_KEYS, getCache, saveCache } from '../../utils/cache';
 
 type LiveTeam = {
   id: number | null;
@@ -86,49 +87,84 @@ export default function LiveScreen() {
   const [livePulse] = useState(() => new Animated.Value(1));
 
   const loadLive = useCallback(async (isRefresh = false) => {
-    try {
-      if (isRefresh) {
-        setRefreshing(true);
+  try {
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      const cachedLive = await getCache<{
+        matches: LiveMatch[];
+        updatedAt: string | null;
+      }>(CACHE_KEYS.LIVE);
+
+      if (
+        Array.isArray(cachedLive?.data?.matches) &&
+        cachedLive.data.matches.length > 0
+      ) {
+        setMatches(cachedLive.data.matches);
+        setUpdatedAt(cachedLive.data.updatedAt);
+        setLoading(false);
       } else {
         setLoading(true);
       }
-
-      setError('');
-
-      const response = await fetch(API_URL);
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (!data?.ok || !Array.isArray(data.matches)) {
-        throw new Error('Respuesta de directos no válida');
-      }
-
-      setMatches(data.matches);
-      setUpdatedAt(data.updatedAt || new Date().toISOString());
-    } catch (err) {
-      console.error('Error cargando directos:', err);
-      setError('No se pudieron actualizar los resultados en directo.');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
     }
-  }, []);
 
-  useEffect(() => {
-  loadLive();
+    setError('');
 
-  const interval = setInterval(() => {
+    const response = await fetch(API_URL);
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (!data?.ok || !Array.isArray(data.matches)) {
+      throw new Error('Respuesta de directos no válida');
+    }
+
+    const newUpdatedAt = data.updatedAt || new Date().toISOString();
+
+    setMatches(data.matches);
+    setUpdatedAt(newUpdatedAt);
+
+    await saveCache(CACHE_KEYS.LIVE, {
+      matches: data.matches,
+      updatedAt: newUpdatedAt,
+    });
+  } catch (err) {
+    console.error('Error cargando directos:', err);
+
+    const cachedLive = await getCache<{
+      matches: LiveMatch[];
+      updatedAt: string | null;
+    }>(CACHE_KEYS.LIVE);
+
+    if (Array.isArray(cachedLive?.data?.matches)) {
+      setMatches(cachedLive.data.matches);
+      setUpdatedAt(cachedLive.data.updatedAt);
+      setError('');
+    } else {
+      setError('No se pudieron actualizar los resultados en directo.');
+    }
+  } finally {
+    setLoading(false);
+    setRefreshing(false);
+  }
+}, []);
+
+  useFocusEffect(
+  useCallback(() => {
     loadLive();
-  }, 30000);
 
-  return () => {
-    clearInterval(interval);
-  };
-}, [loadLive]);
+    const interval = setInterval(() => {
+      loadLive(true);
+    }, 30000);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [loadLive])
+);
 
   useEffect(() => {
     const animation = Animated.loop(
@@ -151,7 +187,8 @@ export default function LiveScreen() {
     return () => animation.stop();
   }, [livePulse]);
 
-  useEffect(() => {
+  useFocusEffect(
+  useCallback(() => {
     const fixtureIds = matches
       .map((match) => match.fixtureId)
       .filter((id): id is number => typeof id === 'number' && id > 0);
@@ -175,18 +212,23 @@ export default function LiveScreen() {
           setCommentCounts(data.counts || {});
         }
       } catch (countError) {
-        console.log('No se pudieron cargar los contadores de comentarios:', countError);
+        console.log(
+          'No se pudieron cargar los contadores de comentarios:',
+          countError
+        );
       }
     };
 
     loadCommentCounts();
+
     const interval = setInterval(loadCommentCounts, 5000);
 
     return () => {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [matches]);
+  }, [matches])
+);
 
 const getStatusText = (match: LiveMatch) => {
   const short = match.status.short;

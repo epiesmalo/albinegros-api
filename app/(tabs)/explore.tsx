@@ -10,7 +10,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import AnimatedCard from '../../components/AnimatedCard';
+
 import { colors } from '../../theme/colors';
 import { CACHE_KEYS, formatCacheAge, getCache, saveCache } from '../../utils/cache';
 
@@ -47,71 +47,92 @@ export default function StandingsScreen() {
   const [cacheSavedAt, setCacheSavedAt] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(Date.now());
 
-  const loadStandings = async (isRefresh = false) => {
-    try {
-      if (isRefresh) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
-
-      setError('');
-try {
-  await fetch(
-    'https://api.albinegroscastellon.com/api/football/sync-standings',
-    {
-      method: 'POST',
-    }
-  );
-} catch (syncError) {
-  console.log(
-    'No se pudo sincronizar la clasificación:',
-    syncError
-  );
-}
-
-      const response = await fetch(
-        'https://api.albinegroscastellon.com/standings/first-team'
-      );
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (!Array.isArray(data)) {
-        throw new Error('La respuesta de la clasificación no es válida.');
-      }
-
-      setStandings(data);
-      setUsingCachedData(false);
-      setCacheSavedAt(null);
-      setCurrentTime(Date.now());
-
-      await saveCache(CACHE_KEYS.STANDINGS, data);
-    } catch (err) {
-      console.log('Error cargando clasificación:', err);
-
+const loadStandings = async (isRefresh = false) => {
+  try {
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
       const cachedStandings = await getCache<StandingItem[]>(
         CACHE_KEYS.STANDINGS
       );
 
-      if (Array.isArray(cachedStandings?.data) && cachedStandings.data.length > 0) {
+      if (
+        Array.isArray(cachedStandings?.data) &&
+        cachedStandings.data.length > 0
+      ) {
         setStandings(cachedStandings.data);
         setUsingCachedData(true);
         setCacheSavedAt(cachedStandings.savedAt);
         setCurrentTime(Date.now());
-        setError('');
+        setLoading(false);
       } else {
-        setError('No se pudo cargar la clasificación.');
-        setStandings([]);
+        setLoading(true);
       }
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
     }
-  };
+
+    setError('');
+
+    // Sincronizamos primero con el servidor.
+    try {
+      await fetch(
+        'https://api.albinegroscastellon.com/api/football/sync-standings',
+        {
+          method: 'POST',
+        }
+      );
+    } catch (syncError) {
+      console.log(
+        'No se pudo sincronizar la clasificación:',
+        syncError
+      );
+    }
+
+    // Después obtenemos los datos actualizados.
+    const response = await fetch(
+      'https://api.albinegroscastellon.com/standings/first-team'
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (!Array.isArray(data)) {
+      throw new Error('La respuesta de la clasificación no es válida.');
+    }
+
+    setStandings(data);
+    setUsingCachedData(false);
+    setCacheSavedAt(null);
+    setCurrentTime(Date.now());
+
+    await saveCache(CACHE_KEYS.STANDINGS, data);
+  } catch (err) {
+    console.log('Error cargando clasificación:', err);
+
+    const cachedStandings = await getCache<StandingItem[]>(
+      CACHE_KEYS.STANDINGS
+    );
+
+    if (
+      Array.isArray(cachedStandings?.data) &&
+      cachedStandings.data.length > 0
+    ) {
+      setStandings(cachedStandings.data);
+      setUsingCachedData(true);
+      setCacheSavedAt(cachedStandings.savedAt);
+      setCurrentTime(Date.now());
+      setError('');
+    } else {
+      setError('No se pudo cargar la clasificación.');
+      setStandings([]);
+    }
+  } finally {
+    setLoading(false);
+    setRefreshing(false);
+  }
+};
 
   useEffect(() => {
   loadStandings();
@@ -146,14 +167,14 @@ try {
         />
       }
     >
-      <AnimatedCard delay={0}>
+      <View>
         <View style={styles.heroCard}>
           <Text style={styles.kicker}>SEGUNDA DIVISIÓN</Text>
           <Text style={styles.subtitle}>Temporada 2026/27</Text>
         </View>
-      </AnimatedCard>
+      </View>
 
-      <AnimatedCard delay={70}>
+      <View>
       <View style={styles.legendFiltersRow}>
         <View style={styles.legend}>
           <View style={styles.legendItem}>
@@ -208,10 +229,10 @@ try {
           </Pressable>
         </View>
       </View>
-      </AnimatedCard>
+      </View>
 
       {usingCachedData && (
-        <AnimatedCard delay={110}>
+        <View>
           <View style={styles.cachedBanner}>
             <View style={styles.cachedDot} />
             <Text style={styles.cachedText}>
@@ -221,24 +242,20 @@ try {
                 : ''}
             </Text>
           </View>
-        </AnimatedCard>
+        </View>
       )}
 
       {loading && <ActivityIndicator size="large" color={colors.accent} style={styles.loader} />}
       {error ? (
-        <AnimatedCard delay={140}>
+        <View>
           <Text style={styles.errorText}>{error}</Text>
-        </AnimatedCard>
+        </View>
       ) : null}
 
       {!loading && !error && (
         <>
           {viewMode === 'summary' ? (
-            <AnimatedCard
-              style={styles.animatedFullWidth}
-              delay={140}
-              animateKey={`summary-${standings.length}`}
-            >
+           <View style={styles.animatedFullWidth}>
               <View style={styles.tableCard}>
               <View style={styles.headerRow}>
                 <Text style={[styles.headerCell, styles.rankCell]}>#</Text>
@@ -320,13 +337,9 @@ try {
                 );
               })}
               </View>
-            </AnimatedCard>
+            </View>
           ) : (
-            <AnimatedCard
-              style={styles.animatedFullWidth}
-              delay={140}
-              animateKey={`full-${standings.length}`}
-            >
+            <View style={styles.animatedFullWidth}>
               <View style={styles.frozenTableCard}>
               <View style={styles.frozenColumns}>
                 <View style={[styles.headerRow, styles.frozenHeaderRow]}>
@@ -451,7 +464,7 @@ try {
                 </View>
               </ScrollView>
               </View>
-            </AnimatedCard>
+            </View>
           )}
         </>
       )}

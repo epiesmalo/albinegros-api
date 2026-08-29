@@ -1,3 +1,5 @@
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   Image,
@@ -9,11 +11,9 @@ import {
   Text,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../theme/colors';
 import AnimatedPressable from '../../components/AnimatedPressable';
-import AnimatedCard from '../../components/AnimatedCard';
+import { colors } from '../../theme/colors';
+
 import { CACHE_KEYS, formatCacheAge, getCache, saveCache } from '../../utils/cache';
 
 const NEXT_MATCH_BG = require('../../assets/images/next-match-bg.png');
@@ -186,53 +186,10 @@ export default function HomeScreen() {
   }, []);
 
   const loadHomeData = async (isRefresh = false) => {
-    try {
-      if (isRefresh) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
-
-      const [matchRes, adsRes] = await Promise.all([
-        fetch('https://albinegros-api.onrender.com/api/admin/next-match'),
-        fetch('https://albinegros-api.onrender.com/api/admin/ads'),
-      ]);
-
-      if (!matchRes.ok) {
-        throw new Error(`Error cargando próximo partido: HTTP ${matchRes.status}`);
-      }
-
-      if (!adsRes.ok) {
-        throw new Error(`Error cargando patrocinadores: HTTP ${adsRes.status}`);
-      }
-
-      const matchData = await matchRes.json();
-      const adsData = await adsRes.json();
-
-      if (!matchData || typeof matchData !== 'object') {
-        throw new Error('La respuesta del próximo partido no es válida.');
-      }
-
-      const normalizedAds = Array.isArray(adsData) ? adsData : [];
-
-      setNextMatch(matchData);
-      setAds(normalizedAds);
-      setUpdatedAt(
-        typeof matchData?.updatedAt === 'string'
-          ? matchData.updatedAt
-          : new Date().toISOString()
-      );
-      setCurrentTime(Date.now());
-      setUsingCachedData(false);
-      setCacheSavedAt(null);
-
-      await Promise.all([
-        saveCache(CACHE_KEYS.HOME_NEXT_MATCH, matchData),
-        saveCache(CACHE_KEYS.HOME_ADS, normalizedAds),
-      ]);
-    } catch (error) {
-      console.log('Error cargando datos del inicio:', error);
-
+  try {
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
       const [cachedMatch, cachedAds] = await Promise.all([
         getCache<NextMatch>(CACHE_KEYS.HOME_NEXT_MATCH),
         getCache<AdItem[]>(CACHE_KEYS.HOME_ADS),
@@ -258,12 +215,89 @@ export default function HomeScreen() {
         setUsingCachedData(true);
         setCacheSavedAt(availableSavedAt);
         setCurrentTime(Date.now());
+        setLoading(false);
+      } else {
+        setLoading(true);
       }
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
     }
-  };
+
+    const [matchRes, adsRes] = await Promise.all([
+      fetch('https://albinegros-api.onrender.com/api/admin/next-match'),
+      fetch('https://albinegros-api.onrender.com/api/admin/ads'),
+    ]);
+
+    if (!matchRes.ok) {
+      throw new Error(
+        `Error cargando próximo partido: HTTP ${matchRes.status}`
+      );
+    }
+
+    if (!adsRes.ok) {
+      throw new Error(
+        `Error cargando patrocinadores: HTTP ${adsRes.status}`
+      );
+    }
+
+    const matchData = await matchRes.json();
+    const adsData = await adsRes.json();
+
+    if (!matchData || typeof matchData !== 'object') {
+      throw new Error('La respuesta del próximo partido no es válida.');
+    }
+
+    const normalizedAds = Array.isArray(adsData) ? adsData : [];
+
+    setNextMatch(matchData);
+    setAds(normalizedAds);
+
+    setUpdatedAt(
+      typeof matchData?.updatedAt === 'string'
+        ? matchData.updatedAt
+        : new Date().toISOString()
+    );
+
+    setCurrentTime(Date.now());
+    setUsingCachedData(false);
+    setCacheSavedAt(null);
+
+    await Promise.all([
+      saveCache(CACHE_KEYS.HOME_NEXT_MATCH, matchData),
+      saveCache(CACHE_KEYS.HOME_ADS, normalizedAds),
+    ]);
+  } catch (error) {
+    console.log('Error cargando datos del inicio:', error);
+
+    const [cachedMatch, cachedAds] = await Promise.all([
+      getCache<NextMatch>(CACHE_KEYS.HOME_NEXT_MATCH),
+      getCache<AdItem[]>(CACHE_KEYS.HOME_ADS),
+    ]);
+
+    if (cachedMatch?.data) {
+      setNextMatch(cachedMatch.data);
+      setUpdatedAt(
+        typeof cachedMatch.data.updatedAt === 'string'
+          ? cachedMatch.data.updatedAt
+          : cachedMatch.savedAt
+      );
+    }
+
+    if (Array.isArray(cachedAds?.data)) {
+      setAds(cachedAds.data);
+    }
+
+    const availableSavedAt =
+      cachedMatch?.savedAt || cachedAds?.savedAt || null;
+
+    if (cachedMatch?.data || cachedAds?.data) {
+      setUsingCachedData(true);
+      setCacheSavedAt(availableSavedAt);
+      setCurrentTime(Date.now());
+    }
+  } finally {
+    setLoading(false);
+    setRefreshing(false);
+  }
+};
 
   const openLink = async (url: string) => {
     const supported = await Linking.canOpenURL(url);
@@ -290,23 +324,23 @@ export default function HomeScreen() {
         />
       }
     >
-      <AnimatedCard delay={0}>
-        <View style={styles.headerCard}>
-          <Image
-            source={require('../../assets/images/escudo1.png')}
-            style={styles.logo}
-          />
+<View>
+  <View style={styles.headerCard}>
+    <Image
+      source={require('../../assets/images/escudo1.png')}
+      style={styles.logo}
+    />
 
-          <View style={styles.headerTextBox}>
-            <Text style={styles.title}>Albinegros Castellón</Text>
-            <Text style={styles.subtitle}>
-              Toda la información del club en una sola app
-            </Text>
-          </View>
-        </View>
-      </AnimatedCard>
+    <View style={styles.headerTextBox}>
+      <Text style={styles.title}>Albinegros Castellón</Text>
+      <Text style={styles.subtitle}>
+        Toda la información del club en una sola app
+      </Text>
+    </View>
+  </View>
+</View>
 
-      <AnimatedCard delay={70}>
+      <View>
       <View style={styles.socialContainer}>
         <View style={styles.socialButtonWrapper}>
           <AnimatedPressable
@@ -336,9 +370,9 @@ export default function HomeScreen() {
           </AnimatedPressable>
         </View>
       </View>
-      </AnimatedCard>
+      </View>
 
-      <AnimatedCard delay={140}>
+      <View>
       <ImageBackground
         source={NEXT_MATCH_BG}
         imageStyle={styles.matchBackgroundImage}
@@ -493,10 +527,10 @@ export default function HomeScreen() {
           )}
         </View>
       </ImageBackground>
-      </AnimatedCard>
+      </View>
 
-      <AnimatedCard delay={220}>
-      <Text style={styles.sectionTitle}>Accesos rápidos</Text>
+      <View>
+  <Text style={styles.sectionTitle}>Accesos rápidos</Text>
 
       <ScrollView
         horizontal
@@ -525,10 +559,10 @@ export default function HomeScreen() {
           </AnimatedPressable>
         ))}
       </ScrollView>
-      </AnimatedCard>
+      </View>
 
-      <AnimatedCard delay={300}>
-      <Text style={styles.sectionTitle}>Patrocinadores oficiales</Text>
+      <View>
+  <Text style={styles.sectionTitle}>Patrocinadores oficiales</Text>
 
       <View style={styles.sponsorsStrip}>
         <ScrollView
@@ -553,7 +587,7 @@ export default function HomeScreen() {
           ))}
         </ScrollView>
       </View>
-      </AnimatedCard>
+      </View>
     </ScrollView>
   );
 }

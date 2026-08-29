@@ -1,6 +1,6 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { File, Paths } from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -18,11 +18,11 @@ import {
 } from 'react-native';
 
 import { Image } from 'expo-image';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ImageZoom from 'react-native-image-pan-zoom';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors } from '../../theme/colors';
-import AnimatedCard from '../../components/AnimatedCard';
+
 import { CACHE_KEYS, formatCacheAge, getCache, saveCache } from '../../utils/cache';
 
 type GalleryItem = {
@@ -113,57 +113,74 @@ export default function GalleryScreen() {
   }, []);
 
   const loadGallery = async (isRefresh = false) => {
-    try {
-      if (isRefresh) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
-
-      const response = await fetch(
-        'https://api.albinegroscastellon.com/api/admin/gallery'
-      );
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (!Array.isArray(data)) {
-        throw new Error('La respuesta de la galería no es válida.');
-      }
-
-      const sortedData = [...data].sort(
-        (a: GalleryItem, b: GalleryItem) =>
-          new Date(b.created_at || 0).getTime() -
-          new Date(a.created_at || 0).getTime()
-      );
-
-      setGalleryItems(sortedData);
-      setUsingCachedData(false);
-      setCacheSavedAt(null);
-      setCurrentTime(Date.now());
-
-      await saveCache(CACHE_KEYS.GALLERY, sortedData);
-    } catch (error) {
-      console.log('Error cargando galería:', error);
-
+  try {
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
       const cachedGallery = await getCache<GalleryItem[]>(
         CACHE_KEYS.GALLERY
       );
 
-      if (Array.isArray(cachedGallery?.data) && cachedGallery.data.length > 0) {
-        setGalleryItems(cachedGallery.data);
-        setUsingCachedData(true);
-        setCacheSavedAt(cachedGallery.savedAt);
-        setCurrentTime(Date.now());
-      }
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (
+  Array.isArray(cachedGallery?.data) &&
+  cachedGallery.data.length > 0
+) {
+  setGalleryItems(cachedGallery.data);
+  setUsingCachedData(true);
+  setCacheSavedAt(cachedGallery.savedAt);
+  setCurrentTime(Date.now());
+  setLoading(false);
+} else {
+  setLoading(true);
+}
+}
+    const response = await fetch(
+      'https://api.albinegroscastellon.com/api/admin/gallery'
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
     }
-  };
+
+    const data = await response.json();
+
+    if (!Array.isArray(data)) {
+      throw new Error('La respuesta de la galería no es válida.');
+    }
+
+    const sortedData = [...data].sort(
+      (a: GalleryItem, b: GalleryItem) =>
+        new Date(b.created_at || 0).getTime() -
+        new Date(a.created_at || 0).getTime()
+    );
+
+    setGalleryItems(sortedData);
+    setUsingCachedData(false);
+    setCacheSavedAt(null);
+    setCurrentTime(Date.now());
+
+    await saveCache(CACHE_KEYS.GALLERY, sortedData);
+  } catch (error) {
+    console.log('Error cargando galería:', error);
+
+    const cachedGallery = await getCache<GalleryItem[]>(
+      CACHE_KEYS.GALLERY
+    );
+
+    if (
+      Array.isArray(cachedGallery?.data) &&
+      cachedGallery.data.length > 0
+    ) {
+      setGalleryItems(cachedGallery.data);
+      setUsingCachedData(true);
+      setCacheSavedAt(cachedGallery.savedAt);
+      setCurrentTime(Date.now());
+    }
+} finally {
+  setLoading(false);
+  setRefreshing(false);
+}
+};
 
   const loadFavorites = async () => {
     try {
@@ -370,14 +387,12 @@ export default function GalleryScreen() {
     item: GalleryItem;
     index: number;
   }) => (
-    <AnimatedCard
-      style={[
-        styles.animatedGridItem,
-        index % 2 === 0 ? styles.leftAnimatedItem : styles.rightAnimatedItem,
-      ]}
-      delay={Math.min(index, 8) * 45}
-      animateKey={`${selectedCategory}-${item.id}`}
-    >
+   <View
+  style={[
+    styles.animatedGridItem,
+    index % 2 === 0 ? styles.leftAnimatedItem : styles.rightAnimatedItem,
+  ]}
+>
       <Pressable
   style={({ pressed }) => [
     selectedCategory === 'fondos'
@@ -427,7 +442,7 @@ export default function GalleryScreen() {
         </View>
       )}
       </Pressable>
-    </AnimatedCard>
+    </View>
   );
 
   return (
@@ -451,20 +466,20 @@ export default function GalleryScreen() {
         }
         ListHeaderComponent={
           <>
-            <AnimatedCard delay={0}>
-              <View style={styles.header}>
-                <Text style={styles.eyebrow}>MOMENTOS ALBINEGROS</Text>
-                <Text style={styles.screenTitle}>Galería</Text>
-                <Text style={styles.headerDescription}>
-                  Imágenes, recuerdos y fondos del C.D. Castellón.
-                </Text>
-              </View>
-            </AnimatedCard>
+<View>
+  <View style={styles.header}>
+    <Text style={styles.eyebrow}>MOMENTOS ALBINEGROS</Text>
+    <Text style={styles.screenTitle}>Galería</Text>
+    <Text style={styles.headerDescription}>
+      Imágenes, recuerdos y fondos del C.D. Castellón.
+    </Text>
+  </View>
+</View>
 
             {loading && <GallerySkeleton />}
 
             {usingCachedData && !loading && (
-              <AnimatedCard delay={55}>
+              <View>
                 <View style={styles.cachedBanner}>
                   <View style={styles.cachedDot} />
                   <Text style={styles.cachedText}>
@@ -474,15 +489,11 @@ export default function GalleryScreen() {
                       : ''}
                   </Text>
                 </View>
-              </AnimatedCard>
+              </View>
             )}
 
             {!loading && photoOfTheDay && (
-              <AnimatedCard
-                style={styles.animatedFullWidth}
-                delay={70}
-                animateKey={photoOfTheDay.id}
-              >
+              <View style={styles.animatedFullWidth}>
                 <Pressable
                   style={({ pressed }) => [
                     styles.photoOfDayCard,
@@ -523,7 +534,7 @@ export default function GalleryScreen() {
                   {photoOfTheDay.title}
                 </Text>
                 </Pressable>
-              </AnimatedCard>
+              </View>
             )}
 
             {!loading && (
@@ -532,12 +543,12 @@ export default function GalleryScreen() {
               Categorías
             </Text>
 
-            <AnimatedCard delay={140} animateKey={selectedCategory}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.menuContainer}
-            >
+            <View>
+  <ScrollView
+    horizontal
+    showsHorizontalScrollIndicator={false}
+    contentContainerStyle={styles.menuContainer}
+  >
               {galleryCategories.map((category) => (
                 <Pressable
                   key={category.id}
@@ -563,7 +574,7 @@ export default function GalleryScreen() {
                 </Pressable>
               ))}
             </ScrollView>
-            </AnimatedCard>
+            </View>
 
             <View style={styles.galleryHeader}>
               <Text style={styles.sectionTitle}>

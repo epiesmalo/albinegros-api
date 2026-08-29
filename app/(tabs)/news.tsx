@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { colors } from '../../theme/colors';
-import AnimatedCard from '../../components/AnimatedCard';
+
 import { CACHE_KEYS, formatCacheAge, getCache, saveCache } from '../../utils/cache';
 
 type NewsItem = {
@@ -105,56 +105,74 @@ export default function NewsScreen() {
   const [currentTime, setCurrentTime] = useState(Date.now());
 
   const loadNews = useCallback(async (isRefresh = false) => {
-    try {
-      if (isRefresh) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
-
-      setError('');
-
-      const response = await fetch(
-        'https://api.albinegroscastellon.com/news'
-      );
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const data = await response.json();
-      const normalizedNews: NewsItem[] = Array.isArray(data) ? data : [];
-
-      setNews(normalizedNews);
-      setCurrentPage(1);
-      setFailedImages({});
-      setUsingCachedData(false);
-      setCacheSavedAt(null);
-      setCurrentTime(Date.now());
-
-      await saveCache(CACHE_KEYS.NEWS, normalizedNews);
-    } catch (err) {
-      console.error('Error cargando noticias:', err);
-
+  try {
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
       const cachedNews = await getCache<NewsItem[]>(CACHE_KEYS.NEWS);
 
-      if (Array.isArray(cachedNews?.data) && cachedNews.data.length > 0) {
+      if (
+        Array.isArray(cachedNews?.data) &&
+        cachedNews.data.length > 0
+      ) {
         setNews(cachedNews.data);
         setCurrentPage(1);
         setFailedImages({});
         setUsingCachedData(true);
         setCacheSavedAt(cachedNews.savedAt);
         setCurrentTime(Date.now());
-        setError('');
+        setLoading(false);
       } else {
-        setError('No se pudieron cargar las noticias.');
-        setNews([]);
+        setLoading(true);
       }
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
     }
-  }, []);
+
+    setError('');
+
+    const response = await fetch(
+      'https://api.albinegroscastellon.com/news'
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    const normalizedNews: NewsItem[] = Array.isArray(data) ? data : [];
+
+    setNews(normalizedNews);
+    setCurrentPage(1);
+    setFailedImages({});
+    setUsingCachedData(false);
+    setCacheSavedAt(null);
+    setCurrentTime(Date.now());
+
+    await saveCache(CACHE_KEYS.NEWS, normalizedNews);
+  } catch (err) {
+    console.error('Error cargando noticias:', err);
+
+    const cachedNews = await getCache<NewsItem[]>(CACHE_KEYS.NEWS);
+
+    if (
+      Array.isArray(cachedNews?.data) &&
+      cachedNews.data.length > 0
+    ) {
+      setNews(cachedNews.data);
+      setCurrentPage(1);
+      setFailedImages({});
+      setUsingCachedData(true);
+      setCacheSavedAt(cachedNews.savedAt);
+      setCurrentTime(Date.now());
+      setError('');
+    } else {
+      setError('No se pudieron cargar las noticias.');
+      setNews([]);
+    }
+  } finally {
+    setLoading(false);
+    setRefreshing(false);
+  }
+}, []);
 
   useEffect(() => {
     loadNews();
@@ -183,18 +201,14 @@ export default function NewsScreen() {
   const secondaryNews = currentNews.slice(1);
 
   const openLink = async (url: string) => {
-    if (!url) return;
+  if (!url) return;
 
-    try {
-      const supported = await Linking.canOpenURL(url);
-
-      if (supported) {
-        await Linking.openURL(url);
-      }
-    } catch (err) {
-      console.error('No se pudo abrir la noticia:', err);
-    }
-  };
+  try {
+    await Linking.openURL(url);
+  } catch (err) {
+    console.error('No se pudo abrir la noticia:', err);
+  }
+};
 
   const changePage = (nextPage: number) => {
     if (
@@ -223,7 +237,7 @@ export default function NewsScreen() {
         />
       }
     >
-      <AnimatedCard delay={0}>
+      <View>
         <View style={styles.header}>
           <View style={styles.headerText}>
             <Text style={styles.eyebrow}>ACTUALIDAD ALBINEGRA</Text>
@@ -239,10 +253,10 @@ export default function NewsScreen() {
             </View>
           ) : null}
         </View>
-      </AnimatedCard>
+      </View>
 
       {usingCachedData && (
-        <AnimatedCard delay={55}>
+        <View>
           <View style={styles.cachedBanner}>
             <View style={styles.cachedDot} />
             <Text style={styles.cachedText}>
@@ -252,13 +266,13 @@ export default function NewsScreen() {
                 : ''}
             </Text>
           </View>
-        </AnimatedCard>
+        </View>
       )}
 
       {loading ? <NewsSkeleton /> : null}
 
       {!loading && error ? (
-        <AnimatedCard delay={70}>
+        <View>
           <View style={styles.messageCard}>
             <Text style={styles.errorTitle}>
               No se pudieron cargar
@@ -276,11 +290,11 @@ export default function NewsScreen() {
               <Text style={styles.retryButtonText}>Reintentar</Text>
             </Pressable>
           </View>
-        </AnimatedCard>
+        </View>
       ) : null}
 
       {!loading && !error && news.length === 0 ? (
-        <AnimatedCard delay={70}>
+        <View>
           <View style={styles.messageCard}>
             <Text style={styles.emptyTitle}>
               Todavía no hay noticias
@@ -290,16 +304,12 @@ export default function NewsScreen() {
               Las últimas novedades del C.D. Castellón aparecerán aquí.
             </Text>
           </View>
-        </AnimatedCard>
+        </View>
       ) : null}
 
       {!loading && !error && featuredNews ? (
         <>
-          <AnimatedCard
-            style={styles.animatedFullWidth}
-            delay={80}
-            animateKey={currentPage}
-          >
+          <View style={styles.animatedFullWidth}>
           <Pressable
             style={({ pressed }) => [
               styles.featuredCard,
@@ -358,16 +368,14 @@ export default function NewsScreen() {
               </View>
             </View>
           </Pressable>
-          </AnimatedCard>
+          </View>
 
           <View style={styles.secondaryList}>
             {secondaryNews.map((item, index) => (
-              <AnimatedCard
-                key={item.id}
-                style={styles.animatedFullWidth}
-                delay={140 + index * 55}
-                animateKey={`${currentPage}-${item.id}`}
-              >
+              <View
+  key={item.id}
+  style={styles.animatedFullWidth}
+>
                 <Pressable
                 style={({ pressed }) => [
                   styles.compactCard,
@@ -422,16 +430,12 @@ export default function NewsScreen() {
                   </Text>
                 </View>
                 </Pressable>
-              </AnimatedCard>
+              </View>
             ))}
           </View>
 
           {totalPages > 1 ? (
-            <AnimatedCard
-              style={styles.animatedFullWidth}
-              delay={380}
-              animateKey={currentPage}
-            >
+            <View style={styles.animatedFullWidth}>
               <View style={styles.paginationCard}>
               <Pressable
                 style={({ pressed }) => [
@@ -486,7 +490,7 @@ export default function NewsScreen() {
                 </Text>
               </Pressable>
               </View>
-            </AnimatedCard>
+            </View>
           ) : null}
         </>
       ) : null}

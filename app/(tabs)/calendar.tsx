@@ -12,7 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import AnimatedCard from '../../components/AnimatedCard';
+
 import { colors } from '../../theme/colors';
 import { CACHE_KEYS, formatCacheAge, getCache, saveCache } from '../../utils/cache';
 
@@ -95,59 +95,77 @@ export default function CalendarScreen() {
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
 
   const loadCalendar = async (isRefresh = false) => {
-    try {
-      if (isRefresh) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
-
-      setError('');
-
-      const response = await fetch(
-        'https://api.albinegroscastellon.com/calendar/first-team'
-      );
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (!Array.isArray(data)) {
-        throw new Error('La respuesta del calendario no es válida.');
-      }
-
-  const updatedData = await refreshTodayFixtures(data);
-
-setFixtures(updatedData);
-setUsingCachedData(false);
-setCacheSavedAt(null);
-setCurrentTime(Date.now());
-
-await saveCache(CACHE_KEYS.CALENDAR, updatedData);
-    } catch (err) {
-      console.log('Error cargando calendario:', err);
-
+  try {
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
       const cachedCalendar = await getCache<FixtureItem[]>(
         CACHE_KEYS.CALENDAR
       );
 
-      if (Array.isArray(cachedCalendar?.data) && cachedCalendar.data.length > 0) {
+      if (
+        Array.isArray(cachedCalendar?.data) &&
+        cachedCalendar.data.length > 0
+      ) {
         setFixtures(cachedCalendar.data);
         setUsingCachedData(true);
         setCacheSavedAt(cachedCalendar.savedAt);
         setCurrentTime(Date.now());
-        setError('');
+        setLoading(false);
       } else {
-        setError('No se pudo cargar el calendario.');
-        setFixtures([]);
+        setLoading(true);
       }
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
     }
-  };
+
+    setError('');
+
+    const response = await fetch(
+      'https://api.albinegroscastellon.com/calendar/first-team'
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (!Array.isArray(data)) {
+      throw new Error('La respuesta del calendario no es válida.');
+    }
+
+    const updatedData = await refreshTodayFixtures(data);
+
+    setFixtures(updatedData);
+    setUsingCachedData(false);
+    setCacheSavedAt(null);
+    setCurrentTime(Date.now());
+
+    await saveCache(CACHE_KEYS.CALENDAR, updatedData);
+  } catch (err) {
+    console.log('Error cargando calendario:', err);
+
+    const cachedCalendar = await getCache<FixtureItem[]>(
+      CACHE_KEYS.CALENDAR
+    );
+
+    if (
+      Array.isArray(cachedCalendar?.data) &&
+      cachedCalendar.data.length > 0
+    ) {
+      setFixtures(cachedCalendar.data);
+      setUsingCachedData(true);
+      setCacheSavedAt(cachedCalendar.savedAt);
+      setCurrentTime(Date.now());
+      setError('');
+    } else {
+      setError('No se pudo cargar el calendario.');
+      setFixtures([]);
+    }
+  } finally {
+    setLoading(false);
+    setRefreshing(false);
+  }
+};
   const refreshTodayFixtures = async (calendarData: FixtureItem[]) => {
     try {
       const today = new Intl.DateTimeFormat('en-CA', {
@@ -220,7 +238,7 @@ const yesterday = new Intl.DateTimeFormat('en-CA', {
 
 useFocusEffect(
   useCallback(() => {
-    loadCalendar(true);
+    loadCalendar();
 
     const interval = setInterval(() => {
       loadCalendar(true);
@@ -292,14 +310,14 @@ useEffect(() => {
       }
     };
 
-    loadCommentCounts();
+   loadCommentCounts();
 
-    const interval = setInterval(loadCommentCounts, 15000);
+const interval = setInterval(loadCommentCounts, 15000);
 
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
+return () => {
+  cancelled = true;
+  clearInterval(interval);
+};
   }, [fixtures]);
 
   const selectedRoundMatches = useMemo(() => {
@@ -359,12 +377,10 @@ useEffect(() => {
     const isCastellon = isCastellonTeam(item.homeTeam) || isCastellonTeam(item.awayTeam);
 
     return (
-      <AnimatedCard
-        key={item.id}
-        style={styles.animatedFullWidth}
-        delay={180}
-        animateKey={`${selectedRound}-${item.id}`}
-      >
+      <View
+  key={item.id}
+  style={styles.animatedFullWidth}
+>
         <Pressable
           disabled={!item.fixtureId}
           onPress={() => {
@@ -465,7 +481,7 @@ useEffect(() => {
           {item.fixtureId ? <Text style={styles.detailChevron}>›</Text> : null}
         </View>
         </Pressable>
-      </AnimatedCard>
+      </View>
     );
   };
 
@@ -506,14 +522,14 @@ useEffect(() => {
           />
         }
       >
-        <AnimatedCard delay={0}>
-          <View style={styles.heroCard}>
-            <Text style={styles.kicker}>SEGUNDA DIVISIÓN</Text>
-            <Text style={styles.subtitle}>Temporada 2026/27</Text>
-          </View>
-        </AnimatedCard>
+        <View>
+  <View style={styles.heroCard}>
+    <Text style={styles.kicker}>SEGUNDA DIVISIÓN</Text>
+    <Text style={styles.subtitle}>Temporada 2026/27</Text>
+  </View>
+</View>
 
-        <AnimatedCard delay={70}>
+        <View>
           <View style={styles.filterRow}>
             <Text style={styles.sectionLabel}>Calendario</Text>
 
@@ -526,9 +542,9 @@ useEffect(() => {
               <Text style={styles.compactChevron}>▾</Text>
             </TouchableOpacity>
           </View>
-        </AnimatedCard>
+        </View>
 
-        <AnimatedCard delay={140} animateKey={selectedRound ?? 0}>
+        <View>
           <View style={styles.roundSelectorRow}>
             <TouchableOpacity activeOpacity={0.85} style={styles.arrowButton} onPress={goPreviousRound}>
               <Text style={styles.arrowText}>‹</Text>
@@ -552,10 +568,10 @@ useEffect(() => {
               <Text style={styles.arrowText}>›</Text>
             </TouchableOpacity>
           </View>
-        </AnimatedCard>
+        </View>
 
         {usingCachedData && (
-          <AnimatedCard delay={165}>
+          <View>
             <View style={styles.cachedBanner}>
               <View style={styles.cachedDot} />
               <Text style={styles.cachedText}>
@@ -565,7 +581,7 @@ useEffect(() => {
                   : ''}
               </Text>
             </View>
-          </AnimatedCard>
+         </View>
         )}
 
         {loading && <CalendarSkeleton />}
@@ -576,11 +592,13 @@ useEffect(() => {
             {selectedRoundMatches.length > 0 ? (
               selectedRoundMatches.map(renderMatch)
             ) : (
-              <AnimatedCard delay={180} animateKey={`${selectedRound}-${filter}`}>
-                <View style={styles.emptyCard}>
-                  <Text style={styles.emptyText}>No hay partidos para esta selección</Text>
-                </View>
-              </AnimatedCard>
+              <View>
+  <View style={styles.emptyCard}>
+    <Text style={styles.emptyText}>
+      No hay partidos para esta selección
+    </Text>
+  </View>
+</View>
             )}
           </>
         )}

@@ -1,4 +1,13 @@
-import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  FlatList,
+  Image,
+  Linking,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+
 import { shopItems } from '../../data/shopData';
 import { colors } from '../../theme/colors';
 
@@ -8,27 +17,39 @@ export default function ShopScreen() {
   };
 
   return (
-    <ScrollView
+    <FlatList
+      data={shopItems}
+      keyExtractor={(item) => item.id}
       style={styles.container}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.header}>
-        <Text style={styles.eyebrow}>PRODUCTOS ALBINEGROS</Text>
-        <Text style={styles.screenTitle}>Tienda</Text>
-        <Text style={styles.headerDescription}>
-          Artículos seleccionados para llevar el sentimiento albinegro contigo.
-        </Text>
-      </View>
+      initialNumToRender={3}
+      maxToRenderPerBatch={3}
+      windowSize={5}
+      removeClippedSubviews
+      ListHeaderComponent={
+        <>
+          <View style={styles.header}>
+            <Text style={styles.eyebrow}>PRODUCTOS ALBINEGROS</Text>
 
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Productos destacados</Text>
-        <Text style={styles.productCount}>{shopItems.length} artículos</Text>
-      </View>
+            <Text style={styles.screenTitle}>Tienda</Text>
 
-      {shopItems.map((item) => (
+            <Text style={styles.headerDescription}>
+              Artículos seleccionados para llevar el sentimiento albinegro contigo.
+            </Text>
+          </View>
+
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Productos destacados</Text>
+
+            <Text style={styles.productCount}>
+              {shopItems.length} artículos
+            </Text>
+          </View>
+        </>
+      }
+      renderItem={({ item }) => (
         <Pressable
-          key={item.id}
           style={({ pressed }) => [
             styles.card,
             pressed && styles.cardPressed,
@@ -36,7 +57,11 @@ export default function ShopScreen() {
           onPress={() => openProduct(item.link)}
         >
           <View style={styles.imageContainer}>
-            <Image source={item.image} style={styles.image} resizeMode="cover" />
+            <Image
+              source={item.image}
+              style={styles.image}
+              resizeMode="cover"
+            />
 
             <View style={styles.productBadge}>
               <Text style={styles.productBadgeText}>ALBINEGROS</Text>
@@ -45,7 +70,10 @@ export default function ShopScreen() {
 
           <View style={styles.info}>
             <Text style={styles.title}>{item.title}</Text>
-            <Text style={styles.description}>{item.description}</Text>
+
+            <Text style={styles.description}>
+              {item.description}
+            </Text>
 
             <View style={styles.bottomRow}>
               <Text style={styles.price}>{item.price}</Text>
@@ -57,8 +85,8 @@ export default function ShopScreen() {
             </View>
           </View>
         </Pressable>
-      ))}
-    </ScrollView>
+      )}
+    />
   );
 }
 

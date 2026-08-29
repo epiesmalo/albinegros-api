@@ -7,6 +7,7 @@ type CacheEnvelope<T> = {
 };
 
 export const CACHE_KEYS = {
+  LIVE: 'albinegros_cache_live',
   HOME_NEXT_MATCH: 'albinegros_cache_home_next_match',
   HOME_ADS: 'albinegros_cache_home_ads',
   STANDINGS: 'albinegros_cache_standings',

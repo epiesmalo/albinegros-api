@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react';
+import { setAudioModeAsync, useAudioPlayer } from 'expo-audio';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Image,
   Linking,
@@ -6,9 +8,8 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  View,
+  View
 } from 'react-native';
-import { setAudioModeAsync, useAudioPlayer } from 'expo-audio';
 import { colors } from '../../theme/colors';
 
 type RadioSection = 'directo' | 'podcasts' | 'otros';
@@ -29,47 +30,52 @@ export default function RadioScreen() {
   const [activeSection, setActiveSection] = useState<RadioSection>('directo');
 
   const [isRadioPlaying, setIsRadioPlaying] = useState(false);
+const radioPlayer = useAudioPlayer(SIGNO_STREAM_URL);
+useEffect(() => {
+  setAudioModeAsync({
+    playsInSilentMode: true,
+    shouldPlayInBackground: true,
+    interruptionMode: 'doNotMix',
+  }).catch((error) => {
+    console.log('Error configurando audio en segundo plano:', error);
+  });
+}, []);
 
-  const radioPlayer = useAudioPlayer(SIGNO_STREAM_URL);
 
-  useEffect(() => {
-    setAudioModeAsync({
-      playsInSilentMode: true,
-      shouldPlayInBackground: true,
-      interruptionMode: 'doNotMix',
-    }).catch((error) => {
-      console.log('Error configurando audio en segundo plano:', error);
-    });
-  }, []);
 
-  const toggleRadio = () => {
-    if (isRadioPlaying) {
+const toggleRadio = () => {
+  if (isRadioPlaying) {
+    radioPlayer.pause();
+    radioPlayer.setActiveForLockScreen(false);
+    setIsRadioPlaying(false);
+    return;
+  }
+
+  radioPlayer.setActiveForLockScreen(true, {
+    title: 'Signo Radio Castellón',
+    artist: 'Radio oficial de Albinegros Castellón',
+  });
+
+  radioPlayer.play();
+  setIsRadioPlaying(true);
+};
+const openUrl = async (url: string) => {
+  try {
+    await Linking.openURL(url);
+  } catch (error) {
+    console.log('Error abriendo enlace de radio:', error);
+  }
+};
+
+useFocusEffect(
+  useCallback(() => {
+    return () => {
       radioPlayer.pause();
       radioPlayer.setActiveForLockScreen(false);
       setIsRadioPlaying(false);
-      return;
-    }
-
-    radioPlayer.setActiveForLockScreen(true, {
-      title: 'Signo Radio Castellón',
-      artist: 'Radio oficial de Albinegros Castellón',
-      albumTitle: 'En directo',
-    });
-
-    radioPlayer.play();
-    setIsRadioPlaying(true);
-  };
-
-  const openUrl = async (url: string) => {
-    try {
-      const supported = await Linking.canOpenURL(url);
-      if (supported) {
-        await Linking.openURL(url);
-      }
-    } catch (error) {
-      console.log('Error abriendo enlace de radio:', error);
-    }
-  };
+    };
+  }, [radioPlayer])
+);
 
   return (
     <ScrollView
