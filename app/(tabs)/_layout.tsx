@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
-import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { StyleSheet, Text, View } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
+import { Tabs } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import Animated, {
   FadeInDown,
   FadeOutUp,
@@ -41,7 +41,7 @@ export default function TabLayout() {
       <View style={styles.tabsContainer}>
         <Tabs
           screenOptions={{
-            animation: 'fade',
+            animation: 'none',
             headerTitleAlign: 'center',
             headerStyle: {
               backgroundColor: '#101010',

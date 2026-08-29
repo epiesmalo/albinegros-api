@@ -1,16 +1,15 @@
+import * as WebBrowser from 'expo-web-browser';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Image,
-  Linking,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  View,
+  View
 } from 'react-native';
 import { colors } from '../../theme/colors';
-
 import { CACHE_KEYS, formatCacheAge, getCache, saveCache } from '../../utils/cache';
 
 type NewsItem = {
@@ -204,7 +203,7 @@ export default function NewsScreen() {
   if (!url) return;
 
   try {
-    await Linking.openURL(url);
+    await WebBrowser.openBrowserAsync(url);
   } catch (err) {
     console.error('No se pudo abrir la noticia:', err);
   }

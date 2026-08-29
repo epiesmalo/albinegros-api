@@ -1,8 +1,8 @@
 import {
-  FlatList,
   Image,
   Linking,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -17,44 +17,34 @@ export default function ShopScreen() {
   };
 
   return (
-    <FlatList
-      data={shopItems}
-      keyExtractor={(item) => item.id}
+    <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
-      initialNumToRender={3}
-      maxToRenderPerBatch={3}
-      windowSize={5}
-      removeClippedSubviews
-      ListHeaderComponent={
-        <>
-          <View style={styles.header}>
-            <Text style={styles.eyebrow}>PRODUCTOS ALBINEGROS</Text>
+    >
+      <View style={styles.header}>
+        <Text style={styles.eyebrow}>PRODUCTOS ALBINEGROS</Text>
 
-            <Text style={styles.screenTitle}>Tienda</Text>
+        <Text style={styles.screenTitle}>Tienda</Text>
 
-            <Text style={styles.headerDescription}>
-              Artículos seleccionados para llevar el sentimiento albinegro contigo.
-            </Text>
-          </View>
+        <Text style={styles.headerDescription}>
+          Artículos seleccionados para llevar el sentimiento albinegro contigo.
+        </Text>
+      </View>
 
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Productos destacados</Text>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Productos destacados</Text>
 
-            <Text style={styles.productCount}>
-              {shopItems.length} artículos
-            </Text>
-          </View>
-        </>
-      }
-      renderItem={({ item }) => (
+        <Text style={styles.productCount}>
+          {shopItems.length} artículos
+        </Text>
+      </View>
+
+      {shopItems.map((item) => (
         <Pressable
-          style={({ pressed }) => [
-            styles.card,
-            pressed && styles.cardPressed,
-          ]}
-          onPress={() => openProduct(item.link)}
+          key={item.id}
+          style={styles.card}
+          onPress={() => openProduct(item.url)}
         >
           <View style={styles.imageContainer}>
             <Image
@@ -85,8 +75,8 @@ export default function ShopScreen() {
             </View>
           </View>
         </Pressable>
-      )}
-    />
+      ))}
+    </ScrollView>
   );
 }
 
