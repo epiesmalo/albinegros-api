@@ -1,6 +1,5 @@
 import { setAudioModeAsync, useAudioPlayer } from 'expo-audio';
-import { useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Image,
   Linking,
@@ -67,15 +66,7 @@ const openUrl = async (url: string) => {
   }
 };
 
-useFocusEffect(
-  useCallback(() => {
-    return () => {
-      radioPlayer.pause();
-      radioPlayer.setActiveForLockScreen(false);
-      setIsRadioPlaying(false);
-    };
-  }, [radioPlayer])
-);
+
 
   return (
     <ScrollView
@@ -129,7 +120,12 @@ useFocusEffect(
             </View>
 
             <View style={styles.logoHeroWrap}>
-              <Image source={SIGNO_LOGO} style={styles.logoHero} resizeMode="contain" />
+              <Image
+  source={SIGNO_LOGO}
+  style={styles.logoHero}
+  resizeMode="contain"
+  fadeDuration={0}
+/>
             </View>
 
             <Text style={styles.heroTitle}>Signo Radio Castellón</Text>

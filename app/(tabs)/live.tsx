@@ -437,12 +437,26 @@ const getStatusText = (match: LiveMatch) => {
           </View>
 
           <View style={styles.teamRow}>
-            <Image
-              source={{ uri: match.home.logo }}
-              style={styles.teamLogo}
-              contentFit="contain"
-              cachePolicy="disk"
-            />
+            <Pressable
+  disabled={!match.home.id}
+  onPress={(event) => {
+    event.stopPropagation();
+
+    if (!match.home.id) return;
+
+    router.push({
+      pathname: '/team/[teamId]',
+      params: { teamId: String(match.home.id) },
+    });
+  }}
+>
+  <Image
+    source={{ uri: match.home.logo }}
+    style={styles.teamLogo}
+    contentFit="contain"
+    cachePolicy="disk"
+  />
+</Pressable>
 
             <View style={styles.teamNameWrap}>
               <Text
@@ -464,12 +478,26 @@ const getStatusText = (match: LiveMatch) => {
           <View style={styles.separator} />
 
           <View style={styles.teamRow}>
-            <Image
-              source={{ uri: match.away.logo }}
-              style={styles.teamLogo}
-              contentFit="contain"
-              cachePolicy="disk"
-            />
+            <Pressable
+  disabled={!match.away.id}
+  onPress={(event) => {
+    event.stopPropagation();
+
+    if (!match.away.id) return;
+
+    router.push({
+      pathname: '/team/[teamId]',
+      params: { teamId: String(match.away.id) },
+    });
+  }}
+>
+  <Image
+    source={{ uri: match.away.logo }}
+    style={styles.teamLogo}
+    contentFit="contain"
+    cachePolicy="disk"
+  />
+</Pressable>
 
             <View style={styles.teamNameWrap}>
               <Text

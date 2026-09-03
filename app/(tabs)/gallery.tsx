@@ -35,13 +35,10 @@ type GalleryItem = {
 };
 
 const galleryCategories = [
-  { id: 'tifos', title: 'Tifos' },
   { id: 'castalia', title: 'Castalia' },
-  { id: 'jugadores', title: 'Jugadores' },
+  { id: 'desplazamientos', title: 'Desplazamientos' },
   { id: 'vintage', title: 'Vintage' },
-  { id: 'aficion', title: 'Afición' },
   { id: 'fondos', title: 'Fondos' },
-  { id: 'favoritos', title: 'Favoritos' },
 ];
 
 const { width, height } = Dimensions.get('window');
@@ -210,19 +207,7 @@ export default function GalleryScreen() {
     return galleryItems.filter((item) => item.category === selectedCategory);
   }, [galleryItems, selectedCategory, favoriteIds]);
 
-  const allImages = useMemo(() => {
-  return galleryItems;
-}, [galleryItems]);
 
-  const photoOfTheDay = useMemo(() => {
-    if (allImages.length === 0) return null;
-
-    const todayIndex =
-      Math.floor(new Date().setHours(0, 0, 0, 0) / 86400000) %
-      allImages.length;
-
-    return allImages[todayIndex];
-  }, [allImages]);
 
   const selectedImage =
     selectedImageIndex !== null && images[selectedImageIndex]
@@ -492,50 +477,7 @@ export default function GalleryScreen() {
               </View>
             )}
 
-            {!loading && photoOfTheDay && (
-              <View style={styles.animatedFullWidth}>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.photoOfDayCard,
-                    pressed && styles.cardPressed,
-                  ]}
-                  onPress={() => {
-                    const imageIndex = images.findIndex(
-                      (item) => item.id === photoOfTheDay.id
-                    );
-
-                    if (imageIndex >= 0) {
-                      openImage(imageIndex);
-                    } else {
-                      setSelectedCategory(photoOfTheDay.category);
-                      const categoryImages = galleryItems.filter(
-                        (item) => item.category === photoOfTheDay.category
-                      );
-                      const categoryIndex = categoryImages.findIndex(
-                        (item) => item.id === photoOfTheDay.id
-                      );
-                      setSelectedImageIndex(categoryIndex >= 0 ? categoryIndex : null);
-                    }
-                  }}
-                >
-                <Text style={styles.photoOfDayLabel}>
-                  Foto albinegra del día
-                </Text>
-
-                <Image
-                  source={{ uri: photoOfTheDay.image }}
-                  style={styles.photoOfDayImage}
-                  contentFit="contain"
-                  transition={250}
-                  cachePolicy="disk"
-                />
-
-                <Text style={styles.photoOfDayTitle}>
-                  {photoOfTheDay.title}
-                </Text>
-                </Pressable>
-              </View>
-            )}
+            
 
             {!loading && (
               <>

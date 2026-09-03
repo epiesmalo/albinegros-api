@@ -1,3 +1,7 @@
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Image } from 'expo-image';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -10,10 +14,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { Image } from 'expo-image';
-import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Team = {
   id: number | null;
@@ -129,6 +129,8 @@ function DetailSkeleton() {
 }
 
 export default function MatchDetailScreen() {
+  const router = useRouter();
+
   const params = useLocalSearchParams<{ fixtureId?: string | string[] }>();
   const fixtureId = Array.isArray(params.fixtureId)
     ? params.fixtureId[0]
@@ -782,7 +784,24 @@ export default function MatchDetailScreen() {
 
               <View style={styles.scoreTeams}>
                 <View style={styles.scoreTeam}>
-                  <Image source={{ uri: data.home.logo }} style={styles.bigLogo} contentFit="contain" cachePolicy="disk" />
+                  <Pressable
+  disabled={!data.home.id}
+  onPress={() => {
+    if (!data.home.id) return;
+
+    router.push({
+      pathname: '/team/[teamId]',
+      params: { teamId: String(data.home.id) },
+    });
+  }}
+>
+  <Image
+    source={{ uri: data.home.logo }}
+    style={styles.bigLogo}
+    contentFit="contain"
+    cachePolicy="disk"
+  />
+</Pressable>
                   <Text numberOfLines={2} style={[styles.scoreTeamName, data.home.isCastellon && styles.castellon]}>
                     {data.home.shortName || data.home.name}
                   </Text>
@@ -800,7 +819,24 @@ export default function MatchDetailScreen() {
                 </View>
 
                 <View style={styles.scoreTeam}>
-                  <Image source={{ uri: data.away.logo }} style={styles.bigLogo} contentFit="contain" cachePolicy="disk" />
+                 <Pressable
+  disabled={!data.away.id}
+  onPress={() => {
+    if (!data.away.id) return;
+
+    router.push({
+      pathname: '/team/[teamId]',
+      params: { teamId: String(data.away.id) },
+    });
+  }}
+>
+  <Image
+    source={{ uri: data.away.logo }}
+    style={styles.bigLogo}
+    contentFit="contain"
+    cachePolicy="disk"
+  />
+</Pressable>
                   <Text numberOfLines={2} style={[styles.scoreTeamName, data.away.isCastellon && styles.castellon]}>
                     {data.away.shortName || data.away.name}
                   </Text>
