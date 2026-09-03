@@ -130,8 +130,8 @@ const openUrl = async (url: string) => {
 
             <Text style={styles.heroTitle}>Signo Radio Castellón</Text>
             <Text style={styles.heroDescription}>
-              Narración de los partidos del C.D. Castellón y programación dedicada
-              a la actualidad orellut.
+               Narración de los partidos del C.D. Castellón, dirigido por los periodistas Víctor
+  Serrano, Víctor Ulldemolins y Álvaro Font
             </Text>
 
             <Pressable
@@ -197,8 +197,9 @@ const openUrl = async (url: string) => {
             </View>
 
             <Text style={styles.sectionDescription}>
-              Programas, análisis, entrevistas y retransmisiones dedicadas al C.D.
-              Castellón. Accede a los contenidos publicados por Signo Radio.
+               Programas, análisis, entrevistas y retransmisiones dedicadas al C.D.
+  Castellón. Programa dirigido por los periodistas Víctor Serrano y Víctor
+  Ulldemolins. Accede a los contenidos publicados por Signo Radio.
             </Text>
 
             <Pressable
@@ -214,7 +215,7 @@ const openUrl = async (url: string) => {
           </View>
 
           <View style={styles.collaborationCard}>
-            <Text style={styles.collaborationLabel}>EN COLABORACIÓN CON</Text>
+            <Text style={styles.collaborationLabel}>RADIO OFICIAL DE</Text>
             <Image
               source={ALBINEGROS_LOGO}
               style={styles.albinegrosLogo}
@@ -248,13 +249,14 @@ const openUrl = async (url: string) => {
               resizeMode="cover"
             />
             <View style={styles.mediaTextWrap}>
-              <Text style={styles.mediaTitle}>La Grada Albinegra</Text>
-              <Text style={styles.mediaMeta}>TeVe4 · Lunes a las 20:00</Text>
-              <Text style={styles.mediaDescription}>
-                Programa de tertulia albinegra con análisis, opinión y actualidad del
-                C.D. Castellón.
-              </Text>
-              <Text style={styles.mediaAction}>VER PROGRAMAS →</Text>
+              <Text style={styles.mediaTitle}>LA GRADA ALBINEGRA</Text>
+<Text style={styles.mediaMeta}>Dirigido por Toni Llaves</Text>
+<Text style={styles.mediaMeta}>Televisión TeVe4 · Lunes a las 20:00 h</Text>
+<Text style={styles.mediaDescription}>
+  Programa dedicado a la actualidad del C.D. Castellón, con análisis,
+  tertulia y toda la información albinegra.
+</Text>
+<Text style={styles.mediaAction}>VER PROGRAMAS →</Text>
             </View>
           </Pressable>
 
@@ -271,11 +273,14 @@ const openUrl = async (url: string) => {
               resizeMode="cover"
             />
             <View style={styles.mediaTextWrap}>
-              <Text style={styles.mediaTitle}>Conexión Orellut</Text>
-              <Text style={styles.mediaMeta}>El Periódico Mediterráneo</Text>
+              <Text style={styles.mediaTitle}>CONEXIÓN ORELLUT</Text>
+              <Text style={styles.mediaMeta}>Dirigido por José Luis Gual</Text>
+              <Text style={styles.mediaMeta}>
+  El Periódico Mediterráneo · Martes y jueves 
+              </Text>
               <Text style={styles.mediaDescription}>
-                Dos episodios semanales con José Luis Gual: partidos, claves,
-                actualidad y voces del entorno orellut.
+                Dos programas semanales para analizar la actualidad del C.D. Castellón
+  y todo lo que rodea al conjunto albinegro.
               </Text>
               <Text style={styles.mediaAction}>VER PODCASTS →</Text>
             </View>
@@ -294,12 +299,15 @@ const openUrl = async (url: string) => {
               resizeMode="cover"
             />
             <View style={styles.mediaTextWrap}>
-              <Text style={styles.mediaTitle}>La Tribuna de Castelló</Text>
-              <Text style={styles.mediaMeta}>#MeletaDeRomer</Text>
-              <Text style={styles.mediaDescription}>
-                Información, opinión, debate y actualidad deportiva del C.D.
-                Castellón con rigor, pasión y sentimiento orellut.
-              </Text>
+              <Text style={styles.mediaTitle}>LA TRIBUNA DE CASTELLÓ</Text>
+              <Text style={styles.mediaMeta}>Dirigido por Alexis Cervera</Text>
+              <Text style={styles.mediaMeta}>
+  Televisión de Castellón · Lunes a las 21:00 h
+</Text>
+<Text style={styles.mediaDescription}>
+  Programa de actualidad dedicado al C.D. Castellón, con análisis,
+  opinión y seguimiento de la actualidad albinegra.
+</Text>
               <Text style={styles.mediaAction}>VER PROGRAMAS →</Text>
             </View>
           </Pressable>

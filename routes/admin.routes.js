@@ -311,13 +311,29 @@ router.post('/api/admin/ads', adminAuth, async (req, res) => {
       return res.status(400).json({ error: 'Los sponsors deben ser un array' });
     }
 
-    await supabase.from('ads').delete().neq('id', '');
+    const { error: deleteError } = await supabase
+      .from('ads')
+      .delete()
+      .neq('id', '');
 
-    const { error } = await supabase.from('ads').insert(ads);
+    if (deleteError) {
+      return res.status(500).json({ error: deleteError.message });
+    }
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (ads.length > 0) {
+      const { error: insertError } = await supabase
+        .from('ads')
+        .insert(ads);
 
-    res.json({ success: true });
+      if (insertError) {
+        return res.status(500).json({ error: insertError.message });
+      }
+    }
+
+    res.json({
+      success: true,
+      total: ads.length,
+    });
   } catch (error) {
     res.status(500).json({
       error: 'No se pudieron guardar los sponsors',

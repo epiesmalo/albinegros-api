@@ -112,33 +112,27 @@
   </div>
 
   <div class="card">
-    <h2>Publicidad</h2>
+  <h2>Publicidad</h2>
 
-<label>Imagen anuncio 1 (URL)</label>
-<input id="ad1Image" />    
-<label>Título anuncio 1</label>
-    <input id="ad1Title" />
+  <label>Imagen (URL)</label>
+  <input id="adImage" placeholder="https://..." />
 
-    <label>Texto anuncio 1</label>
-    <input id="ad1Text" />
+  <label>Título</label>
+  <input id="adTitle" placeholder="Título del anuncio" />
 
-    <label>Link anuncio 1</label>
-    <input id="ad1Link" />
-<label>Imagen anuncio 2 (URL)</label>
-<input id="ad2Image" />
-    
-<label>Título anuncio 2</label>
-    <input id="ad2Title" />
+  <label>Texto</label>
+  <input id="adText" placeholder="Descripción del anuncio" />
 
-    <label>Texto anuncio 2</label>
-    <input id="ad2Text" />
+  <label>Link</label>
+  <input id="adLink" placeholder="https://..." />
 
-    <label>Link anuncio 2</label>
-    <input id="ad2Link" />
+  <button onclick="addAd()">Añadir publicidad</button>
 
-    <button onclick="saveAds()">Guardar publicidad</button>
-    <div id="adsMsg" class="success"></div>
-  </div>
+  <div id="adsMsg" class="success"></div>
+
+  <h3>Publicidad actual</h3>
+  <div id="adsList"></div>
+</div>
 <div class="card">
   <h2>Clasificación</h2>
 
@@ -206,6 +200,7 @@
   <script>
 
 let galleryItems = [];
+let adsItems = [];
 
 function logout() {
   fetch('/admin.html', {
@@ -243,24 +238,18 @@ const nextMatch = await nextMatchRes.json();
       document.getElementById('aboutText').value = about.text || '';
 
       const adsRes = await fetch('/api/admin/ads');
-      const ads = await adsRes.json();
+adsItems = await adsRes.json();
+
+if (!Array.isArray(adsItems)) {
+  adsItems = [];
+}
+
+renderAdsList();
 const galleryRes = await fetch('/api/admin/gallery');
 galleryItems = await galleryRes.json();
 renderGalleryList();
 
-      if (Array.isArray(ads) && ads[0]) {
-        document.getElementById('ad1Image').value = ads[0].image || '';
-        document.getElementById('ad1Title').value = ads[0].title || '';
-        document.getElementById('ad1Text').value = ads[0].text || '';
-        document.getElementById('ad1Link').value = ads[0].link || '';
-      }
-
-      if (Array.isArray(ads) && ads[1]) {
-        document.getElementById('ad2Image').value = ads[1].image || '';
-        document.getElementById('ad2Title').value = ads[1].title || '';
-        document.getElementById('ad2Text').value = ads[1].text || '';
-        document.getElementById('ad2Link').value = ads[1].link || '';
-      }
+     
     } catch (error) {
       console.error('Error cargando datos del panel:', error);
       alert('Error cargando datos del panel. Mira la consola del navegador.');
@@ -432,37 +421,106 @@ async function saveGallery() {
 
     document.getElementById('aboutMsg').innerText = 'Sección guardada';
   }
+function renderAdsList() {
+  const container = document.getElementById('adsList');
 
-async function saveAds() {
-  const payload = [
-    {
-      id: '1',
-      image: document.getElementById('ad1Image').value,
-      title: document.getElementById('ad1Title').value,
-      text: document.getElementById('ad1Text').value,
-      link: document.getElementById('ad1Link').value
-    },
-    {
-      id: '2',
-      image: document.getElementById('ad2Image').value,
-      title: document.getElementById('ad2Title').value,
-      text: document.getElementById('ad2Text').value,
-      link: document.getElementById('ad2Link').value
-    }
-  ];
+  if (!adsItems.length) {
+    container.innerHTML = '<p>No hay publicidad actualmente.</p>';
+    return;
+  }
 
-  const response = await fetch('/api/admin/ads', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
+  container.innerHTML = adsItems.map((item, index) => `
+    <div style="display:flex; gap:12px; align-items:center; border:1px solid #ddd; border-radius:12px; padding:10px; margin-bottom:10px;">
+      
+      <img
+        src="${item.image || ''}"
+        style="width:90px; height:70px; object-fit:cover; border-radius:8px;"
+      />
 
-  const result = await response.json();
-  console.log('ADS GUARDADOS:', result);
+      <div style="flex:1;">
+        <strong>${item.title || 'Sin título'}</strong><br/>
+        <small>${item.text || ''}</small>
+      </div>
 
-  document.getElementById('adsMsg').innerText = 'Publicidad guardada correctamente';
+      <button
+        onclick="deleteAd(${index})"
+        style="background:#c62828; margin:0;"
+      >
+        Eliminar
+      </button>
+
+    </div>
+  `).join('');
 }
 
+function addAd() {
+  const image = document.getElementById('adImage').value.trim();
+  const title = document.getElementById('adTitle').value.trim();
+  const text = document.getElementById('adText').value.trim();
+  const link = document.getElementById('adLink').value.trim();
+
+  if (!image && !title && !text && !link) {
+    alert('Rellena al menos un campo del anuncio.');
+    return;
+  }
+
+  adsItems.push({
+    id: String(Date.now()),
+    image,
+    title,
+    text,
+    link
+  });
+
+  document.getElementById('adImage').value = '';
+  document.getElementById('adTitle').value = '';
+  document.getElementById('adText').value = '';
+  document.getElementById('adLink').value = '';
+
+  renderAdsList();
+  saveAds();
+}
+
+function deleteAd(index) {
+  const confirmed = confirm('¿Quieres eliminar esta publicidad?');
+
+  if (!confirmed) {
+    return;
+  }
+
+  adsItems.splice(index, 1);
+
+  renderAdsList();
+  saveAds();
+}
+
+async function saveAds() {
+  try {
+    const response = await fetch('/api/admin/ads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(adsItems)
+    });
+
+    const result = await response.json();
+
+    console.log('ADS GUARDADOS:', result);
+
+    if (!response.ok) {
+      alert(
+        'Error guardando publicidad: ' +
+        (result.error || 'Error desconocido')
+      );
+      return;
+    }
+
+    document.getElementById('adsMsg').innerText =
+      'Publicidad guardada correctamente';
+  } catch (error) {
+    console.error('ERROR SAVE ADS:', error);
+    alert('No se pudo guardar la publicidad.');
+  }
+}
   window.onload = loadData;
 </script>
 </body>
