@@ -1,5 +1,5 @@
-import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 
 import { colors } from '../../theme/colors';
-import { CACHE_KEYS, formatCacheAge, getCache, saveCache } from '../../utils/cache';
+import { CACHE_KEYS, getCache, saveCache } from '../../utils/cache';
 
 type StandingItem = {
   teamId: number | null;
@@ -134,15 +134,19 @@ const loadStandings = async (isRefresh = false) => {
   }
 };
 
-  useEffect(() => {
-  loadStandings();
+ useFocusEffect(
+  useCallback(() => {
+    loadStandings();
 
-  const interval = setInterval(() => {
-    loadStandings(true);
-  }, 5 * 60 * 1000);
+    const interval = setInterval(() => {
+      loadStandings(true);
+    }, 60_000);
 
-  return () => clearInterval(interval);
-}, []);
+    return () => {
+      clearInterval(interval);
+    };
+  }, [])
+);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -231,19 +235,6 @@ const loadStandings = async (isRefresh = false) => {
       </View>
       </View>
 
-      {usingCachedData && (
-        <View>
-          <View style={styles.cachedBanner}>
-            <View style={styles.cachedDot} />
-            <Text style={styles.cachedText}>
-              Mostrando datos guardados
-              {cacheSavedAt
-                ? ` · ${formatCacheAge(cacheSavedAt, currentTime)}`
-                : ''}
-            </Text>
-          </View>
-        </View>
-      )}
 
       {loading && <ActivityIndicator size="large" color={colors.accent} style={styles.loader} />}
       {error ? (

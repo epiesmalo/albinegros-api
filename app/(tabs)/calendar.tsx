@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 
 import { colors } from '../../theme/colors';
-import { CACHE_KEYS, formatCacheAge, getCache, saveCache } from '../../utils/cache';
+import { CACHE_KEYS, getCache, saveCache } from '../../utils/cache';
 
 type FixtureItem = {
   id: number;
@@ -570,20 +570,7 @@ return () => {
           </View>
         </View>
 
-        {usingCachedData && (
-          <View>
-            <View style={styles.cachedBanner}>
-              <View style={styles.cachedDot} />
-              <Text style={styles.cachedText}>
-                Mostrando datos guardados
-                {cacheSavedAt
-                  ? ` · ${formatCacheAge(cacheSavedAt, currentTime)}`
-                  : ''}
-              </Text>
-            </View>
-         </View>
-        )}
-
+  
         {loading && <CalendarSkeleton />}
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
