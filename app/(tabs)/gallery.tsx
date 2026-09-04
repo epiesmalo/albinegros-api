@@ -85,7 +85,7 @@ function GallerySkeleton() {
 export default function GalleryScreen() {
   const insets = useSafeAreaInsets();
 
-  const [selectedCategory, setSelectedCategory] = useState('tifos');
+  const [selectedCategory, setSelectedCategory] = useState('castalia');
 
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
