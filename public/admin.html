@@ -99,17 +99,110 @@
   </div>
 
   <div class="card">
-    <h2>¿Quiénes somos?</h2>
+  <h2>¿Quiénes somos?</h2>
 
-    <label>Título</label>
-    <input id="aboutTitle" />
+  <h3>Nuestra historia</h3>
 
-    <label>Texto</label>
-    <textarea id="aboutText" rows="6"></textarea>
+  <label>Título</label>
+  <input id="aboutTitle" />
 
-    <button onclick="saveAbout()">Guardar sección</button>
-    <div id="aboutMsg" class="success"></div>
-  </div>
+  <label>Historia</label>
+  <textarea id="aboutText" rows="8"></textarea>
+
+  <hr style="margin:24px 0;" />
+
+  <h3>Equipo</h3>
+
+  <label>Fundador</label>
+  <input id="founderName" placeholder="Víctor Jara" />
+
+  <label>Cargo del fundador</label>
+  <input
+    id="founderRole"
+    placeholder="Fundador y creador de Albinegros Castellón"
+  />
+
+  <label>Descripción del fundador</label>
+  <textarea id="founderText" rows="4"></textarea>
+
+  <label>Socio</label>
+  <input id="partnerName" placeholder="Andros Martínez" />
+
+  <label>Cargo del socio</label>
+  <input
+    id="partnerRole"
+    placeholder="Socio de Albinegros Castellón"
+  />
+
+  <label>Descripción del socio</label>
+  <textarea id="partnerText" rows="4"></textarea>
+
+  <hr style="margin:24px 0;" />
+
+  <h3>Colabora con nosotros</h3>
+
+  <label>Título comercial</label>
+  <input
+    id="collaborateTitle"
+    placeholder="¿Quieres que tu negocio llegue a miles de personas?"
+  />
+
+  <label>Texto introductorio</label>
+  <textarea id="collaborateText" rows="5"></textarea>
+
+  <label>Visualizaciones mensuales</label>
+  <input id="monthlyViews" placeholder="3000000" />
+
+  <label>Seguidores totales</label>
+  <input id="totalFollowers" placeholder="24000" />
+
+  <label>Seguidores en Instagram</label>
+  <input id="instagramFollowers" placeholder="17000" />
+
+  <label>Servicios / posibilidades de colaboración</label>
+  <textarea
+    id="collaborateServices"
+    rows="5"
+    placeholder="Publicidad en app, web, redes sociales, stories, sorteos..."
+  ></textarea>
+
+  <label>Email de contacto</label>
+  <input
+    id="contactEmail"
+    placeholder="contacto@albinegroscastellon.com"
+  />
+
+  <hr style="margin:24px 0;" />
+
+  <h3>Nuestras redes</h3>
+
+  <label>Instagram - seguidores</label>
+  <input id="socialInstagramFollowers" />
+
+  <label>Instagram - enlace</label>
+  <input id="socialInstagramUrl" placeholder="https://..." />
+
+  <label>Facebook - seguidores</label>
+  <input id="socialFacebookFollowers" />
+
+  <label>Facebook - enlace</label>
+  <input id="socialFacebookUrl" placeholder="https://..." />
+
+  <label>X - seguidores</label>
+  <input id="socialXFollowers" />
+
+  <label>X - enlace</label>
+  <input id="socialXUrl" placeholder="https://..." />
+
+  <label>TikTok - seguidores</label>
+  <input id="socialTiktokFollowers" />
+
+  <label>TikTok - enlace</label>
+  <input id="socialTiktokUrl" placeholder="https://..." />
+
+  <button onclick="saveAbout()">Guardar sección</button>
+  <div id="aboutMsg" class="success"></div>
+</div>
 
   <div class="card">
   <h2>Publicidad</h2>
@@ -229,11 +322,77 @@ const nextMatch = await nextMatchRes.json();
       document.getElementById('teamLogo').value = nextMatch.teamLogo || '';
       document.getElementById('opponentLogo').value = nextMatch.opponentLogo || '';
 
-      const aboutRes = await fetch('/api/admin/about');
-      const about = await aboutRes.json();
+const aboutRes = await fetch('/api/admin/about');
+const about = await aboutRes.json();
 
-      document.getElementById('aboutTitle').value = about.title || '';
-      document.getElementById('aboutText').value = about.text || '';
+document.getElementById('aboutTitle').value =
+  about.history?.title || about.title || '';
+
+document.getElementById('aboutText').value =
+  about.history?.text || about.text || '';
+
+document.getElementById('founderName').value =
+  about.team?.founderName || '';
+
+document.getElementById('founderRole').value =
+  about.team?.founderRole || '';
+
+document.getElementById('founderText').value =
+  about.team?.founderText || '';
+
+document.getElementById('partnerName').value =
+  about.team?.partnerName || '';
+
+document.getElementById('partnerRole').value =
+  about.team?.partnerRole || '';
+
+document.getElementById('partnerText').value =
+  about.team?.partnerText || '';
+
+document.getElementById('collaborateTitle').value =
+  about.collaborate?.title || '';
+
+document.getElementById('collaborateText').value =
+  about.collaborate?.text || '';
+
+document.getElementById('monthlyViews').value =
+  about.collaborate?.monthlyViews || '';
+
+document.getElementById('totalFollowers').value =
+  about.collaborate?.totalFollowers || '';
+
+document.getElementById('instagramFollowers').value =
+  about.collaborate?.instagramFollowers || '';
+
+document.getElementById('collaborateServices').value =
+  about.collaborate?.services || '';
+
+document.getElementById('contactEmail').value =
+  about.collaborate?.contactEmail || '';
+
+document.getElementById('socialInstagramFollowers').value =
+  about.socials?.instagram?.followers || '';
+
+document.getElementById('socialInstagramUrl').value =
+  about.socials?.instagram?.url || '';
+
+document.getElementById('socialFacebookFollowers').value =
+  about.socials?.facebook?.followers || '';
+
+document.getElementById('socialFacebookUrl').value =
+  about.socials?.facebook?.url || '';
+
+document.getElementById('socialXFollowers').value =
+  about.socials?.x?.followers || '';
+
+document.getElementById('socialXUrl').value =
+  about.socials?.x?.url || '';
+
+document.getElementById('socialTiktokFollowers').value =
+  about.socials?.tiktok?.followers || '';
+
+document.getElementById('socialTiktokUrl').value =
+  about.socials?.tiktok?.url || '';
 
       const adsRes = await fetch('/api/admin/ads');
 adsItems = await adsRes.json();
@@ -405,20 +564,80 @@ async function saveGallery() {
     document.getElementById('nextMatchMsg').innerText = 'Próximo partido guardado';
   }
 
-  async function saveAbout() {
-    const payload = {
+async function saveAbout() {
+  const payload = {
+    history: {
       title: document.getElementById('aboutTitle').value,
       text: document.getElementById('aboutText').value
-    };
+    },
 
-    await fetch('/api/admin/about', {
+    team: {
+      founderName: document.getElementById('founderName').value,
+      founderRole: document.getElementById('founderRole').value,
+      founderText: document.getElementById('founderText').value,
+
+      partnerName: document.getElementById('partnerName').value,
+      partnerRole: document.getElementById('partnerRole').value,
+      partnerText: document.getElementById('partnerText').value
+    },
+
+    collaborate: {
+      title: document.getElementById('collaborateTitle').value,
+      text: document.getElementById('collaborateText').value,
+      monthlyViews: document.getElementById('monthlyViews').value,
+      totalFollowers: document.getElementById('totalFollowers').value,
+      instagramFollowers: document.getElementById('instagramFollowers').value,
+      services: document.getElementById('collaborateServices').value,
+      contactEmail: document.getElementById('contactEmail').value
+    },
+
+    socials: {
+      instagram: {
+        followers: document.getElementById('socialInstagramFollowers').value,
+        url: document.getElementById('socialInstagramUrl').value
+      },
+
+      facebook: {
+        followers: document.getElementById('socialFacebookFollowers').value,
+        url: document.getElementById('socialFacebookUrl').value
+      },
+
+      x: {
+        followers: document.getElementById('socialXFollowers').value,
+        url: document.getElementById('socialXUrl').value
+      },
+
+      tiktok: {
+        followers: document.getElementById('socialTiktokFollowers').value,
+        url: document.getElementById('socialTiktokUrl').value
+      }
+    }
+  };
+
+  try {
+    const response = await fetch('/api/admin/about', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
 
-    document.getElementById('aboutMsg').innerText = 'Sección guardada';
+    const result = await response.json();
+
+    if (!response.ok) {
+      alert(
+        'Error guardando Quiénes somos: ' +
+        (result.error || 'Error desconocido')
+      );
+      return;
+    }
+
+    document.getElementById('aboutMsg').innerText =
+      'Sección guardada correctamente';
+  } catch (error) {
+    console.error('ERROR SAVE ABOUT:', error);
+    alert('No se pudo guardar la sección Quiénes somos.');
   }
+}
 function renderAdsList() {
   const container = document.getElementById('adsList');
 

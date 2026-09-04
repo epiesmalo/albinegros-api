@@ -245,14 +245,42 @@ router.get('/api/admin/about', async (req, res) => {
     const { data, error } = await supabase
       .from('about')
       .select('*')
-      .eq('id', '1')
-      .single();
+      .order('id', { ascending: true });
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    const rows = data || [];
+
+    const historyRow = rows.find((item) => String(item.id) === '1');
+    const teamRow = rows.find((item) => String(item.id) === '2');
+    const collaborateRow = rows.find((item) => String(item.id) === '3');
+    const socialsRow = rows.find((item) => String(item.id) === '4');
+
+    const parseData = (value) => {
+      try {
+        return value ? JSON.parse(value) : {};
+      } catch {
+        return {};
+      }
+    };
 
     res.json({
-      title: data.title,
-      text: data.text,
+      // Compatibilidad con la versión actual de la app
+      title: historyRow?.title || '',
+      text: historyRow?.text || '',
+
+      history: {
+        title: historyRow?.title || '',
+        text: historyRow?.text || '',
+      },
+
+      team: parseData(teamRow?.text),
+
+      collaborate: parseData(collaborateRow?.text),
+
+      socials: parseData(socialsRow?.text),
     });
   } catch (error) {
     res.status(500).json({
@@ -264,17 +292,45 @@ router.get('/api/admin/about', async (req, res) => {
 
 router.post('/api/admin/about', adminAuth, async (req, res) => {
   try {
-    const payload = {
-      id: '1',
-      title: req.body.title,
-      text: req.body.text,
+    const history = req.body.history || {
+      title: req.body.title || '',
+      text: req.body.text || '',
     };
+
+    const team = req.body.team || {};
+    const collaborate = req.body.collaborate || {};
+    const socials = req.body.socials || {};
+
+    const rows = [
+      {
+        id: '1',
+        title: history.title || '',
+        text: history.text || '',
+      },
+      {
+        id: '2',
+        title: 'team',
+        text: JSON.stringify(team),
+      },
+      {
+        id: '3',
+        title: 'collaborate',
+        text: JSON.stringify(collaborate),
+      },
+      {
+        id: '4',
+        title: 'socials',
+        text: JSON.stringify(socials),
+      },
+    ];
 
     const { error } = await supabase
       .from('about')
-      .upsert(payload);
+      .upsert(rows);
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
 
     res.json({ success: true });
   } catch (error) {
