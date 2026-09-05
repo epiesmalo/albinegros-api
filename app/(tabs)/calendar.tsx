@@ -771,7 +771,27 @@ const minute =
         {!loading && !error && (
           <>
             {selectedRoundMatches.length > 0 ? (
-              selectedRoundMatches.map(renderMatch)
+              [...selectedRoundMatches]
+  .sort((a, b) => {
+    const liveStatuses = ['1H', '2H', 'ET', 'P', 'LIVE'];
+    const pausedStatuses = ['HT', 'BT'];
+
+    const getPriority = (status?: string | null) => {
+      if (liveStatuses.includes(status || '')) return 0;
+      if (pausedStatuses.includes(status || '')) return 1;
+      return 2;
+    };
+
+    const priorityDifference =
+      getPriority(a.statusShort) - getPriority(b.statusShort);
+
+    if (priorityDifference !== 0) {
+      return priorityDifference;
+    }
+
+    return new Date(a.date).getTime() - new Date(b.date).getTime();
+  })
+  .map(renderMatch)
             ) : (
               <View>
   <View style={styles.emptyCard}>
