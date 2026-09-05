@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import { File, Paths } from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
 
@@ -44,7 +44,7 @@ const galleryCategories = [
 const { width, height } = Dimensions.get('window');
 const CARD_GAP = 12;
 const CARD_WIDTH = (width - 16 * 2 - CARD_GAP) / 2;
-const FAVORITES_STORAGE_KEY = 'albinegros_gallery_favorites';
+
 
 
 
@@ -88,7 +88,7 @@ export default function GalleryScreen() {
   const [selectedCategory, setSelectedCategory] = useState('castalia');
 
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
-  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+  
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
@@ -96,10 +96,9 @@ export default function GalleryScreen() {
   const [cacheSavedAt, setCacheSavedAt] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(Date.now());
 
-  useEffect(() => {
-    loadGallery();
-    loadFavorites();
-  }, []);
+ useEffect(() => {
+  loadGallery();
+}, []);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -179,33 +178,15 @@ export default function GalleryScreen() {
 }
 };
 
-  const loadFavorites = async () => {
-    try {
-      const savedFavorites = await AsyncStorage.getItem(FAVORITES_STORAGE_KEY);
 
-      if (savedFavorites) {
-        setFavoriteIds(JSON.parse(savedFavorites));
-      }
-    } catch (error) {
-      console.log('Error cargando favoritos:', error);
-    }
-  };
 
-  const getCategoryCount = (categoryId: string) => {
-    if (categoryId === 'favoritos') {
-      return galleryItems.filter((item) => favoriteIds.includes(item.id)).length;
-    }
+const getCategoryCount = (categoryId: string) => {
+  return galleryItems.filter((item) => item.category === categoryId).length;
+};
 
-    return galleryItems.filter((item) => item.category === categoryId).length;
-  };
-
-  const images = useMemo(() => {
-    if (selectedCategory === 'favoritos') {
-      return galleryItems.filter((item) => favoriteIds.includes(item.id));
-    }
-
-    return galleryItems.filter((item) => item.category === selectedCategory);
-  }, [galleryItems, selectedCategory, favoriteIds]);
+const images = useMemo(() => {
+  return galleryItems.filter((item) => item.category === selectedCategory);
+}, [galleryItems, selectedCategory]);
 
 
 
@@ -238,30 +219,9 @@ export default function GalleryScreen() {
     }
   };
 
-  const isFavorite = (imageId: string) => {
-    return favoriteIds.includes(imageId);
-  };
+ 
 
-  const toggleFavorite = async (imageId: string) => {
-    try {
-      const updatedFavorites = favoriteIds.includes(imageId)
-        ? favoriteIds.filter((id) => id !== imageId)
-        : [...favoriteIds, imageId];
 
-      setFavoriteIds(updatedFavorites);
-
-      await AsyncStorage.setItem(
-        FAVORITES_STORAGE_KEY,
-        JSON.stringify(updatedFavorites)
-      );
-
-      if (selectedCategory === 'favoritos' && updatedFavorites.length === 0) {
-        setSelectedImageIndex(null);
-      }
-    } catch (error) {
-      console.log('Error guardando favorito:', error);
-    }
-  };
 
   const downloadImage = async () => {
     if (!selectedImage) return;
@@ -400,17 +360,7 @@ export default function GalleryScreen() {
   cachePolicy="disk"
 />
 
-      <Pressable
-        style={styles.favoriteButton}
-        onPress={(event) => {
-          event.stopPropagation();
-          toggleFavorite(item.id);
-        }}
-      >
-        <Text style={styles.favoriteButtonText}>
-          {isFavorite(item.id) ? '❤️' : '🤍'}
-        </Text>
-      </Pressable>
+ 
 
       <Text
         style={styles.imageTitle}
@@ -618,25 +568,7 @@ export default function GalleryScreen() {
                 </Pressable>
               </View>
 
-              <Pressable
-                style={[
-                  styles.modalFavoriteButton,
-                  selectedImage &&
-                    isFavorite(selectedImage.id) &&
-                    styles.modalFavoriteButtonActive,
-                ]}
-                onPress={() => {
-                  if (selectedImage) {
-                    toggleFavorite(selectedImage.id);
-                  }
-                }}
-              >
-                <Text style={styles.modalFavoriteButtonText}>
-                  {selectedImage && isFavorite(selectedImage.id)
-                    ? '❤️ Quitar de favoritos'
-                    : '🤍 Añadir a favoritos'}
-                </Text>
-              </Pressable>
+              
 
               {selectedCategory === 'fondos' && (
                 <View style={styles.wallpaperActions}>
@@ -1034,46 +966,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
 
-  favoriteButton: {
-    position: 'absolute',
-    top: 13,
-    left: 13,
-    backgroundColor: 'rgba(5,5,5,0.82)',
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
 
-  favoriteButtonText: {
-    fontSize: 17,
-  },
-
-  modalFavoriteButton: {
-    minHeight: 38,
-    backgroundColor: '#111111',
-    borderWidth: 1,
-    borderColor: '#303030',
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    marginBottom: 10,
-    justifyContent: 'center',
-  },
-
-  modalFavoriteButtonActive: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
-  },
-
-  modalFavoriteButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '900',
-    fontSize: 12,
-  },
 
   modalOverlay: {
     flex: 1,
