@@ -204,6 +204,29 @@
   <div id="aboutMsg" class="success"></div>
 </div>
 
+<div class="card">
+  <h2>Última hora</h2>
+
+  <label>Texto del ticker</label>
+  <input
+    id="tickerText"
+    placeholder="Escribe aquí la noticia de última hora"
+  />
+
+  <label style="display:flex; align-items:center; gap:8px; margin-top:14px;">
+    <input
+      id="tickerActive"
+      type="checkbox"
+      style="width:auto;"
+    />
+    Mostrar ticker en Inicio
+  </label>
+
+  <button onclick="saveTicker()">Guardar última hora</button>
+
+  <div id="tickerMsg" class="success"></div>
+</div>
+
   <div class="card">
   <h2>Publicidad</h2>
 
@@ -394,6 +417,14 @@ document.getElementById('socialTiktokFollowers').value =
 document.getElementById('socialTiktokUrl').value =
   about.socials?.tiktok?.url || '';
 
+  const tickerRes = await fetch('/api/admin/ticker');
+const ticker = await tickerRes.json();
+
+document.getElementById('tickerText').value =
+  ticker.text || '';
+
+document.getElementById('tickerActive').checked =
+  Boolean(ticker.active);
       const adsRes = await fetch('/api/admin/ads');
 adsItems = await adsRes.json();
 
@@ -738,6 +769,41 @@ async function saveAds() {
     alert('No se pudo guardar la publicidad.');
   }
 }
+
+async function saveTicker() {
+  try {
+    const text = document.getElementById('tickerText').value.trim();
+    const active = document.getElementById('tickerActive').checked;
+
+    const response = await fetch('/api/admin/ticker', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        text,
+        active
+      })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      alert(
+        'Error guardando última hora: ' +
+        (result.error || 'Error desconocido')
+      );
+      return;
+    }
+
+    document.getElementById('tickerMsg').innerText =
+      'Última hora guardada correctamente';
+  } catch (error) {
+    console.error('ERROR SAVE TICKER:', error);
+    alert('No se pudo guardar la última hora.');
+  }
+}
+
   window.onload = loadData;
 </script>
 </body>

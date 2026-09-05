@@ -340,6 +340,63 @@ router.post('/api/admin/about', adminAuth, async (req, res) => {
     });
   }
 });
+router.get('/api/admin/ticker', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('home_ticker')
+      .select('*')
+      .eq('id', 1)
+      .single();
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    res.json({
+      text: data?.text || '',
+      active: Boolean(data?.active),
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: 'No se pudo obtener el ticker',
+      details: error.message,
+    });
+  }
+});
+
+router.post('/api/admin/ticker', adminAuth, async (req, res) => {
+  try {
+    const text = typeof req.body.text === 'string'
+      ? req.body.text.trim()
+      : '';
+
+    const active = Boolean(req.body.active);
+
+    const { error } = await supabase
+      .from('home_ticker')
+      .upsert({
+        id: 1,
+        text,
+        active,
+        updated_at: new Date().toISOString(),
+      });
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    res.json({
+      success: true,
+      text,
+      active,
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: 'No se pudo guardar el ticker',
+      details: error.message,
+    });
+  }
+});
 
 router.get('/api/admin/ads', async (req, res) => {
   try {
