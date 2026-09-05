@@ -642,18 +642,7 @@ export default function MatchDetailScreen() {
 
     return (
       <View>
-        <View style={styles.chatHeaderCard}>
-          <View>
-            <Text style={styles.chatEyebrow}>CONVERSACIÓN DEL PARTIDO</Text>
-            <Text style={styles.chatTitle}>💬 {comments.length} comentarios</Text>
-          </View>
-
-          <Text style={styles.changeNick}>@{nickname}</Text>
-        </View>
-
-        <Text style={styles.chatRules}>
-          Respeta al resto de orelluts. El spam y los mensajes ofensivos podrán ser eliminados.
-        </Text>
+      
 
         {commentsLoading ? (
           <View style={styles.commentsLoader}>

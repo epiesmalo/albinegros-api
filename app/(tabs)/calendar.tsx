@@ -1,6 +1,8 @@
+﻿import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Animated,
   FlatList,
   Image,
   Modal,
@@ -10,7 +12,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 
 import { colors } from '../../theme/colors';
@@ -30,6 +32,10 @@ type FixtureItem = {
   homeGoals: number | null;
   awayGoals: number | null;
   venue: string;
+  statusShort?: string | null;
+  statusLong?: string | null;
+  elapsed?: number | null;
+  extra?: number | null;
 };
 
 const getLogoUrl = (teamName: string, logo?: string) => {
@@ -81,7 +87,9 @@ function CalendarSkeleton() {
 }
 
 export default function CalendarScreen() {
+  const [livePulse] = useState(() => new Animated.Value(1));
   const [fixtures, setFixtures] = useState<FixtureItem[]>([]);
+  const fixturesRef = useRef<FixtureItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -93,6 +101,31 @@ export default function CalendarScreen() {
   const [cacheSavedAt, setCacheSavedAt] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+  const animation = Animated.loop(
+    Animated.sequence([
+      Animated.timing(livePulse, {
+        toValue: 0.2,
+        duration: 650,
+        useNativeDriver: true,
+      }),
+      Animated.timing(livePulse, {
+        toValue: 1,
+        duration: 650,
+        useNativeDriver: true,
+      }),
+    ])
+  );
+
+  animation.start();
+
+  return () => animation.stop();
+}, [livePulse]);
+
+  useEffect(() => {
+  fixturesRef.current = fixtures;
+}, [fixtures]);
 
   const loadCalendar = async (isRefresh = false) => {
   try {
@@ -133,16 +166,58 @@ export default function CalendarScreen() {
       throw new Error('La respuesta del calendario no es válida.');
     }
 
-    const updatedData = await refreshTodayFixtures(data);
+const updatedData = await refreshTodayFixtures(data);
 
-    setFixtures(updatedData);
-    setUsingCachedData(false);
-    setCacheSavedAt(null);
-    setCurrentTime(Date.now());
+const previousFixtures = fixturesRef.current;
 
-    await saveCache(CACHE_KEYS.CALENDAR, updatedData);
+const mergedData = updatedData.map((item) => {
+ const previousItem = previousFixtures.find(
+  (previous) =>
+    String(previous.fixtureId) === String(item.fixtureId)
+);
+
+  if (!previousItem) {
+    return item;
+  }
+
+ return {
+  ...item,
+  homeGoals:
+    item.homeGoals ?? previousItem.homeGoals ?? null,
+  awayGoals:
+    item.awayGoals ?? previousItem.awayGoals ?? null,
+  statusShort:
+    item.statusShort ?? previousItem.statusShort ?? null,
+  statusLong:
+    item.statusLong ?? previousItem.statusLong ?? null,
+  elapsed:
+    item.elapsed ?? previousItem.elapsed ?? null,
+  extra:
+    item.extra ?? previousItem.extra ?? null,
+};
+});
+
+fixturesRef.current = mergedData;
+const liveMatchDebug = mergedData.find(
+  (item) => item.statusShort === '1H' || item.statusShort === '2H'
+);
+
+if (liveMatchDebug) {
+  console.log(
+    '🟢 LIVE UPDATE:',
+    liveMatchDebug.elapsed,
+    liveMatchDebug.homeGoals,
+    liveMatchDebug.awayGoals
+  );
+}
+setFixtures(mergedData);
+setUsingCachedData(false);
+setCacheSavedAt(null);
+setCurrentTime(Date.now());
+
+await saveCache(CACHE_KEYS.CALENDAR, mergedData);
   } catch (err) {
-    console.log('Error cargando calendario:', err);
+  console.log('🔴 ERROR CALENDARIO - ENTRANDO EN CATCH:', err);
 
     const cachedCalendar = await getCache<FixtureItem[]>(
       CACHE_KEYS.CALENDAR
@@ -152,8 +227,10 @@ export default function CalendarScreen() {
       Array.isArray(cachedCalendar?.data) &&
       cachedCalendar.data.length > 0
     ) {
-      setFixtures(cachedCalendar.data);
-      setUsingCachedData(true);
+  fixturesRef.current = cachedCalendar.data;
+setFixtures(cachedCalendar.data);
+setUsingCachedData(true);
+setUsingCachedData(true);
       setCacheSavedAt(cachedCalendar.savedAt);
       setCurrentTime(Date.now());
       setError('');
@@ -166,73 +243,57 @@ export default function CalendarScreen() {
     setRefreshing(false);
   }
 };
-  const refreshTodayFixtures = async (calendarData: FixtureItem[]) => {
-    try {
-      const today = new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'Europe/Madrid',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      }).format(new Date());
-      const yesterdayDate = new Date();
-yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+ const refreshTodayFixtures = async (calendarData: FixtureItem[]) => {
+  try {
+    const response = await fetch(
+      'https://api.albinegroscastellon.com/api/football/live'
+    );
 
-const yesterday = new Intl.DateTimeFormat('en-CA', {
-  timeZone: 'Europe/Madrid',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-}).format(yesterdayDate);
-
-      const updatedFixtures = await Promise.all(
-        calendarData.map(async (item) => {
-          if (!item.fixtureId || !item.date) {
-            return item;
-          }
-
-          const matchDate = new Intl.DateTimeFormat('en-CA', {
-            timeZone: 'Europe/Madrid',
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-          }).format(new Date(item.date));
-
-          if (matchDate !== today && matchDate !== yesterday) {
-  return item;
-}
-
-          try {
-            const response = await fetch(
-              `https://api.albinegroscastellon.com/api/football/fixture/${item.fixtureId}/details`
-            );
-
-            if (!response.ok) {
-              return item;
-            }
-
-            const detail = await response.json();
-
-            if (!detail?.ok) {
-              return item;
-            }
-
-            return {
-              ...item,
-              homeGoals: detail.goals?.home ?? item.homeGoals,
-              awayGoals: detail.goals?.away ?? item.awayGoals,
-            };
-          } catch {
-            return item;
-          }
-        })
-      );
-
-      return updatedFixtures;
-    } catch (error) {
-      console.log('Error actualizando partidos de hoy:', error);
+    if (!response.ok) {
       return calendarData;
     }
-  };
+
+    const data = await response.json();
+
+    if (!data?.ok || !Array.isArray(data.matches)) {
+      return calendarData;
+    }
+
+    return calendarData.map((item) => {
+      if (!item.fixtureId) {
+        return item;
+      }
+
+      const liveMatch = data.matches.find(
+        (match: any) =>
+          String(match.fixtureId) === String(item.fixtureId)
+      );
+
+      if (!liveMatch) {
+        return item;
+      }
+
+      return {
+        ...item,
+        homeGoals:
+          liveMatch.goals?.home ?? item.homeGoals ?? null,
+        awayGoals:
+          liveMatch.goals?.away ?? item.awayGoals ?? null,
+        statusShort:
+          liveMatch.status?.short ?? item.statusShort ?? null,
+        statusLong:
+          liveMatch.status?.long ?? item.statusLong ?? null,
+        elapsed:
+          liveMatch.status?.elapsed ?? item.elapsed ?? null,
+        extra:
+          liveMatch.status?.extra ?? item.extra ?? null,
+      };
+    });
+  } catch (error) {
+    console.log('Error actualizando partidos en directo:', error);
+    return calendarData;
+  }
+};
 
   
 
@@ -372,40 +433,111 @@ return () => {
       </Text>
     );
   };
+const renderLiveStatus = (item: FixtureItem) => {
+  const short = item.statusShort || '';
 
-  const renderMatch = (item: FixtureItem) => {
-    const isCastellon = isCastellonTeam(item.homeTeam) || isCastellonTeam(item.awayTeam);
+  const liveStatuses = ['1H', '2H', 'ET', 'P', 'LIVE'];
+  const pausedStatuses = ['HT', 'BT'];
+
+  if (liveStatuses.includes(short)) {
+const minute =
+  item.elapsed !== null && item.elapsed !== undefined
+    ? item.elapsed === 45 && item.extra
+      ? `${item.elapsed}+${item.extra}'`
+      : item.elapsed === 90 && item.extra
+        ? `${item.elapsed}+${item.extra}'`
+        : `${item.elapsed}'`
+    : 'EN VIVO';
 
     return (
-      <View
-  key={item.id}
-  style={styles.animatedFullWidth}
->
-        <Pressable
-          disabled={!item.fixtureId}
-          onPress={() => {
-            if (!item.fixtureId) return;
+      <View style={styles.liveStatusRow}>
+        <View style={styles.liveDot} />
+        <Text style={styles.liveStatusText}>
+          EN VIVO · {minute}
+        </Text>
+      </View>
+    );
+  }
 
-            router.push({
-              pathname: '/match/[fixtureId]',
-              params: { fixtureId: String(item.fixtureId) },
-            });
-          }}
-  style={({ pressed }) => [
-  styles.matchCard,
-  isCastellon
-    ? styles.castellonMatchCard
-    : null,
-  pressed && !!item.fixtureId
-    ? styles.matchCardPressed
-    : null,
-]}
->
-        <View style={styles.teamsBlock}>
+  if (pausedStatuses.includes(short)) {
+    return (
+      <View style={styles.liveStatusRow}>
+        <View style={styles.liveDot} />
+        <Text style={styles.liveStatusText}>
+          DESCANSO
+        </Text>
+      </View>
+    );
+  }
+
+  return null;
+};
+
+  const renderMatch = (item: FixtureItem) => {
+  const isCastellon =
+    isCastellonTeam(item.homeTeam) ||
+    isCastellonTeam(item.awayTeam);
+
+  const short = item.statusShort || '';
+
+  const liveStatuses = ['1H', '2H', 'ET', 'P', 'LIVE'];
+  const pausedStatuses = ['HT', 'BT'];
+  const finishedStatuses = ['FT', 'AET', 'PEN'];
+
+  const isLive = liveStatuses.includes(short);
+  const isPaused = pausedStatuses.includes(short);
+  const isFinished = finishedStatuses.includes(short);
+
+  const minute =
+    item.elapsed !== null && item.elapsed !== undefined
+      ? item.elapsed === 45 && item.extra
+        ? `${item.elapsed}+${item.extra}'`
+        : item.elapsed === 90 && item.extra
+          ? `${item.elapsed}+${item.extra}'`
+          : `${item.elapsed}'`
+      : '';
+
+  return (
+    <View
+      key={item.id}
+      style={styles.animatedFullWidth}
+    >
+      <Pressable
+        disabled={!item.fixtureId}
+        onPress={() => {
+          if (!item.fixtureId) return;
+
+          router.push({
+            pathname: '/match/[fixtureId]',
+            params: { fixtureId: String(item.fixtureId) },
+          });
+        }}
+        style={({ pressed }) => [
+          styles.matchCard,
+          isCastellon ? styles.castellonMatchCard : null,
+          pressed && !!item.fixtureId
+            ? styles.matchCardPressed
+            : null,
+        ]}
+      >
+        <View style={styles.directMatchHeader}>
+          <Text style={styles.directStatusText}>
+            {isLive
+              ? 'EN JUEGO'
+              : isPaused
+                ? 'DESCANSO'
+                : isFinished
+                  ? 'FINAL'
+                  : formatMatchDate(item.date)}
+          </Text>
+        </View>
+
+        <View style={styles.directTeamRow}>
           <Pressable
             disabled={!item.homeTeamId}
             onPress={(event) => {
               event.stopPropagation();
+
               if (!item.homeTeamId) return;
 
               router.push({
@@ -413,31 +545,41 @@ return () => {
                 params: { teamId: String(item.homeTeamId) },
               });
             }}
-            style={({ pressed }) => [
-  styles.teamLine,
-  pressed && !!item.homeTeamId
-    ? styles.teamLinePressed
-    : null,
-]}
           >
-            <Image source={{ uri: getLogoUrl(item.homeTeam, item.homeLogo) }} style={styles.teamLogo} />
+            <Image
+              source={{
+                uri: getLogoUrl(item.homeTeam, item.homeLogo),
+              }}
+              style={styles.directTeamLogo}
+            />
+          </Pressable>
+
+          <View style={styles.directTeamNameWrap}>
             <Text
-              style={[
-                styles.teamName,
-                isCastellonTeam(item.homeTeam) && styles.castellonTeamName,
-              ]}
               numberOfLines={1}
+              style={[
+                styles.directTeamName,
+                isCastellonTeam(item.homeTeam) &&
+                  styles.castellonTeamName,
+              ]}
             >
               {item.homeTeam}
             </Text>
-          </Pressable>
+          </View>
 
-          <View style={styles.scoreBox}>{renderScore(item)}</View>
+          <Text style={styles.directScore}>
+            {item.homeGoals ?? '-'}
+          </Text>
+        </View>
 
+        <View style={styles.directSeparator} />
+
+        <View style={styles.directTeamRow}>
           <Pressable
             disabled={!item.awayTeamId}
             onPress={(event) => {
               event.stopPropagation();
+
               if (!item.awayTeamId) return;
 
               router.push({
@@ -445,45 +587,97 @@ return () => {
                 params: { teamId: String(item.awayTeamId) },
               });
             }}
-            style={({ pressed }) => [
-  styles.teamLine,
-  pressed && !!item.awayTeamId
-    ? styles.teamLinePressed
-    : null,
-]}
           >
-            <Image source={{ uri: getLogoUrl(item.awayTeam, item.awayLogo) }} style={styles.teamLogo} />
+            <Image
+              source={{
+                uri: getLogoUrl(item.awayTeam, item.awayLogo),
+              }}
+              style={styles.directTeamLogo}
+            />
+          </Pressable>
+
+          <View style={styles.directTeamNameWrap}>
             <Text
-              style={[
-                styles.teamName,
-                isCastellonTeam(item.awayTeam) && styles.castellonTeamName,
-              ]}
               numberOfLines={1}
+              style={[
+                styles.directTeamName,
+                isCastellonTeam(item.awayTeam) &&
+                  styles.castellonTeamName,
+              ]}
             >
               {item.awayTeam}
             </Text>
-          </Pressable>
+          </View>
+
+          <Text style={styles.directScore}>
+            {item.awayGoals ?? '-'}
+          </Text>
         </View>
 
-        <View style={styles.matchFooter}>
-          <Text style={styles.dateText}>{formatMatchDate(item.date)}</Text>
-          <View style={styles.footerDivider} />
-          <Text style={styles.venueText} numberOfLines={1}>
+        <View style={styles.directVenueRow}>
+          <Ionicons
+            name="location-outline"
+            size={13}
+            color="#8E8E8E"
+          />
+
+          <Text
+            numberOfLines={1}
+            style={styles.directVenueText}
+          >
             {item.venue || 'Estadio por confirmar'}
           </Text>
+        </View>
+
+        <View style={styles.directCommunityRow}>
+          {isLive ? (
+            <View style={styles.directLiveBadge}>
+              <Animated.View style={[
+    styles.directRedDot,
+    { opacity: livePulse },
+  ]}
+/>
+
+              <Text style={styles.directLiveText}>
+                EN VIVO{minute ? ` · ${minute}` : ''}
+              </Text>
+            </View>
+          ) : isPaused ? (
+            <View style={styles.directBreakBadge}>
+              <Text style={styles.directBreakText}>
+                DESCANSO
+              </Text>
+            </View>
+          ) : isFinished ? (
+            <View style={styles.directFinishedBadge}>
+              <Text style={styles.directFinishedText}>
+                FINAL
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.directScheduledBadge}>
+              <Text style={styles.directScheduledText}>
+                {formatMatchDate(item.date)}
+              </Text>
+            </View>
+          )}
+
           {item.fixtureId ? (
-            <View style={styles.commentCountBadge}>
-              <Text style={styles.commentCountText}>
+            <View style={styles.directCommentBadge}>
+              <Text style={styles.directCommentText}>
                 💬 {commentCounts[String(item.fixtureId)] || 0}
               </Text>
             </View>
           ) : null}
-          {item.fixtureId ? <Text style={styles.detailChevron}>›</Text> : null}
+
+          {item.fixtureId ? (
+            <Text style={styles.detailChevron}>›</Text>
+          ) : null}
         </View>
-        </Pressable>
-      </View>
-    );
-  };
+      </Pressable>
+    </View>
+  );
+};
 
   const renderRoundItem = ({ item }: { item: number }) => {
     const isActive = item === selectedRound;
@@ -531,7 +725,7 @@ return () => {
 
         <View>
           <View style={styles.filterRow}>
-            <Text style={styles.sectionLabel}>Calendario</Text>
+            <Text style={styles.sectionLabel}>Partidos</Text>
 
             <TouchableOpacity
               activeOpacity={0.85}
@@ -539,7 +733,7 @@ return () => {
               onPress={() => setFilterDropdownOpen(true)}
             >
               <Text style={styles.compactFilterText}>{filter}</Text>
-              <Text style={styles.compactChevron}>▾</Text>
+              <Text style={styles.compactChevron}>▼</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -561,7 +755,7 @@ return () => {
                   {selectedRoundMatches.length} partidos
                 </Text>
               </View>
-              <Text style={styles.roundSelectorChevron}>▾</Text>
+              <Text style={styles.roundSelectorChevron}>▼</Text>
             </TouchableOpacity>
 
             <TouchableOpacity activeOpacity={0.85} style={styles.arrowButton} onPress={goNextRound}>
@@ -1048,4 +1242,186 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '900',
   },
+  liveStatusRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginBottom: 5,
+},
+
+liveDot: {
+  width: 7,
+  height: 7,
+  borderRadius: 4,
+  backgroundColor: '#FF3B30',
+  marginRight: 6,
+},
+
+liveStatusText: {
+  color: '#FF3B30',
+  fontSize: 11,
+  fontWeight: '900',
+  letterSpacing: 0.5,
+},
+directMatchHeader: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  marginBottom: 12,
+},
+
+directStatusText: {
+  color: '#D4AF37',
+  fontSize: 10,
+  fontWeight: '900',
+  letterSpacing: 0.4,
+},
+
+directTeamRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  minHeight: 47,
+},
+
+directTeamLogo: {
+  width: 36,
+  height: 36,
+},
+
+directTeamNameWrap: {
+  flex: 1,
+  marginLeft: 12,
+  marginRight: 10,
+},
+
+directTeamName: {
+  color: '#FFFFFF',
+  fontSize: 14,
+  fontWeight: '800',
+},
+
+directScore: {
+  color: '#FFFFFF',
+  fontSize: 21,
+  fontWeight: '900',
+  minWidth: 28,
+  textAlign: 'center',
+},
+
+directSeparator: {
+  height: 1,
+  backgroundColor: '#202020',
+  marginLeft: 48,
+},
+
+directVenueRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  marginTop: 10,
+},
+
+directVenueText: {
+  flex: 1,
+  color: '#8E8E8E',
+  fontSize: 10,
+  fontWeight: '600',
+  marginLeft: 5,
+},
+
+directCommunityRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  marginTop: 11,
+  paddingTop: 10,
+  borderTopWidth: 1,
+  borderTopColor: '#202020',
+},
+
+directLiveBadge: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  paddingHorizontal: 8,
+  paddingVertical: 5,
+  borderRadius: 999,
+  backgroundColor: 'rgba(230,45,45,0.08)',
+  borderWidth: 1,
+  borderColor: 'rgba(230,45,45,0.28)',
+},
+
+directRedDot: {
+  width: 7,
+  height: 7,
+  borderRadius: 3.5,
+  backgroundColor: '#E62D2D',
+  marginRight: 6,
+},
+
+directLiveText: {
+  color: '#F15A5A',
+  fontSize: 9,
+  fontWeight: '900',
+  letterSpacing: 0.5,
+},
+
+directBreakBadge: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  paddingHorizontal: 8,
+  paddingVertical: 5,
+  borderRadius: 999,
+  backgroundColor: 'rgba(212,175,55,0.08)',
+  borderWidth: 1,
+  borderColor: 'rgba(212,175,55,0.28)',
+},
+
+directBreakText: {
+  color: '#D4AF37',
+  fontSize: 9,
+  fontWeight: '900',
+},
+
+directFinishedBadge: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  paddingHorizontal: 8,
+  paddingVertical: 5,
+  borderRadius: 999,
+  backgroundColor: 'rgba(255,255,255,0.06)',
+  borderWidth: 1,
+  borderColor: '#2F2F2F',
+},
+
+directFinishedText: {
+  color: '#AAAAAA',
+  fontSize: 9,
+  fontWeight: '900',
+},
+
+directScheduledBadge: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  paddingHorizontal: 8,
+  paddingVertical: 5,
+  borderRadius: 999,
+  backgroundColor: 'rgba(212,175,55,0.06)',
+  borderWidth: 1,
+  borderColor: 'rgba(212,175,55,0.18)',
+},
+
+directScheduledText: {
+  color: '#D4AF37',
+  fontSize: 9,
+  fontWeight: '900',
+},
+
+directCommentBadge: {
+  flex: 1,
+  marginLeft: 8,
+},
+
+directCommentText: {
+  color: '#D4AF37',
+  fontSize: 10,
+  fontWeight: '900',
+},
+
 });

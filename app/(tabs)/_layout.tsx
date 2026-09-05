@@ -106,21 +106,18 @@ export default function TabLayout() {
           <Tabs.Screen
             name="calendar"
             options={{
-              title: 'Calend.',
+              title: 'Partidos',
               tabBarIcon: ({ color }) => (
                 <Ionicons name="calendar" size={21} color={color} />
               ),
             }}
           />
-          <Tabs.Screen
-            name="live"
-            options={{
-              title: 'Directo',
-              tabBarIcon: ({ color }) => (
-                <Ionicons name="football" size={21} color={color} />
-              ),
-            }}
-          />
+        <Tabs.Screen
+  name="live"
+  options={{
+    href: null,
+  }}
+/>
           <Tabs.Screen
             name="news"
             options={{
