@@ -1,81 +1,57 @@
 import {
   Image,
-  Linking,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 
-import { shopItems } from '../../data/shopData';
-import { colors } from '../../theme/colors';
+const SHOP_COMING_SOON = require('../../assets/images/tienda-proximamente.png');
 
 export default function ShopScreen() {
-  const openProduct = async (url: string) => {
-    await Linking.openURL(url);
-  };
-
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      <View style={styles.header}>
-        <Text style={styles.eyebrow}>PRODUCTOS ALBINEGROS</Text>
+  <Image
+  source={SHOP_COMING_SOON}
+  style={styles.image}
+  resizeMode="contain"
+/>
+<View style={styles.comingSoonContent}>
+  <Text style={styles.eyebrow}>MUY PRONTO</Text>
 
-        <Text style={styles.screenTitle}>Tienda</Text>
+  <Text style={styles.description}>
+    Estamos preparando algo para llevar los colores albinegros más allá de Castalia.
+  </Text>
 
-        <Text style={styles.headerDescription}>
-          Artículos seleccionados para llevar el sentimiento albinegro contigo.
-        </Text>
-      </View>
+  <View style={styles.categoriesRow}>
+    <View style={styles.categoryCard}>
+      <Text style={styles.categoryIcon}>👕</Text>
+      <Text style={styles.categoryTitle}>TEXTIL</Text>
+    </View>
 
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Productos destacados</Text>
+    <View style={styles.categoryCard}>
+      <Text style={styles.categoryIcon}>🏴</Text>
+      <Text style={styles.categoryTitle}>ACCESORIOS</Text>
+    </View>
 
-        <Text style={styles.productCount}>
-          {shopItems.length} artículos
-        </Text>
-      </View>
+    <View style={styles.categoryCard}>
+      <Text style={styles.categoryIcon}>★</Text>
+      <Text style={styles.categoryTitle}>EXCLUSIVOS</Text>
+    </View>
+  </View>
 
-      {shopItems.map((item) => (
-        <Pressable
-          key={item.id}
-          style={styles.card}
-          onPress={() => openProduct(item.url)}
-        >
-          <View style={styles.imageContainer}>
-            <Image
-              source={item.image}
-              style={styles.image}
-              resizeMode="cover"
-            />
+  <Text style={styles.products}>
+    Camisetas · Sudaderas · Bufandas · Banderas · Accesorios · Ediciones especiales
+  </Text>
 
-            <View style={styles.productBadge}>
-              <Text style={styles.productBadgeText}>ALBINEGROS</Text>
-            </View>
-          </View>
+  <View style={styles.divider} />
 
-          <View style={styles.info}>
-            <Text style={styles.title}>{item.title}</Text>
-
-            <Text style={styles.description}>
-              {item.description}
-            </Text>
-
-            <View style={styles.bottomRow}>
-              <Text style={styles.price}>{item.price}</Text>
-
-              <View style={styles.buyButton}>
-                <Text style={styles.buyButtonText}>Comprar</Text>
-                <Text style={styles.buyArrow}>→</Text>
-              </View>
-            </View>
-          </View>
-        </Pressable>
-      ))}
+  <Text style={styles.orellut}>PAM PAM ORELLUT</Text>
+</View>
     </ScrollView>
   );
 }
@@ -87,149 +63,95 @@ const styles = StyleSheet.create({
   },
 
   content: {
-    paddingHorizontal: 16,
-    paddingTop: 20,
-    paddingBottom: 36,
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    paddingBottom: 30,
   },
 
-  header: {
-    marginBottom: 20,
-  },
+image: {
+  width: '100%',
+  height: undefined,
+  aspectRatio: 1168 / 1346,
+  alignSelf: 'center',
+},
+comingSoonContent: {
+  paddingHorizontal: 18,
+  paddingTop: 28,
+  paddingBottom: 28,
+  alignItems: 'center',
+},
 
-  eyebrow: {
-    color: colors.accent,
-    fontSize: 10,
-    fontWeight: '900',
-    letterSpacing: 1.35,
-    marginBottom: 4,
-  },
+eyebrow: {
+  color: '#D4AF37',
+  fontSize: 12,
+  fontWeight: '900',
+  letterSpacing: 2.2,
+  marginBottom: 10,
+},
 
-  screenTitle: {
-    color: '#FFFFFF',
-    fontSize: 31,
-    fontWeight: '900',
-  },
+description: {
+  maxWidth: 330,
+  color: '#FFFFFF',
+  fontSize: 16,
+  lineHeight: 23,
+  fontWeight: '700',
+  textAlign: 'center',
+  marginBottom: 24,
+},
 
-  headerDescription: {
-    marginTop: 5,
-    color: '#9A9A9A',
-    fontSize: 14,
-    lineHeight: 20,
-  },
+categoriesRow: {
+  width: '100%',
+  flexDirection: 'row',
+  gap: 9,
+  marginBottom: 22,
+},
 
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 13,
-  },
+categoryCard: {
+  flex: 1,
+  minHeight: 82,
+  backgroundColor: '#101010',
+  borderRadius: 15,
+  borderWidth: 1,
+  borderColor: '#292929',
+  alignItems: 'center',
+  justifyContent: 'center',
+  paddingHorizontal: 5,
+},
 
-  sectionTitle: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '900',
-  },
+categoryIcon: {
+  fontSize: 23,
+  marginBottom: 7,
+},
 
-  productCount: {
-    color: colors.accent,
-    fontSize: 12,
-    fontWeight: '900',
-  },
+categoryTitle: {
+  color: '#FFFFFF',
+  fontSize: 10,
+  fontWeight: '900',
+  letterSpacing: 0.5,
+  textAlign: 'center',
+},
 
-  card: {
-    backgroundColor: '#111111',
-    borderRadius: 22,
-    marginBottom: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#282828',
-  },
+products: {
+  maxWidth: 340,
+  color: '#888888',
+  fontSize: 12,
+  lineHeight: 19,
+  fontWeight: '600',
+  textAlign: 'center',
+},
 
-  imageContainer: {
-    position: 'relative',
-    backgroundColor: '#0A0A0A',
-  },
+divider: {
+  width: 42,
+  height: 2,
+  backgroundColor: '#D4AF37',
+  marginTop: 24,
+  marginBottom: 17,
+},
 
-  image: {
-    width: '100%',
-    height: 250,
-  },
-
-  productBadge: {
-    position: 'absolute',
-    top: 14,
-    left: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: colors.accent,
-  },
-
-  productBadgeText: {
-    color: '#101010',
-    fontSize: 9,
-    fontWeight: '900',
-    letterSpacing: 0.8,
-  },
-
-  info: {
-    padding: 15,
-  },
-
-  title: {
-    color: '#FFFFFF',
-    fontSize: 19,
-    lineHeight: 23,
-    fontWeight: '900',
-    marginBottom: 6,
-  },
-
-  description: {
-    color: '#9A9A9A',
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 15,
-  },
-
-  bottomRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-
-  price: {
-    color: colors.accent,
-    fontSize: 24,
-    fontWeight: '900',
-  },
-
-  buyButton: {
-    minHeight: 42,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 15,
-    borderRadius: 14,
-    backgroundColor: '#080808',
-    borderWidth: 1,
-    borderColor: colors.accent,
-  },
-
-  buyButtonText: {
-    color: colors.accent,
-    fontSize: 13,
-    fontWeight: '900',
-  },
-
-  buyArrow: {
-    color: colors.accent,
-    fontSize: 18,
-    marginLeft: 8,
-    marginTop: -1,
-  },
-
-  cardPressed: {
-    opacity: 0.88,
-    transform: [{ scale: 0.992 }],
-    borderColor: colors.accent,
-  },
+orellut: {
+  color: '#FFFFFF',
+  fontSize: 12,
+  fontWeight: '900',
+  letterSpacing: 2,
+},
 });
