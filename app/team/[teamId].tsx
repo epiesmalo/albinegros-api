@@ -1,3 +1,6 @@
+import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Pressable,
@@ -7,9 +10,21 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Image } from 'expo-image';
-import { Ionicons } from '@expo/vector-icons';
-import { Stack, router, useLocalSearchParams } from 'expo-router';
+
+const translatePosition = (position?: string | null) => {
+  switch (position) {
+    case 'Goalkeeper':
+      return 'Portero';
+    case 'Defender':
+      return 'Defensa';
+    case 'Midfielder':
+      return 'Centrocampista';
+    case 'Attacker':
+      return 'Delantero';
+    default:
+      return position || '';
+  }
+};
 
 type SquadPlayer = {
   id: number | string | null;
@@ -333,7 +348,7 @@ export default function TeamDetailScreen() {
                 <View style={styles.playerInfo}>
                   <Text style={styles.playerName}>{player.name}</Text>
                   <Text style={styles.playerMeta}>
-                    {[player.position, player.age ? `${player.age} años` : '']
+                    {[translatePosition(player.position), player.age ? `${player.age} años` : '']
                       .filter(Boolean)
                       .join(' · ')}
                   </Text>
@@ -404,13 +419,40 @@ export default function TeamDetailScreen() {
           </View>
         </View>
 
-        {stats.form ? (
-          <View style={styles.infoCard}>
-            <Text style={styles.cardTitle}>FORMA RECIENTE</Text>
-            <Text style={styles.formText}>{stats.form}</Text>
-          </View>
-        ) : null}
+     {stats.form ? (
+  <>
+    <Text style={styles.cardTitle}>FORMA RECIENTE</Text>
 
+    <View style={styles.formRow}>
+      {stats.form.slice(-5).split('').map((result, index) => {
+        const translated =
+          result === 'W'
+            ? 'V'
+            : result === 'D'
+              ? 'E'
+              : result === 'L'
+                ? 'D'
+                : result;
+
+        const resultStyle =
+          result === 'W'
+            ? styles.formWin
+            : result === 'D'
+              ? styles.formDraw
+              : styles.formLoss;
+
+        return (
+          <View
+            key={`${result}-${index}`}
+            style={[styles.formBadge, resultStyle]}
+          >
+            <Text style={styles.formBadgeText}>{translated}</Text>
+          </View>
+        );
+      })}
+    </View>
+  </>
+) : null}
         {stats.lineups.length > 0 ? (
           <View style={styles.infoCard}>
             <Text style={styles.cardTitle}>FORMACIONES UTILIZADAS</Text>
@@ -854,4 +896,37 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     marginBottom: 8,
   },
+
+formRow: {
+  flexDirection: 'row',
+  gap: 8,
+  marginTop: 10,
+  marginBottom: 18,
+},
+
+formBadge: {
+  width: 34,
+  height: 34,
+  borderRadius: 6,
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+
+formWin: {
+  backgroundColor: '#22C55E',
+},
+
+formDraw: {
+  backgroundColor: '#EAB308',
+},
+
+formLoss: {
+  backgroundColor: '#EF4444',
+},
+
+formBadgeText: {
+  color: '#FFFFFF',
+  fontSize: 16,
+  fontWeight: '900',
+},
 });
