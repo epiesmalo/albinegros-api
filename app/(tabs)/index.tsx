@@ -137,11 +137,13 @@ export default function HomeScreen() {
 const [tickerContainerWidth, setTickerContainerWidth] = useState(0);
 const [tickerTextWidth, setTickerTextWidth] = useState(0);
 
-const tickerText =
-  'El C.D. Castellón prepara su próximo partido en SkyFi Castalia';
+const [tickerText, setTickerText] = useState('');
+const [tickerActive, setTickerActive] = useState(false);
 
 useEffect(() => {
-  if (!tickerContainerWidth || !tickerTextWidth) return;
+  if (!tickerActive || !tickerText || !tickerContainerWidth || !tickerTextWidth) {
+  return;
+}
 
   tickerAnimation.setValue(tickerContainerWidth);
 
@@ -159,7 +161,13 @@ useEffect(() => {
   animation.start();
 
   return () => animation.stop();
-}, [tickerAnimation, tickerContainerWidth, tickerTextWidth]);
+}, [
+  tickerAnimation,
+  tickerContainerWidth,
+  tickerTextWidth,
+  tickerText,
+  tickerActive,
+]);
   const [nextMatch, setNextMatch] = useState<NextMatch | null>(null);
   const [ads, setAds] = useState<AdItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -210,10 +218,11 @@ const quickLinks = [
       }
     }
 
-    const [matchRes, adsRes] = await Promise.all([
-      fetch('https://albinegros-api.onrender.com/api/admin/next-match'),
-      fetch('https://albinegros-api.onrender.com/api/admin/ads'),
-    ]);
+  const [matchRes, adsRes, tickerRes] = await Promise.all([
+  fetch('https://albinegros-api.onrender.com/api/admin/next-match'),
+  fetch('https://albinegros-api.onrender.com/api/admin/ads'),
+  fetch('https://albinegros-api.onrender.com/api/admin/ticker'),
+]);
 
     if (!matchRes.ok) {
       throw new Error(
@@ -226,9 +235,15 @@ const quickLinks = [
         `Error cargando patrocinadores: HTTP ${adsRes.status}`
       );
     }
+    if (!tickerRes.ok) {
+  throw new Error(
+    `Error cargando ticker: HTTP ${tickerRes.status}`
+  );
+}
 
-    const matchData = await matchRes.json();
-    const adsData = await adsRes.json();
+   const matchData = await matchRes.json();
+const adsData = await adsRes.json();
+const tickerData = await tickerRes.json();
 
     if (!matchData || typeof matchData !== 'object') {
       throw new Error('La respuesta del próximo partido no es válida.');
@@ -238,6 +253,15 @@ const quickLinks = [
 
     setNextMatch(matchData);
     setAds(normalizedAds);
+    setTickerText(
+  typeof tickerData?.text === 'string'
+    ? tickerData.text
+    : ''
+);
+
+setTickerActive(
+  Boolean(tickerData?.active)
+);
 
  
 
@@ -346,34 +370,36 @@ const quickLinks = [
         </View>
       </View>
       </View>
-<View style={styles.newsTicker}>
-  <View style={styles.newsTickerLabel}>
-    <Text style={styles.newsTickerLabelText}>ÚLTIMA HORA</Text>
-  </View>
+{tickerActive && tickerText.trim() ? (
+  <View style={styles.newsTicker}>
+    <View style={styles.newsTickerLabel}>
+      <Text style={styles.newsTickerLabelText}>ÚLTIMA HORA</Text>
+    </View>
 
-  <View
-  style={styles.newsTickerContent}
-  onLayout={(event) =>
-    setTickerContainerWidth(event.nativeEvent.layout.width)
-  }
->
-  <Animated.View
-    style={{
-      transform: [{ translateX: tickerAnimation }],
-    }}
-  >
-    <Text
-      numberOfLines={1}
+    <View
+      style={styles.newsTickerContent}
       onLayout={(event) =>
-        setTickerTextWidth(event.nativeEvent.layout.width)
+        setTickerContainerWidth(event.nativeEvent.layout.width)
       }
-      style={styles.newsTickerText}
     >
-      {tickerText}
-    </Text>
-  </Animated.View>
-</View>
-</View>
+      <Animated.View
+        style={{
+          transform: [{ translateX: tickerAnimation }],
+        }}
+      >
+        <Text
+          numberOfLines={1}
+          onLayout={(event) =>
+            setTickerTextWidth(event.nativeEvent.layout.width)
+          }
+          style={styles.newsTickerText}
+        >
+          {tickerText}
+        </Text>
+      </Animated.View>
+    </View>
+  </View>
+) : null}
       <View>
       <ImageBackground
         source={NEXT_MATCH_BG}
