@@ -14,7 +14,7 @@ import {
 import AnimatedPressable from '../../components/AnimatedPressable';
 import { colors } from '../../theme/colors';
 
-import { CACHE_KEYS, formatCacheAge, getCache, saveCache } from '../../utils/cache';
+import { CACHE_KEYS, getCache, saveCache } from '../../utils/cache';
 
 const NEXT_MATCH_BG = require('../../assets/images/next-match-bg.png');
 const CASTELLON_LOGO_URL = 'https://archivos.albinegroscastellon.com/cas.png';
@@ -95,31 +95,7 @@ const getDisplayTeamName = (shortName?: string, fullName?: string) => {
   return selectedName.toUpperCase();
 };
 
-const formatUpdatedAgo = (date?: string | null, now = Date.now()) => {
-  if (!date) return '';
 
-  const updatedTime = new Date(date).getTime();
-
-  if (Number.isNaN(updatedTime)) return '';
-
-  const diffMs = Math.max(0, now - updatedTime);
-  const minutes = Math.floor(diffMs / 60_000);
-
-  if (minutes < 1) return 'Datos actualizados ahora';
-  if (minutes < 60) return `Datos actualizados hace ${minutes} min`;
-
-  const hours = Math.floor(minutes / 60);
-
-  if (hours < 24) {
-    return `Datos actualizados hace ${hours} ${hours === 1 ? 'hora' : 'horas'}`;
-  }
-
-  const days = Math.floor(hours / 24);
-
-  if (days === 1) return 'Datos actualizados ayer';
-
-  return `Datos actualizados hace ${days} días`;
-};
 
 
 function HomeMatchSkeleton() {
@@ -159,10 +135,7 @@ export default function HomeScreen() {
   const [ads, setAds] = useState<AdItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
-  const [currentTime, setCurrentTime] = useState(Date.now());
-  const [usingCachedData, setUsingCachedData] = useState(false);
-  const [cacheSavedAt, setCacheSavedAt] = useState<string | null>(null);
+
 
   const quickLinks = [
     { id: '1', title: 'Clasificación', route: '/(tabs)/explore', icon: 'trophy' },
@@ -177,13 +150,7 @@ export default function HomeScreen() {
     loadHomeData();
   }, []);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(Date.now());
-    }, 60_000);
 
-    return () => clearInterval(timer);
-  }, []);
 
   const loadHomeData = async (isRefresh = false) => {
   try {
@@ -197,12 +164,7 @@ export default function HomeScreen() {
 
       if (cachedMatch?.data) {
         setNextMatch(cachedMatch.data);
-        setUpdatedAt(
-          typeof cachedMatch.data.updatedAt === 'string'
-            ? cachedMatch.data.updatedAt
-            : cachedMatch.savedAt
-        );
-      }
+   }
 
       if (Array.isArray(cachedAds?.data)) {
         setAds(cachedAds.data);
@@ -212,9 +174,7 @@ export default function HomeScreen() {
         cachedMatch?.savedAt || cachedAds?.savedAt || null;
 
       if (cachedMatch?.data || cachedAds?.data) {
-        setUsingCachedData(true);
-        setCacheSavedAt(availableSavedAt);
-        setCurrentTime(Date.now());
+ 
         setLoading(false);
       } else {
         setLoading(true);
@@ -250,15 +210,7 @@ export default function HomeScreen() {
     setNextMatch(matchData);
     setAds(normalizedAds);
 
-    setUpdatedAt(
-      typeof matchData?.updatedAt === 'string'
-        ? matchData.updatedAt
-        : new Date().toISOString()
-    );
-
-    setCurrentTime(Date.now());
-    setUsingCachedData(false);
-    setCacheSavedAt(null);
+ 
 
     await Promise.all([
       saveCache(CACHE_KEYS.HOME_NEXT_MATCH, matchData),
@@ -274,11 +226,7 @@ export default function HomeScreen() {
 
     if (cachedMatch?.data) {
       setNextMatch(cachedMatch.data);
-      setUpdatedAt(
-        typeof cachedMatch.data.updatedAt === 'string'
-          ? cachedMatch.data.updatedAt
-          : cachedMatch.savedAt
-      );
+ 
     }
 
     if (Array.isArray(cachedAds?.data)) {
@@ -289,9 +237,7 @@ export default function HomeScreen() {
       cachedMatch?.savedAt || cachedAds?.savedAt || null;
 
     if (cachedMatch?.data || cachedAds?.data) {
-      setUsingCachedData(true);
-      setCacheSavedAt(availableSavedAt);
-      setCurrentTime(Date.now());
+ 
     }
   } finally {
     setLoading(false);
@@ -487,41 +433,7 @@ export default function HomeScreen() {
                   </View>
                 </View>
 
-                <AnimatedPressable
-                  style={styles.calendarButton}
-                  pressedScale={0.975}
-                  onPress={() => router.push('/(tabs)/calendar' as any)}
-                >
-                  <View style={styles.calendarButtonMain}>
-                    <Text style={styles.calendarButtonText}>Ver calendario</Text>
-                    <Ionicons
-                      name="arrow-forward"
-                      size={16}
-                      color={colors.accent}
-                    />
-                  </View>
-
-                  {!!updatedAt && !usingCachedData && (
-                    <View style={styles.updatedRow}>
-                      <View style={styles.updatedDot} />
-                      <Text style={styles.updatedText}>
-                        {formatUpdatedAgo(updatedAt, currentTime)}
-                      </Text>
-                    </View>
-                  )}
-
-                  {usingCachedData && (
-                    <View style={styles.cachedRow}>
-                      <View style={styles.cachedDot} />
-                      <Text style={styles.cachedText}>
-                        Mostrando datos guardados
-                        {cacheSavedAt
-                          ? ` · ${formatCacheAge(cacheSavedAt, currentTime)}`
-                          : ''}
-                      </Text>
-                    </View>
-                  )}
-                </AnimatedPressable>
+                
               </View>
             </>
           )}
@@ -881,80 +793,9 @@ const styles = StyleSheet.create({
     marginVertical: 9,
     backgroundColor: 'rgba(212, 175, 55, 0.42)',
   },
-  calendarButton: {
-    alignSelf: 'center',
-    minWidth: 196,
-    minHeight: 52,
-    borderRadius: 18,
-    marginTop: 9,
-    backgroundColor: 'rgba(0, 0, 0, 0.72)',
-    borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.75)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 7,
-    paddingHorizontal: 16,
-  },
+  
 
-  calendarButtonMain: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  calendarButtonText: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: colors.accent,
-    marginRight: 7,
-  },
-
-  updatedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 4,
-  },
-
-  updatedDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#46D17A',
-    marginRight: 5,
-  },
-
-  updatedText: {
-    color: '#A8A8A8',
-    fontSize: 9,
-    lineHeight: 11,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-
-  cachedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 4,
-  },
-
-  cachedDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#D4AF37',
-    marginRight: 5,
-  },
-
-  cachedText: {
-    color: '#C9B46A',
-    fontSize: 9,
-    lineHeight: 11,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-
+  
   sectionTitle: {
     fontSize: 20,
     fontWeight: '900',
