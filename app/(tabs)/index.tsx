@@ -137,14 +137,14 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
 
-  const quickLinks = [
-    { id: '1', title: 'Clasificación', route: '/(tabs)/explore', icon: 'trophy' },
-    { id: '2', title: 'Calendario', route: '/(tabs)/calendar', icon: 'calendar' },
-    { id: '3', title: 'Media', route: '/(tabs)/media', icon: 'musical-notes' },
-    { id: '4', title: 'Galería', route: '/(tabs)/gallery', icon: 'images' },
-    { id: '5', title: 'Nosotros', route: '/about', icon: 'information-circle' },
-    { id: '6', title: 'Tienda', route: '/(tabs)/shop', icon: 'bag-handle' },
-  ] as const;
+const quickLinks = [
+  { id: '5', title: 'Nosotros', route: '/about', icon: 'information-circle' },
+  { id: '1', title: 'Clasificación', route: '/(tabs)/explore', icon: 'trophy' },
+  { id: '2', title: 'Calendario', route: '/(tabs)/calendar', icon: 'calendar' },
+  { id: '3', title: 'Media', route: '/(tabs)/media', icon: 'musical-notes' },
+  { id: '4', title: 'Galería', route: '/(tabs)/gallery', icon: 'images' },
+  { id: '6', title: 'Tienda', route: '/(tabs)/shop', icon: 'bag-handle' },
+] as const;
 
   useEffect(() => {
     loadHomeData();
