@@ -1,7 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
+  Animated,
+  Easing,
   Image,
   ImageBackground,
   Linking,
@@ -131,6 +133,33 @@ function HomeMatchSkeleton() {
 }
 
 export default function HomeScreen() {
+  const tickerAnimation = useRef(new Animated.Value(0)).current;
+const [tickerContainerWidth, setTickerContainerWidth] = useState(0);
+const [tickerTextWidth, setTickerTextWidth] = useState(0);
+
+const tickerText =
+  'El C.D. Castellón prepara su próximo partido en SkyFi Castalia';
+
+useEffect(() => {
+  if (!tickerContainerWidth || !tickerTextWidth) return;
+
+  tickerAnimation.setValue(tickerContainerWidth);
+
+  const distance = tickerContainerWidth + tickerTextWidth;
+
+  const animation = Animated.loop(
+    Animated.timing(tickerAnimation, {
+      toValue: -tickerTextWidth,
+      duration: distance * 18,
+      easing: Easing.linear,
+      useNativeDriver: true,
+    })
+  );
+
+  animation.start();
+
+  return () => animation.stop();
+}, [tickerAnimation, tickerContainerWidth, tickerTextWidth]);
   const [nextMatch, setNextMatch] = useState<NextMatch | null>(null);
   const [ads, setAds] = useState<AdItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -317,7 +346,34 @@ const quickLinks = [
         </View>
       </View>
       </View>
+<View style={styles.newsTicker}>
+  <View style={styles.newsTickerLabel}>
+    <Text style={styles.newsTickerLabelText}>ÚLTIMA HORA</Text>
+  </View>
 
+  <View
+  style={styles.newsTickerContent}
+  onLayout={(event) =>
+    setTickerContainerWidth(event.nativeEvent.layout.width)
+  }
+>
+  <Animated.View
+    style={{
+      transform: [{ translateX: tickerAnimation }],
+    }}
+  >
+    <Text
+      numberOfLines={1}
+      onLayout={(event) =>
+        setTickerTextWidth(event.nativeEvent.layout.width)
+      }
+      style={styles.newsTickerText}
+    >
+      {tickerText}
+    </Text>
+  </Animated.View>
+</View>
+</View>
       <View>
       <ImageBackground
         source={NEXT_MATCH_BG}
@@ -577,6 +633,44 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     marginLeft: 8,
   },
+newsTicker: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  height: 42,
+  marginHorizontal: 24,
+  marginBottom: 14,
+  borderWidth: 1,
+  borderColor: '#315C3A',
+  borderRadius: 10,
+  overflow: 'hidden',
+  backgroundColor: '#0D0D0D',
+},
+
+newsTickerLabel: {
+  height: '100%',
+  justifyContent: 'center',
+  paddingHorizontal: 12,
+  backgroundColor: '#315C3A',
+},
+
+newsTickerLabelText: {
+  color: '#000000',
+  fontSize: 11,
+  fontWeight: '900',
+},
+
+newsTickerContent: {
+  flex: 1,
+  height: '100%',
+  justifyContent: 'center',
+  overflow: 'hidden',
+},
+
+newsTickerText: {
+  color: '#FFFFFF',
+  fontSize: 13,
+  fontWeight: '700',
+},
   matchCard: {
     height: 444,
     borderRadius: 24,
