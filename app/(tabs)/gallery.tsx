@@ -33,7 +33,7 @@ type GalleryItem = {
   type?: string;
   created_at?: string;
 };
-
+const ImageZoomCompat = ImageZoom as any;
 const galleryCategories = [
   { id: 'castalia', title: 'Castalia' },
   { id: 'desplazamientos', title: 'Desplazamientos' },
@@ -508,7 +508,7 @@ const images = useMemo(() => {
 
           {selectedImage && (
             <View style={styles.modalContent}>
-              <ImageZoom
+              <ImageZoomCompat
                 cropWidth={width}
                 cropHeight={height * 0.56}
                 imageWidth={width - 32}
@@ -524,7 +524,7 @@ const images = useMemo(() => {
                   transition={250}
                   cachePolicy="disk"
                 />
-              </ImageZoom>
+              </ImageZoomCompat>
 
               <Text style={styles.fullImageTitle}>
                 {selectedImage.title}

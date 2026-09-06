@@ -382,21 +382,26 @@ setTickerActive(
         setTickerContainerWidth(event.nativeEvent.layout.width)
       }
     >
-      <Animated.View
-        style={{
-          transform: [{ translateX: tickerAnimation }],
-        }}
-      >
-        <Text
-          numberOfLines={1}
-          onLayout={(event) =>
-            setTickerTextWidth(event.nativeEvent.layout.width)
-          }
-          style={styles.newsTickerText}
-        >
-          {tickerText}
-        </Text>
-      </Animated.View>
+      <Animated.Text
+  numberOfLines={1}
+  ellipsizeMode="clip"
+  style={[
+    styles.newsTickerText,
+    {
+      width: Math.max(2000, tickerText.length * 16),
+      transform: [{ translateX: tickerAnimation }],
+    },
+  ]}
+  onTextLayout={(event) => {
+    const line = event.nativeEvent.lines[0];
+
+    if (line?.width) {
+      setTickerTextWidth(line.width);
+    }
+  }}
+>
+  {tickerText}
+</Animated.Text>
     </View>
   </View>
 ) : null}
@@ -696,6 +701,8 @@ newsTickerText: {
   color: '#FFFFFF',
   fontSize: 13,
   fontWeight: '700',
+  position: 'absolute',
+  left: 0,
 },
   matchCard: {
     height: 444,

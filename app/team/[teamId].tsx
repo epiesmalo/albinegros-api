@@ -329,7 +329,7 @@ export default function TeamDetailScreen() {
                 }}
                 style={({ pressed }) => [
                   styles.playerCard,
-                  pressed && player.id && styles.playerCardPressed,
+                  pressed && player.id ? styles.playerCardPressed : null,
                 ]}
               >
                 {player.photo ? (

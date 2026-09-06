@@ -1,3 +1,6 @@
+import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Pressable,
@@ -7,9 +10,6 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Image } from 'expo-image';
-import { Ionicons } from '@expo/vector-icons';
-import { Stack, router, useLocalSearchParams } from 'expo-router';
 
 type PlayerStat = {
   team: {
@@ -188,7 +188,7 @@ export default function PlayerDetailScreen() {
             }}
             style={({ pressed }) => [
               styles.teamCard,
-              pressed && data.team?.id && styles.pressed,
+              pressed && data.team?.id ? styles.pressed : null,
             ]}
           >
             <Image
@@ -354,7 +354,7 @@ export default function PlayerDetailScreen() {
             }}
             style={({ pressed }) => [
               styles.careerCard,
-              pressed && entry.team.id && styles.pressed,
+              pressed && entry.team.id ? styles.pressed : null,
             ]}
           >
             {entry.team.logo ? (

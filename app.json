@@ -51,7 +51,9 @@
           "enableBackgroundRecording": false
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-asset",
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true,
