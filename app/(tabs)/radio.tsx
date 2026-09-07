@@ -276,7 +276,7 @@ const openUrl = async (url: string) => {
               <Text style={styles.mediaTitle}>CONEXIÓN ORELLUT</Text>
               <Text style={styles.mediaMeta}>Dirigido por José Luis Gual</Text>
               <Text style={styles.mediaMeta}>
-  El Periódico Mediterráneo · Martes y jueves 
+  El Periódico Mediterráneo · Lunes y jueves 
               </Text>
               <Text style={styles.mediaDescription}>
                 Dos programas semanales para analizar la actualidad del C.D. Castellón

@@ -23,7 +23,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { colors } from '../../theme/colors';
 
-import { CACHE_KEYS, formatCacheAge, getCache, saveCache } from '../../utils/cache';
+import { CACHE_KEYS, getCache, saveCache } from '../../utils/cache';
 
 type GalleryItem = {
   id: string;
@@ -413,19 +413,6 @@ const images = useMemo(() => {
 
             {loading && <GallerySkeleton />}
 
-            {usingCachedData && !loading && (
-              <View>
-                <View style={styles.cachedBanner}>
-                  <View style={styles.cachedDot} />
-                  <Text style={styles.cachedText}>
-                    Mostrando galería guardada
-                    {cacheSavedAt
-                      ? ` · ${formatCacheAge(cacheSavedAt, currentTime)}`
-                      : ''}
-                  </Text>
-                </View>
-              </View>
-            )}
 
             
 

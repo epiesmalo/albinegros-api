@@ -525,12 +525,15 @@ function addGalleryImage() {
     return;
   }
 
+  const now = Date.now();
+
   galleryItems.push({
-    id: `${category}-${Date.now()}`,
+    id: `${category}-${now}`,
     title,
     category,
     type,
-    image
+    image,
+    created_at: new Date(now).toISOString()
   });
 
   document.getElementById('galleryTitle').value = '';

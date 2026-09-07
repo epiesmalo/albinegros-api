@@ -327,20 +327,55 @@ useEffect(() => {
     return uniqueRounds.sort((a, b) => a - b);
   }, [fixtures]);
 
-  useEffect(() => {
+    useEffect(() => {
     if (!fixtures.length || selectedRound !== null) return;
 
     const now = new Date();
 
+    const startOfToday = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    );
+
+    const startOfTomorrow = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() + 1
+    );
+
+    const todayMatch = fixtures
+      .filter((item) => {
+        const date = new Date(item.date);
+
+        return (
+          !isNaN(date.getTime()) &&
+          date >= startOfToday &&
+          date < startOfTomorrow
+        );
+      })
+      .sort(
+        (a, b) =>
+          new Date(a.date).getTime() - new Date(b.date).getTime()
+      )[0];
+
     const nextMatch = fixtures
       .filter((item) => {
         const date = new Date(item.date);
-        return !isNaN(date.getTime()) && date >= now;
+        return !isNaN(date.getTime()) && date >= startOfTomorrow;
       })
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0];
+      .sort(
+        (a, b) =>
+          new Date(a.date).getTime() - new Date(b.date).getTime()
+      )[0];
 
-    const nextRound = nextMatch ? extractRoundNumber(nextMatch.round) : rounds[0];
-    setSelectedRound(nextRound || 1);
+    const defaultMatch = todayMatch || nextMatch;
+
+    const defaultRound = defaultMatch
+      ? extractRoundNumber(defaultMatch.round)
+      : rounds[0];
+
+    setSelectedRound(defaultRound || 1);
   }, [fixtures, rounds, selectedRound]);
 
   useEffect(() => {

@@ -10,7 +10,7 @@ import {
   View
 } from 'react-native';
 import { colors } from '../../theme/colors';
-import { CACHE_KEYS, formatCacheAge, getCache, saveCache } from '../../utils/cache';
+import { CACHE_KEYS, getCache, saveCache } from '../../utils/cache';
 
 type NewsItem = {
   id: string;
@@ -254,19 +254,7 @@ export default function NewsScreen() {
         </View>
       </View>
 
-      {usingCachedData && (
-        <View>
-          <View style={styles.cachedBanner}>
-            <View style={styles.cachedDot} />
-            <Text style={styles.cachedText}>
-              Mostrando noticias guardadas
-              {cacheSavedAt
-                ? ` · ${formatCacheAge(cacheSavedAt, currentTime)}`
-                : ''}
-            </Text>
-          </View>
-        </View>
-      )}
+  
 
       {loading ? <NewsSkeleton /> : null}
 
