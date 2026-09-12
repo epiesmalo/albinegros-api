@@ -19,6 +19,68 @@ const SEASON = process.env.FOOTBALL_SEASON;
 const TIMEZONE =
   process.env.FOOTBALL_TIMEZONE || 'Europe/Madrid';
 const LIVE_CACHE_MS = 20_000;
+const SOON_CACHE_MS = 60_000;
+const UPCOMING_CACHE_MS = 5 * 60_000;
+const IDLE_CACHE_MS = 15 * 60_000;
+
+const getLiveCacheMs = (cachedData) => {
+  const matches = cachedData?.matches;
+
+  if (!Array.isArray(matches) || matches.length === 0) {
+    return IDLE_CACHE_MS;
+  }
+
+  const now = Date.now();
+
+  const liveStatuses = ['1H', '2H', 'ET', 'P', 'LIVE', 'HT', 'BT'];
+  const finishedStatuses = ['FT', 'AET', 'PEN'];
+
+  const hasLiveMatch = matches.some((match) =>
+    liveStatuses.includes(match.status?.short)
+  );
+
+  if (hasLiveMatch) {
+    return LIVE_CACHE_MS;
+  }
+
+  const unfinishedMatches = matches.filter(
+    (match) =>
+      !finishedStatuses.includes(match.status?.short)
+  );
+
+  if (unfinishedMatches.length === 0) {
+    return IDLE_CACHE_MS;
+  }
+
+  const nextMatchTimes = unfinishedMatches
+    .map((match) => new Date(match.date).getTime())
+    .filter((timestamp) => Number.isFinite(timestamp));
+
+  if (nextMatchTimes.length === 0) {
+    return UPCOMING_CACHE_MS;
+  }
+
+  const closestMatchTime = Math.min(...nextMatchTimes);
+  const minutesUntilMatch =
+    (closestMatchTime - now) / 60_000;
+
+  // Desde 30 minutos antes y hasta 3 horas después
+  // de la hora prevista comprobamos muy frecuentemente.
+  if (
+    minutesUntilMatch <= 30 &&
+    minutesUntilMatch >= -180
+  ) {
+    return LIVE_CACHE_MS;
+  }
+
+  // Si faltan 2 horas o menos.
+  if (minutesUntilMatch <= 120) {
+    return SOON_CACHE_MS;
+  }
+
+  // Si todavía faltan varias horas.
+  return UPCOMING_CACHE_MS;
+};
 
 let liveCache = null;
 let liveCacheSavedAt = 0;
@@ -351,13 +413,17 @@ router.get('/api/football/live', async (req, res) => {
       });
     }
 
-    const now = Date.now();
+   const now = Date.now();
 
-    // Si tenemos datos recientes, no consultamos API-Football.
-    if (
-      liveCache &&
-      now - liveCacheSavedAt < LIVE_CACHE_MS
-    ) {
+const currentCacheMs = liveCache
+  ? getLiveCacheMs(liveCache)
+  : LIVE_CACHE_MS;
+
+// Si tenemos datos recientes, no consultamos API-Football.
+if (
+  liveCache &&
+  now - liveCacheSavedAt < currentCacheMs
+) {
       return res.json({
         ...liveCache,
         cache: true,
