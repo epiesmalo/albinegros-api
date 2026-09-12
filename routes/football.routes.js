@@ -18,6 +18,11 @@ const LEAGUE_ID = process.env.FOOTBALL_LEAGUE_ID;
 const SEASON = process.env.FOOTBALL_SEASON;
 const TIMEZONE =
   process.env.FOOTBALL_TIMEZONE || 'Europe/Madrid';
+const LIVE_CACHE_MS = 20_000;
+
+let liveCache = null;
+let liveCacheSavedAt = 0;
+let liveRefreshPromise = null;
 
 /**
  * Realiza peticiones a API-Football.
@@ -333,6 +338,10 @@ const nextMatch = {
  * Resultados en directo de la competición configurada.
  * GET /api/football/live
  */
+/**
+ * Resultados en directo de la competición configurada.
+ * GET /api/football/live
+ */
 router.get('/api/football/live', async (req, res) => {
   try {
     if (!LEAGUE_ID) {
@@ -341,139 +350,277 @@ router.get('/api/football/live', async (req, res) => {
         error: 'FOOTBALL_LEAGUE_ID no está configurado',
       });
     }
-const today = new Intl.DateTimeFormat('en-CA', {
-  timeZone: TIMEZONE,
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-}).format(new Date());
 
-const startOfDay = `${today}T00:00:00+02:00`;
-const endOfDay = `${today}T23:59:59+02:00`;
+    const now = Date.now();
 
-const { data: calendarMatches, error: calendarError } = await supabase
-  .from('calendar')
-  .select('*')
-  .gte('date', startOfDay)
-  .lte('date', endOfDay)
-  .order('date', { ascending: true });
-
-if (calendarError) {
-  throw calendarError;
-}
-
-const fixtureIds = (calendarMatches || [])
-  .map((match) => match.fixtureId)
-  .filter((id) => id !== null && id !== undefined);
-
-
-const fixtureResponses = await Promise.all(
-  fixtureIds.map(async (fixtureId) => {
-    try {
-      const data = await footballFetch(
-        `/fixtures?id=${encodeURIComponent(fixtureId)}&timezone=${encodeURIComponent(TIMEZONE)}`
-      );
-
-
-
-      return data.response?.[0] || null;
-    } catch (error) {
-      console.warn(
-        `No se pudo actualizar el partido ${fixtureId}:`,
-        error.message
-      );
-
-      return null;
+    // Si tenemos datos recientes, no consultamos API-Football.
+    if (
+      liveCache &&
+      now - liveCacheSavedAt < LIVE_CACHE_MS
+    ) {
+      return res.json({
+        ...liveCache,
+        cache: true,
+      });
     }
-  })
-);
 
-const fixtures = fixtureResponses.filter(Boolean);
+    // Si otro usuario ya está actualizando los datos,
+    // esperamos esa misma petición en lugar de lanzar otra.
+    if (liveRefreshPromise) {
+      const result = await liveRefreshPromise;
 
+      return res.json({
+        ...result,
+        cache: true,
+      });
+    }
 
-    const matches = fixtures.map((match) => {
-      const homeApiName = match.teams?.home?.name || '';
-      const awayApiName = match.teams?.away?.name || '';
+    liveRefreshPromise = (async () => {
+      const today = new Intl.DateTimeFormat('en-CA', {
+        timeZone: TIMEZONE,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date());
 
-      return {
-        fixtureId: match.fixture?.id ?? null,
-        date: match.fixture?.date || null,
-        timestamp: match.fixture?.timestamp ?? null,
-        status: {
-          short: match.fixture?.status?.short || '',
-          long: match.fixture?.status?.long || '',
-          elapsed: match.fixture?.status?.elapsed ?? null,
-          extra: match.fixture?.status?.extra ?? null,
-        },
-        league: {
-          id: match.league?.id ?? null,
-          name: getCompetitionName(match.league?.name || ''),
-          round: match.league?.round || '',
-          logo: match.league?.logo || '',
-        },
-        venue: {
-          id: match.fixture?.venue?.id ?? null,
-          name: getCorrectVenue(homeApiName, match.fixture?.venue?.name || ''),
-          city: match.fixture?.venue?.city || '',
-        },
-        referee: match.fixture?.referee || '',
-        home: {
-          id: match.teams?.home?.id ?? null,
-          name: getDisplayTeamName(homeApiName),
-          shortName: getShortTeamName(homeApiName),
-          logo: getTeamLogo(homeApiName, match.teams?.home?.logo || ''),
-          winner: match.teams?.home?.winner ?? null,
-          isCastellon: isCastellon(homeApiName),
-        },
-        away: {
-          id: match.teams?.away?.id ?? null,
-          name: getDisplayTeamName(awayApiName),
-          shortName: getShortTeamName(awayApiName),
-          logo: getTeamLogo(awayApiName, match.teams?.away?.logo || ''),
-          winner: match.teams?.away?.winner ?? null,
-          isCastellon: isCastellon(awayApiName),
-        },
-        goals: {
-          home: match.goals?.home ?? null,
-          away: match.goals?.away ?? null,
-        },
-        score: {
-          halftime: {
-            home: match.score?.halftime?.home ?? null,
-            away: match.score?.halftime?.away ?? null,
+      const startOfDay = `${today}T00:00:00+02:00`;
+      const endOfDay = `${today}T23:59:59+02:00`;
+
+      const {
+        data: calendarMatches,
+        error: calendarError,
+      } = await supabase
+        .from('calendar')
+        .select('*')
+        .gte('date', startOfDay)
+        .lte('date', endOfDay)
+        .order('date', { ascending: true });
+
+      if (calendarError) {
+        throw calendarError;
+      }
+
+      const fixtureIds = (calendarMatches || [])
+        .map((match) => match.fixtureId)
+        .filter(
+          (id) =>
+            id !== null &&
+            id !== undefined
+        );
+
+      const fixtureResponses = await Promise.all(
+        fixtureIds.map(async (fixtureId) => {
+          try {
+            const data = await footballFetch(
+              `/fixtures?id=${encodeURIComponent(
+                fixtureId
+              )}&timezone=${encodeURIComponent(
+                TIMEZONE
+              )}`
+            );
+
+            return data.response?.[0] || null;
+          } catch (error) {
+            console.warn(
+              `No se pudo actualizar el partido ${fixtureId}:`,
+              error.message
+            );
+
+            return null;
+          }
+        })
+      );
+
+      const fixtures =
+        fixtureResponses.filter(Boolean);
+
+      const matches = fixtures.map((match) => {
+        const homeApiName =
+          match.teams?.home?.name || '';
+
+        const awayApiName =
+          match.teams?.away?.name || '';
+
+        return {
+          fixtureId:
+            match.fixture?.id ?? null,
+
+          date:
+            match.fixture?.date || null,
+
+          timestamp:
+            match.fixture?.timestamp ?? null,
+
+          status: {
+            short:
+              match.fixture?.status?.short || '',
+            long:
+              match.fixture?.status?.long || '',
+            elapsed:
+              match.fixture?.status?.elapsed ?? null,
+            extra:
+              match.fixture?.status?.extra ?? null,
           },
-          fulltime: {
-            home: match.score?.fulltime?.home ?? null,
-            away: match.score?.fulltime?.away ?? null,
+
+          league: {
+            id:
+              match.league?.id ?? null,
+            name:
+              getCompetitionName(
+                match.league?.name || ''
+              ),
+            round:
+              match.league?.round || '',
+            logo:
+              match.league?.logo || '',
           },
-          extratime: {
-            home: match.score?.extratime?.home ?? null,
-            away: match.score?.extratime?.away ?? null,
+
+          venue: {
+            id:
+              match.fixture?.venue?.id ?? null,
+            name:
+              getCorrectVenue(
+                homeApiName,
+                match.fixture?.venue?.name || ''
+              ),
+            city:
+              match.fixture?.venue?.city || '',
           },
-          penalty: {
-            home: match.score?.penalty?.home ?? null,
-            away: match.score?.penalty?.away ?? null,
+
+          referee:
+            match.fixture?.referee || '',
+
+          home: {
+            id:
+              match.teams?.home?.id ?? null,
+            name:
+              getDisplayTeamName(homeApiName),
+            shortName:
+              getShortTeamName(homeApiName),
+            logo:
+              getTeamLogo(
+                homeApiName,
+                match.teams?.home?.logo || ''
+              ),
+            winner:
+              match.teams?.home?.winner ?? null,
+            isCastellon:
+              isCastellon(homeApiName),
           },
-        },
+
+          away: {
+            id:
+              match.teams?.away?.id ?? null,
+            name:
+              getDisplayTeamName(awayApiName),
+            shortName:
+              getShortTeamName(awayApiName),
+            logo:
+              getTeamLogo(
+                awayApiName,
+                match.teams?.away?.logo || ''
+              ),
+            winner:
+              match.teams?.away?.winner ?? null,
+            isCastellon:
+              isCastellon(awayApiName),
+          },
+
+          goals: {
+            home:
+              match.goals?.home ?? null,
+            away:
+              match.goals?.away ?? null,
+          },
+
+          score: {
+            halftime: {
+              home:
+                match.score?.halftime?.home ??
+                null,
+              away:
+                match.score?.halftime?.away ??
+                null,
+            },
+
+            fulltime: {
+              home:
+                match.score?.fulltime?.home ??
+                null,
+              away:
+                match.score?.fulltime?.away ??
+                null,
+            },
+
+            extratime: {
+              home:
+                match.score?.extratime?.home ??
+                null,
+              away:
+                match.score?.extratime?.away ??
+                null,
+            },
+
+            penalty: {
+              home:
+                match.score?.penalty?.home ??
+                null,
+              away:
+                match.score?.penalty?.away ??
+                null,
+            },
+          },
+        };
+      });
+
+      const result = {
+        ok: true,
+        live: true,
+        league: Number(LEAGUE_ID),
+        season: SEASON || null,
+        timezone: TIMEZONE,
+        count: matches.length,
+        updatedAt: new Date().toISOString(),
+        matches,
       };
-    });
 
-    return res.json({
-      ok: true,
-      live: true,
-      league: Number(LEAGUE_ID),
-      season: SEASON || null,
-      timezone: TIMEZONE,
-      count: matches.length,
-      updatedAt: new Date().toISOString(),
-      matches,
-    });
+      // Guardamos el resultado para los siguientes usuarios.
+      liveCache = result;
+      liveCacheSavedAt = Date.now();
+
+      return result;
+    })();
+
+    try {
+      const result = await liveRefreshPromise;
+
+      return res.json({
+        ...result,
+        cache: false,
+      });
+    } finally {
+      liveRefreshPromise = null;
+    }
   } catch (error) {
-    console.error('Error cargando resultados en directo:', error);
+    console.error(
+      'Error cargando resultados en directo:',
+      error
+    );
+
+    // Si API-Football falla temporalmente pero tenemos
+    // datos anteriores, mejor servirlos que romper el directo.
+    if (liveCache) {
+      return res.json({
+        ...liveCache,
+        cache: true,
+        stale: true,
+      });
+    }
 
     return res.status(500).json({
       ok: false,
-      error: 'No se pudieron cargar los resultados en directo',
+      error:
+        'No se pudieron cargar los resultados en directo',
       detail: error.message,
     });
   }
