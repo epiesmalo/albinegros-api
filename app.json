@@ -23,7 +23,7 @@
       "permissions": [
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
-      "package": "com.epiesmalo.castellonapp"
+      "package": "com.albinegroscastellon.app"
     },
     "web": {
       "output": "static",
