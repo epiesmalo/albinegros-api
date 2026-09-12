@@ -408,31 +408,42 @@ router.get('/api/football/live', async (req, res) => {
             id !== undefined
         );
 
-      const fixtureResponses = await Promise.all(
-        fixtureIds.map(async (fixtureId) => {
-          try {
-            const data = await footballFetch(
-              `/fixtures?id=${encodeURIComponent(
-                fixtureId
-              )}&timezone=${encodeURIComponent(
-                TIMEZONE
-              )}`
-            );
+      let fixtures = [];
 
-            return data.response?.[0] || null;
-          } catch (error) {
-            console.warn(
-              `No se pudo actualizar el partido ${fixtureId}:`,
-              error.message
-            );
+try {
+  const data = await footballFetch(
+    `/fixtures?league=${encodeURIComponent(
+      LEAGUE_ID
+    )}&season=${encodeURIComponent(
+      SEASON
+    )}&date=${encodeURIComponent(
+      today
+    )}&timezone=${encodeURIComponent(
+      TIMEZONE
+    )}`
+  );
 
-            return null;
-          }
-        })
-      );
+  const apiFixtures = Array.isArray(data.response)
+    ? data.response
+    : [];
 
-      const fixtures =
-        fixtureResponses.filter(Boolean);
+  const fixtureIdSet = new Set(
+    fixtureIds.map((id) => String(id))
+  );
+
+  fixtures = apiFixtures.filter((match) =>
+    fixtureIdSet.has(
+      String(match.fixture?.id)
+    )
+  );
+} catch (error) {
+  console.warn(
+    'No se pudieron actualizar los partidos del día:',
+    error.message
+  );
+
+  fixtures = [];
+}
 
       const matches = fixtures.map((match) => {
         const homeApiName =
