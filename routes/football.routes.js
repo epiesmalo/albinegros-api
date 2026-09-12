@@ -23,6 +23,72 @@ const SOON_CACHE_MS = 60_000;
 const UPCOMING_CACHE_MS = 5 * 60_000;
 const IDLE_CACHE_MS = 15 * 60_000;
 
+const getTimeZoneOffsetMs = (date, timeZone) => {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+
+  const values = Object.fromEntries(
+    parts.map(({ type, value }) => [type, value])
+  );
+
+  const asUTC = Date.UTC(
+    Number(values.year),
+    Number(values.month) - 1,
+    Number(values.day),
+    Number(values.hour),
+    Number(values.minute),
+    Number(values.second)
+  );
+
+  return asUTC - date.getTime();
+};
+
+const zonedDateTimeToUtcIso = (
+  year,
+  month,
+  day,
+  hour,
+  minute,
+  second,
+  timeZone
+) => {
+  const utcGuess = Date.UTC(
+    year,
+    month - 1,
+    day,
+    hour,
+    minute,
+    second
+  );
+
+  let date = new Date(utcGuess);
+  let offset = getTimeZoneOffsetMs(
+    date,
+    timeZone
+  );
+
+  date = new Date(utcGuess - offset);
+
+  const correctedOffset =
+    getTimeZoneOffsetMs(date, timeZone);
+
+  if (correctedOffset !== offset) {
+    date = new Date(
+      utcGuess - correctedOffset
+    );
+  }
+
+  return date.toISOString();
+};
+
 const getLiveCacheMs = (cachedData) => {
   const matches = cachedData?.matches;
 
@@ -449,8 +515,35 @@ if (
         day: '2-digit',
       }).format(new Date());
 
-      const startOfDay = `${today}T00:00:00+02:00`;
-      const endOfDay = `${today}T23:59:59+02:00`;
+      const [year, month, day] = today
+        .split('-')
+        .map(Number);
+
+      const startOfDay =
+        zonedDateTimeToUtcIso(
+          year,
+          month,
+          day,
+          0,
+          0,
+          0,
+          TIMEZONE
+        );
+
+      const nextDay = new Date(
+        Date.UTC(year, month - 1, day + 1)
+      );
+
+      const endOfDay =
+        zonedDateTimeToUtcIso(
+          nextDay.getUTCFullYear(),
+          nextDay.getUTCMonth() + 1,
+          nextDay.getUTCDate(),
+          0,
+          0,
+          0,
+          TIMEZONE
+        );
 
       const {
         data: calendarMatches,
@@ -459,7 +552,7 @@ if (
         .from('calendar')
         .select('*')
         .gte('date', startOfDay)
-        .lte('date', endOfDay)
+        .lt('date', endOfDay)
         .order('date', { ascending: true });
 
       if (calendarError) {
