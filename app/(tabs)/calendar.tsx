@@ -171,30 +171,60 @@ const updatedData = await refreshTodayFixtures(data);
 const previousFixtures = fixturesRef.current;
 
 const mergedData = updatedData.map((item) => {
- const previousItem = previousFixtures.find(
-  (previous) =>
-    String(previous.fixtureId) === String(item.fixtureId)
-);
+  const previousItem = previousFixtures.find(
+    (previous) =>
+      String(previous.fixtureId) === String(item.fixtureId)
+  );
 
   if (!previousItem) {
     return item;
   }
 
- return {
-  ...item,
-  homeGoals:
-    item.homeGoals ?? previousItem.homeGoals ?? null,
-  awayGoals:
-    item.awayGoals ?? previousItem.awayGoals ?? null,
-  statusShort:
-    item.statusShort ?? previousItem.statusShort ?? null,
-  statusLong:
-    item.statusLong ?? previousItem.statusLong ?? null,
-  elapsed:
-    item.elapsed ?? previousItem.elapsed ?? null,
-  extra:
-    item.extra ?? previousItem.extra ?? null,
-};
+  const matchDate = new Date(item.date);
+  const now = new Date();
+
+  const isToday =
+    matchDate.getFullYear() === now.getFullYear() &&
+    matchDate.getMonth() === now.getMonth() &&
+    matchDate.getDate() === now.getDate();
+
+  // Solo permitimos conservar estados LIVE anteriores
+  // mientras el partido pertenezca al día de hoy.
+  const canKeepPreviousLiveState = isToday;
+
+  return {
+    ...item,
+
+    homeGoals:
+      item.homeGoals ?? previousItem.homeGoals ?? null,
+
+    awayGoals:
+      item.awayGoals ?? previousItem.awayGoals ?? null,
+
+    statusShort:
+      item.statusShort ??
+      (canKeepPreviousLiveState
+        ? previousItem.statusShort
+        : null),
+
+    statusLong:
+      item.statusLong ??
+      (canKeepPreviousLiveState
+        ? previousItem.statusLong
+        : null),
+
+    elapsed:
+      item.elapsed ??
+      (canKeepPreviousLiveState
+        ? previousItem.elapsed
+        : null),
+
+    extra:
+      item.extra ??
+      (canKeepPreviousLiveState
+        ? previousItem.extra
+        : null),
+  };
 });
 
 fixturesRef.current = mergedData;
@@ -295,14 +325,25 @@ setUsingCachedData(true);
   }
 };
 
-  
+const refreshLiveFixtures = async () => {
+  const currentFixtures = fixturesRef.current;
+
+  if (!currentFixtures.length) {
+    return;
+  }
+
+  const updatedFixtures = await refreshTodayFixtures(currentFixtures);
+
+  fixturesRef.current = updatedFixtures;
+  setFixtures(updatedFixtures);
+};
 
 useFocusEffect(
   useCallback(() => {
     loadCalendar();
 
     const interval = setInterval(() => {
-      loadCalendar(true);
+      refreshLiveFixtures();
     }, 30_000);
 
     return () => {
@@ -519,9 +560,36 @@ const minute =
   const pausedStatuses = ['HT', 'BT'];
   const finishedStatuses = ['FT', 'AET', 'PEN'];
 
-  const isLive = liveStatuses.includes(short);
-  const isPaused = pausedStatuses.includes(short);
-  const isFinished = finishedStatuses.includes(short);
+  const matchDate = new Date(item.date);
+const now = new Date();
+
+const isPastDay =
+  matchDate.getFullYear() < now.getFullYear() ||
+  (
+    matchDate.getFullYear() === now.getFullYear() &&
+    matchDate.getMonth() < now.getMonth()
+  ) ||
+  (
+    matchDate.getFullYear() === now.getFullYear() &&
+    matchDate.getMonth() === now.getMonth() &&
+    matchDate.getDate() < now.getDate()
+  );
+
+const hasFinalScore =
+  item.homeGoals !== null &&
+  item.awayGoals !== null;
+
+const forceFinished =
+  isPastDay && hasFinalScore;
+
+const isLive =
+  !forceFinished && liveStatuses.includes(short);
+
+const isPaused =
+  !forceFinished && pausedStatuses.includes(short);
+
+const isFinished =
+  forceFinished || finishedStatuses.includes(short);
 
   const minute =
     item.elapsed !== null && item.elapsed !== undefined
