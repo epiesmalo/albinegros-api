@@ -2940,326 +2940,69 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
     const playerId = String(req.params.playerId || '').trim();
     const requestedTeamId = String(req.query.teamId || '').trim();
 
-    const isNumericPlayerId = /^\d+$/.test(playerId);
-    const localMatch = playerId.match(/^local-(\d+)$/);
-    const isLocalPlayerId = Boolean(localMatch);
-
-    if (!isNumericPlayerId && !isLocalPlayerId) {
+    if (!/^\d+$/.test(playerId)) {
       return res.status(400).json({
         ok: false,
         error: 'ID de jugador no válido',
       });
     }
 
-    if (!SEASON) {
-      return res.status(500).json({
-        ok: false,
-        error: 'FOOTBALL_SEASON no está configurado',
-      });
-    }
-
-    const CASTELLON_TEAM_ID = 5254;
-    const isCastellonRequest =
-      String(requestedTeamId) === String(CASTELLON_TEAM_ID) ||
-      isLocalPlayerId;
-
-    // ---------------------------------------------------------
-    // DATOS PROPIOS DEL C.D. CASTELLÓN
-    // ---------------------------------------------------------
-    // Si el jugador pertenece a nuestra plantilla curada,
-    // Supabase tiene prioridad para identidad, foto y datos personales.
-    let customPlayer = null;
-
-    if (isCastellonRequest) {
-      let customQuery = supabase
-        .from('castellon_squad')
-        .select(
-          'id,player_id,name,firstname,lastname,number,position,age,birth_date,birth_place,birth_country,nationality,height,photo,active'
-        )
-        .eq('active', true);
-
-      if (isLocalPlayerId) {
-        customQuery = customQuery.eq('id', Number(localMatch[1]));
-      } else {
-        customQuery = customQuery.eq('player_id', Number(playerId));
-      }
-
-      const { data: customRows, error: customError } = await customQuery.limit(1);
-
-      if (customError) {
-        throw customError;
-      }
-
-      customPlayer =
-        Array.isArray(customRows) && customRows.length > 0
-          ? customRows[0]
-          : null;
-    }
-
-    // ---------------------------------------------------------
-    // API-FOOTBALL: perfil + estadísticas
-    // ---------------------------------------------------------
-    let player = null;
-    let rawStatistics = [];
-    let career = [];
-
-    // Los jugadores locales todavía no existen en API-Football,
-    // por lo que no hacemos una petición con un ID inventado.
-    if (isNumericPlayerId) {
-      try {
-        const seasonData = await footballFetch(
-          `/players?id=${encodeURIComponent(playerId)}&season=${encodeURIComponent(SEASON)}`
-        );
-
-        const entry = Array.isArray(seasonData.response)
-          ? seasonData.response[0]
-          : null;
-
-        player = entry?.player || null;
-        rawStatistics = Array.isArray(entry?.statistics)
-          ? entry.statistics
-          : [];
-      } catch (error) {
-        console.warn(
-          'API-Football no devolvió ficha estadística del jugador:',
-          error.message
-        );
-      }
-    }
-
-    // Trayectoria completa del jugador.
-    // API-Football devuelve los equipos y temporadas en los que ha jugado.
-    if (isNumericPlayerId) {
-      try {
-        const careerData = await footballFetch(
-          `/players/teams?player=${encodeURIComponent(playerId)}`
-        );
-
-        const rawCareer = Array.isArray(careerData.response)
-          ? careerData.response
-          : [];
-
-        career = rawCareer
-          .map((entry) => {
-            const apiTeamName = entry.team?.name || '';
-            const seasons = Array.isArray(entry.seasons)
-              ? entry.seasons
-                  .map((season) => {
-                    if (
-                      season &&
-                      typeof season === 'object' &&
-                      season.season !== undefined
-                    ) {
-                      return season.season;
-                    }
-
-                    return season;
-                  })
-                  .filter(
-                    (season) =>
-                      season !== null &&
-                      season !== undefined &&
-                      String(season).trim() !== ''
-                  )
-              : [];
-
-            return {
-              team: {
-                id: entry.team?.id ?? null,
-                name: getDisplayTeamName(apiTeamName),
-                shortName: getShortTeamName(apiTeamName),
-                logo: getTeamLogo(
-                  apiTeamName,
-                  entry.team?.logo || ''
-                ),
-                isCastellon: isCastellon(apiTeamName),
-              },
-              seasons,
-            };
-          })
-          .filter((entry) => entry.team.id || entry.team.name);
-      } catch (error) {
-        console.warn(
-          'No se pudo cargar la trayectoria del jugador:',
-          error.message
-        );
-
-        career = [];
-      }
-    }
-
-    // Al inicio de temporada puede existir en /players/squads
-    // pero todavía no en /players?season=....
-    let squadPlayer = null;
-    let squadTeam = null;
-
     if (
-      isNumericPlayerId &&
-      !player &&
-      /^\d+$/.test(requestedTeamId)
+      requestedTeamId &&
+      !/^\d+$/.test(requestedTeamId)
     ) {
-      try {
-        const squadData = await footballFetch(
-          `/players/squads?team=${encodeURIComponent(requestedTeamId)}`
-        );
-
-        const squadEntry = Array.isArray(squadData.response)
-          ? squadData.response[0]
-          : null;
-
-        squadTeam = squadEntry?.team || null;
-
-        squadPlayer = Array.isArray(squadEntry?.players)
-          ? squadEntry.players.find(
-              (item) => String(item.id) === String(playerId)
-            )
-          : null;
-      } catch (error) {
-        console.warn(
-          'No se pudo usar la plantilla API como fallback del jugador:',
-          error.message
-        );
-      }
-    }
-
-    if (!customPlayer && !player && !squadPlayer) {
-      return res.status(404).json({
+      return res.status(400).json({
         ok: false,
-        error: 'Jugador no encontrado',
-        hint:
-          'Si todavía no tiene estadísticas de la temporada, envía también ?teamId=ID_DEL_EQUIPO',
+        error: 'ID de equipo no válido',
       });
     }
 
-    const normalizeStatistics = (statistics) =>
-      statistics.map((stat) => {
-        const teamApiName = stat.team?.name || '';
+    const positionMap = {
+      24: 'Goalkeeper',
+      25: 'Defender',
+      26: 'Midfielder',
+      27: 'Attacker',
+    };
 
-        return {
-          team: {
-            id: stat.team?.id ?? null,
-            name: getDisplayTeamName(teamApiName),
-            shortName: getShortTeamName(teamApiName),
-            logo: getTeamLogo(teamApiName, stat.team?.logo || ''),
-            isCastellon: isCastellon(teamApiName),
-          },
-          league: {
-            id: stat.league?.id ?? null,
-            name: getCompetitionName(stat.league?.name || ''),
-            country: stat.league?.country || '',
-            logo: stat.league?.logo || '',
-            flag: stat.league?.flag || '',
-            season: stat.league?.season ?? SEASON,
-          },
-          games: {
-            appearances: stat.games?.appearences ?? 0,
-            lineups: stat.games?.lineups ?? 0,
-            minutes: stat.games?.minutes ?? 0,
-            number: stat.games?.number ?? null,
-            position: stat.games?.position || '',
-            rating: stat.games?.rating || null,
-            captain: stat.games?.captain ?? false,
-          },
-          substitutes: {
-            in: stat.substitutes?.in ?? 0,
-            out: stat.substitutes?.out ?? 0,
-            bench: stat.substitutes?.bench ?? 0,
-          },
-          shots: {
-            total: stat.shots?.total ?? 0,
-            on: stat.shots?.on ?? 0,
-          },
-          goals: {
-            total: stat.goals?.total ?? 0,
-            conceded: stat.goals?.conceded ?? 0,
-            assists: stat.goals?.assists ?? 0,
-            saves: stat.goals?.saves ?? 0,
-          },
-          passes: {
-            total: stat.passes?.total ?? 0,
-            key: stat.passes?.key ?? 0,
-            accuracy: stat.passes?.accuracy ?? null,
-          },
-          tackles: {
-            total: stat.tackles?.total ?? 0,
-            blocks: stat.tackles?.blocks ?? 0,
-            interceptions: stat.tackles?.interceptions ?? 0,
-          },
-          duels: {
-            total: stat.duels?.total ?? 0,
-            won: stat.duels?.won ?? 0,
-          },
-          dribbles: {
-            attempts: stat.dribbles?.attempts ?? 0,
-            success: stat.dribbles?.success ?? 0,
-            past: stat.dribbles?.past ?? 0,
-          },
-          fouls: {
-            drawn: stat.fouls?.drawn ?? 0,
-            committed: stat.fouls?.committed ?? 0,
-          },
-          cards: {
-            yellow: stat.cards?.yellow ?? 0,
-            yellowRed: stat.cards?.yellowred ?? 0,
-            red: stat.cards?.red ?? 0,
-          },
-          penalty: {
-            won: stat.penalty?.won ?? 0,
-            committed: stat.penalty?.commited ?? 0,
-            scored: stat.penalty?.scored ?? 0,
-            missed: stat.penalty?.missed ?? 0,
-            saved: stat.penalty?.saved ?? 0,
-          },
-        };
-      });
+    const normalizeImage = (image) => {
+      if (!image) return '';
 
-    const statistics = normalizeStatistics(rawStatistics);
+      if (
+        String(image)
+          .toLowerCase()
+          .includes('placeholder')
+      ) {
+        return '';
+      }
 
-    const preferredStatistics =
-      statistics.find((stat) =>
-        LEAGUE_ID
-          ? String(stat.league.id) === String(LEAGUE_ID)
-          : false
-      ) ||
-      statistics[0] ||
-      null;
-
-    const fallbackTeamName = squadTeam?.name || '';
-    const fallbackTeam = squadTeam
-      ? {
-          id: squadTeam.id ?? Number(requestedTeamId),
-          name: getDisplayTeamName(fallbackTeamName),
-          shortName: getShortTeamName(fallbackTeamName),
-          logo: getTeamLogo(fallbackTeamName, squadTeam.logo || ''),
-          isCastellon: isCastellon(fallbackTeamName),
-        }
-      : null;
-
-    const castellonTeam = {
-      id: CASTELLON_TEAM_ID,
-      name: getDisplayTeamName('CD Castellón'),
-      shortName: getShortTeamName('CD Castellón'),
-      logo: getTeamLogo('CD Castellón', ''),
-      isCastellon: true,
+      return image;
     };
 
     const calculateAge = (birthDate) => {
       if (!birthDate) return null;
 
-      const birth = new Date(`${birthDate}T12:00:00Z`);
+      const birth = new Date(
+        `${birthDate}T12:00:00Z`
+      );
 
       if (Number.isNaN(birth.getTime())) {
         return null;
       }
 
       const today = new Date();
-      let age = today.getUTCFullYear() - birth.getUTCFullYear();
+
+      let age =
+        today.getUTCFullYear() -
+        birth.getUTCFullYear();
 
       const hasNotHadBirthday =
-        today.getUTCMonth() < birth.getUTCMonth() ||
+        today.getUTCMonth() <
+          birth.getUTCMonth() ||
         (
-          today.getUTCMonth() === birth.getUTCMonth() &&
-          today.getUTCDate() < birth.getUTCDate()
+          today.getUTCMonth() ===
+            birth.getUTCMonth() &&
+          today.getUTCDate() <
+            birth.getUTCDate()
         );
 
       if (hasNotHadBirthday) {
@@ -3269,144 +3012,732 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
       return age;
     };
 
-    const apiBasePlayer = player
-      ? {
-          id: player.id ?? (isNumericPlayerId ? Number(playerId) : playerId),
-          name: player.name || '',
-          firstname: player.firstname || '',
-          lastname: player.lastname || '',
-          age: player.age ?? null,
-          birth: {
-            date: player.birth?.date || null,
-            place: player.birth?.place || '',
-            country: player.birth?.country || '',
-          },
-          nationality: player.nationality || '',
-          height: player.height || '',
-          injured: player.injured ?? false,
-          photo: player.photo || '',
-          number: preferredStatistics?.games?.number ?? null,
-          position: preferredStatistics?.games?.position || '',
-        }
-      : squadPlayer
-        ? {
-            id: squadPlayer.id ?? (isNumericPlayerId ? Number(playerId) : playerId),
-            name: squadPlayer.name || '',
-            firstname: '',
-            lastname: '',
-            age: squadPlayer.age ?? null,
-            birth: {
-              date: null,
-              place: '',
-              country: '',
-            },
-            nationality: '',
-            height: '',
-            injured: false,
-            photo: squadPlayer.photo || '',
-            number: squadPlayer.number ?? null,
-            position: squadPlayer.position || '',
-          }
-        : {
-            id: playerId,
-            name: '',
-            firstname: '',
-            lastname: '',
-            age: null,
-            birth: {
-              date: null,
-              place: '',
-              country: '',
-            },
-            nationality: '',
-            height: '',
-            injured: false,
-            photo: '',
-            number: null,
-            position: '',
-          };
+    const playerData = await sportmonksFetch(
+      `/players/${encodeURIComponent(playerId)}` +
+        `?include=statistics.details.type`
+    );
 
-    // Supabase manda únicamente cuando tenemos un dato propio.
-    const mergedPlayer = customPlayer
-      ? {
-          ...apiBasePlayer,
-          id:
-            customPlayer.player_id !== null &&
-            customPlayer.player_id !== undefined
-              ? customPlayer.player_id
-              : `local-${customPlayer.id}`,
-          name: customPlayer.name || apiBasePlayer.name,
-          firstname: customPlayer.firstname || apiBasePlayer.firstname,
-          lastname: customPlayer.lastname || apiBasePlayer.lastname,
-          age:
-            calculateAge(customPlayer.birth_date) ??
-            customPlayer.age ??
-            apiBasePlayer.age,
-          birth: {
-            date:
-              customPlayer.birth_date ||
-              apiBasePlayer.birth.date ||
-              null,
-            place:
-              customPlayer.birth_place ||
-              apiBasePlayer.birth.place ||
-              '',
-            country:
-              customPlayer.birth_country ||
-              apiBasePlayer.birth.country ||
-              '',
-          },
-          nationality:
-            customPlayer.nationality ||
-            apiBasePlayer.nationality ||
-            '',
-          height:
-            customPlayer.height ||
-            apiBasePlayer.height ||
-            '',
-          photo:
-            customPlayer.photo ||
-            apiBasePlayer.photo ||
-            '',
-          number:
-            customPlayer.number ??
-            apiBasePlayer.number ??
-            null,
-          position:
-            customPlayer.position ||
-            apiBasePlayer.position ||
-            '',
+    const player = playerData?.data;
+
+    if (!player?.id) {
+      return res.status(404).json({
+        ok: false,
+        error: 'Jugador no encontrado',
+      });
+    }
+
+    const allStatistics = Array.isArray(
+      player.statistics
+    )
+      ? player.statistics
+      : [];
+
+    /*
+     * Solo usamos estadísticas pertenecientes a las
+     * temporadas actuales de nuestras competiciones.
+     */
+    const competitionList =
+      Object.values(
+        SPORTMONKS_COMPETITIONS
+      ).filter(
+        (competition) =>
+          competition?.seasonId
+      );
+
+    const currentSeasonIds = new Set(
+      competitionList.map(
+        (competition) =>
+          Number(competition.seasonId)
+      )
+    );
+
+    const currentStatistics =
+      allStatistics.filter((stat) =>
+        currentSeasonIds.has(
+          Number(stat.season_id)
+        )
+      );
+
+    /*
+     * Si hemos llegado desde la ficha de un equipo,
+     * damos prioridad a ese equipo.
+     */
+    const preferredRawStatistic =
+      (
+        requestedTeamId
+          ? currentStatistics.find(
+              (stat) =>
+                Number(stat.team_id) ===
+                Number(requestedTeamId)
+            )
+          : null
+      ) ||
+      currentStatistics.find(
+        (stat) => stat.has_values === true
+      ) ||
+      currentStatistics[0] ||
+      null;
+
+    const resolvedTeamId =
+      requestedTeamId ||
+      (
+        preferredRawStatistic?.team_id
+          ? String(
+              preferredRawStatistic.team_id
+            )
+          : ''
+      );
+
+    /*
+     * Cargamos todos los equipos que necesitamos
+     * para poder formar statistics y la ficha.
+     */
+    const relevantTeamIds = Array.from(
+      new Set(
+        [
+          resolvedTeamId,
+          ...currentStatistics.map(
+            (stat) =>
+              String(stat.team_id || '')
+          ),
+        ].filter(
+          (id) =>
+            id &&
+            /^\d+$/.test(id)
+        )
+      )
+    );
+
+    const teamEntries =
+      await Promise.all(
+        relevantTeamIds.map(
+          async (id) => {
+            try {
+              const teamData =
+                await sportmonksFetch(
+                  `/teams/${encodeURIComponent(id)}`
+                );
+
+              return [
+                String(id),
+                teamData?.data || null,
+              ];
+            } catch (error) {
+              console.warn(
+                `No se pudo cargar el equipo ${id} del jugador ${playerId}:`,
+                error.message
+              );
+
+              return [
+                String(id),
+                null,
+              ];
+            }
+          }
+        )
+      );
+
+    const teamMap = new Map(
+      teamEntries
+    );
+
+    const buildTeam = (teamId) => {
+      if (!teamId) return null;
+
+      const rawTeam = teamMap.get(
+        String(teamId)
+      );
+
+      if (!rawTeam) {
+        return {
+          id: Number(teamId),
+          name: '',
+          shortName: '',
+          logo: '',
+          isCastellon:
+            Number(teamId) === 10008,
+        };
+      }
+
+      const rawName =
+        rawTeam.name || '';
+
+      return {
+        id:
+          rawTeam.id ??
+          Number(teamId),
+
+        name:
+          getDisplayTeamName(rawName),
+
+        shortName:
+          getShortTeamName(rawName),
+
+        logo:
+          getTeamLogo(
+            rawName,
+            rawTeam.image_path || ''
+          ),
+
+        isCastellon:
+          isCastellon(rawName),
+      };
+    };
+
+    const getDetail = (
+      stat,
+      developerName
+    ) => {
+      const details =
+        Array.isArray(stat?.details)
+          ? stat.details
+          : [];
+
+      return (
+        details.find(
+          (detail) =>
+            detail?.type
+              ?.developer_name ===
+            developerName
+        ) || null
+      );
+    };
+
+    const getValue = (
+      stat,
+      developerName,
+      key = 'total',
+      fallback = 0
+    ) => {
+      const detail = getDetail(
+        stat,
+        developerName
+      );
+
+      const value = detail?.value;
+
+      if (
+        value === null ||
+        value === undefined
+      ) {
+        return fallback;
+      }
+
+      if (
+        typeof value === 'number' ||
+        typeof value === 'string'
+      ) {
+        const parsed = Number(value);
+
+        return Number.isNaN(parsed)
+          ? value
+          : parsed;
+      }
+
+      if (
+        typeof value === 'object'
+      ) {
+        const candidate =
+          value[key] ??
+          value.total ??
+          value.value;
+
+        if (
+          candidate === null ||
+          candidate === undefined
+        ) {
+          return fallback;
         }
-      : apiBasePlayer;
+
+        const parsed =
+          Number(candidate);
+
+        return Number.isNaN(parsed)
+          ? candidate
+          : parsed;
+      }
+
+      return fallback;
+    };
+
+    const normalizePlayerStatistic = (
+      stat
+    ) => {
+      const competition =
+        competitionList.find(
+          (item) =>
+            Number(item.seasonId) ===
+            Number(stat.season_id)
+        ) || null;
+
+      const ratingDetail = getDetail(
+        stat,
+        'RATING'
+      );
+
+      const ratingValue =
+        ratingDetail?.value &&
+        typeof ratingDetail.value ===
+          'object'
+          ? (
+              ratingDetail.value.average ??
+              ratingDetail.value.value ??
+              null
+            )
+          : (
+              ratingDetail?.value ??
+              null
+            );
+
+      const substitutionDetail =
+        getDetail(
+          stat,
+          'SUBSTITUTIONS'
+        );
+
+      const substitutionValue =
+        substitutionDetail?.value &&
+        typeof substitutionDetail.value ===
+          'object'
+          ? substitutionDetail.value
+          : {};
+
+      return {
+        team:
+          buildTeam(
+            stat.team_id
+          ) || {
+            id:
+              stat.team_id ??
+              null,
+            name: '',
+            shortName: '',
+            logo: '',
+            isCastellon: false,
+          },
+
+        league: {
+          id:
+            competition?.leagueId ??
+            null,
+
+          name:
+            competition?.name ||
+            '',
+
+          country: 'España',
+
+          logo: '',
+
+          season:
+            stat.season_id ??
+            null,
+        },
+
+        games: {
+          appearances:
+            getValue(
+              stat,
+              'APPEARANCES'
+            ),
+
+          lineups:
+            getValue(
+              stat,
+              'LINEUPS'
+            ),
+
+          minutes:
+            getValue(
+              stat,
+              'MINUTES_PLAYED'
+            ),
+
+          number:
+            stat.jersey_number ??
+            null,
+
+          position:
+            positionMap[
+              Number(
+                stat.position_id ??
+                player.position_id
+              )
+            ] || '',
+
+          rating:
+            ratingValue,
+
+          captain: false,
+        },
+
+        substitutes: {
+          in:
+            Number(
+              substitutionValue.in ??
+              0
+            ),
+
+          out:
+            Number(
+              substitutionValue.out ??
+              0
+            ),
+
+          bench:
+            getValue(
+              stat,
+              'BENCH'
+            ),
+        },
+
+        shots: {
+          total:
+            getValue(
+              stat,
+              'SHOTS_TOTAL'
+            ),
+
+          on:
+            getValue(
+              stat,
+              'SHOTS_ON_TARGET'
+            ),
+        },
+
+        goals: {
+          total:
+            getValue(
+              stat,
+              'GOALS'
+            ),
+
+          conceded:
+            getValue(
+              stat,
+              'GOALS_CONCEDED'
+            ),
+
+          assists:
+            getValue(
+              stat,
+              'ASSISTS'
+            ),
+
+          saves:
+            getValue(
+              stat,
+              'SAVES'
+            ),
+        },
+
+        passes: {
+          total:
+            getValue(
+              stat,
+              'PASSES'
+            ),
+
+          key:
+            getValue(
+              stat,
+              'KEY_PASSES'
+            ),
+
+          accuracy:
+            getValue(
+              stat,
+              'ACCURATE_PASSES_PERCENTAGE',
+              'total',
+              null
+            ),
+        },
+
+        tackles: {
+          total:
+            getValue(
+              stat,
+              'TACKLES'
+            ),
+
+          blocks:
+            getValue(
+              stat,
+              'BLOCKED_SHOTS'
+            ),
+
+          interceptions:
+            getValue(
+              stat,
+              'INTERCEPTIONS'
+            ),
+        },
+
+        duels: {
+          total:
+            getValue(
+              stat,
+              'TOTAL_DUELS'
+            ),
+
+          won:
+            getValue(
+              stat,
+              'DUELS_WON'
+            ),
+        },
+
+        dribbles: {
+          attempts:
+            getValue(
+              stat,
+              'DRIBBLED_ATTEMPTS'
+            ),
+
+          success:
+            getValue(
+              stat,
+              'SUCCESSFUL_DRIBBLES'
+            ),
+
+          past:
+            getValue(
+              stat,
+              'DRIBBLED_PAST'
+            ),
+        },
+
+        fouls: {
+          drawn:
+            getValue(
+              stat,
+              'FOULS_DRAWN'
+            ),
+
+          committed:
+            getValue(
+              stat,
+              'FOULS'
+            ),
+        },
+
+        cards: {
+          yellow:
+            getValue(
+              stat,
+              'YELLOWCARDS'
+            ),
+
+          yellowRed:
+            getValue(
+              stat,
+              'YELLOWRED_CARDS'
+            ),
+
+          red:
+            getValue(
+              stat,
+              'REDCARDS'
+            ),
+        },
+
+        penalty: {
+          won: 0,
+          committed: 0,
+          scored: 0,
+          missed: 0,
+          saved: 0,
+        },
+      };
+    };
+
+    /*
+     * Solo consideramos disponibles aquellas
+     * estadísticas que realmente tienen valores.
+     */
+    const statistics =
+      currentStatistics
+        .filter(
+          (stat) =>
+            stat.has_values === true &&
+            Array.isArray(
+              stat.details
+            ) &&
+            stat.details.length > 0
+        )
+        .map(
+          normalizePlayerStatistic
+        );
+
+    const preferredStatistics =
+      (
+        preferredRawStatistic
+          ?.has_values === true &&
+        Array.isArray(
+          preferredRawStatistic.details
+        ) &&
+        preferredRawStatistic
+          .details.length > 0
+          ? normalizePlayerStatistic(
+              preferredRawStatistic
+            )
+          : null
+      ) ||
+      statistics[0] ||
+      null;
+
+    const preferredTeam =
+      buildTeam(
+        resolvedTeamId
+      ) ||
+      preferredStatistics?.team ||
+      null;
+
+    /*
+     * Aunque el jugador todavía no tenga estadísticas,
+     * usamos su registro de temporada para dorsal y posición.
+     */
+    const playerNumber =
+      preferredRawStatistic
+        ?.jersey_number ??
+      null;
+
+    const playerPosition =
+      positionMap[
+        Number(
+          preferredRawStatistic
+            ?.position_id ??
+          player.position_id
+        )
+      ] || '';
+
+    const playerProfile = {
+      id: Number(player.id),
+
+      name:
+        player.display_name ||
+        player.name ||
+        player.common_name ||
+        '',
+
+      firstname:
+        player.firstname || '',
+
+      lastname:
+        player.lastname || '',
+
+      age:
+        calculateAge(
+          player.date_of_birth
+        ),
+
+      birth: {
+        date:
+          player.date_of_birth ||
+          null,
+
+        place: '',
+
+        country: '',
+      },
+
+      nationality: '',
+
+      height:
+        player.height
+          ? `${player.height} cm`
+          : '',
+
+      weight:
+        player.weight
+          ? `${player.weight} kg`
+          : '',
+
+      injured: false,
+
+      photo:
+        normalizeImage(
+          player.image_path || ''
+        ),
+
+      number:
+        playerNumber,
+
+      position:
+        playerPosition,
+    };
+
+    /*
+     * Trayectoria:
+     * de momento la dejamos preparada pero vacía.
+     * No mezclamos IDs de temporadas con nombres/años
+     * hasta migrar esa relación correctamente.
+     */
+    const career = [];
+
+    const preferredCompetition =
+      competitionList.find(
+        (competition) =>
+          Number(
+            competition.seasonId
+          ) ===
+          Number(
+            preferredRawStatistic
+              ?.season_id
+          )
+      ) || null;
 
     return res.json({
       ok: true,
-      updatedAt: new Date().toISOString(),
-      profileSource: customPlayer
-        ? 'castellon_squad'
-        : player
-          ? 'season'
-          : 'squad',
-      statisticsAvailable: statistics.length > 0,
+      provider: 'sportmonks',
+      updatedAt:
+        new Date().toISOString(),
 
-      player: mergedPlayer,
+      profileSource:
+        'sportmonks',
+
+      statisticsAvailable:
+        statistics.length > 0,
+
+      player:
+        playerProfile,
 
       team:
-        customPlayer
-          ? castellonTeam
-          : preferredStatistics?.team || fallbackTeam,
+        preferredTeam,
 
-      season: SEASON,
+      season:
+        preferredCompetition
+          ?.seasonId
+          ? String(
+              preferredCompetition
+                .seasonId
+            )
+          : (
+              preferredRawStatistic
+                ?.season_id
+                ? String(
+                    preferredRawStatistic
+                      .season_id
+                  )
+                : null
+            ),
+
       preferredStatistics,
+
       statistics,
+
       career,
     });
   } catch (error) {
-    console.error('Error cargando ficha del jugador:', error);
+    console.error(
+      'Error cargando ficha del jugador:',
+      error
+    );
 
     return res.status(500).json({
       ok: false,
-      error: 'No se pudo cargar la ficha del jugador',
+      error:
+        'No se pudo cargar la ficha del jugador',
       detail: error.message,
     });
   }
