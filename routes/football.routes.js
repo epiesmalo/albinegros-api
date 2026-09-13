@@ -1733,7 +1733,7 @@ router.get('/api/football/fixture/:fixtureId/details', async (req, res) => {
 
     const fixtureData = await sportmonksFetch(
       `/fixtures/${encodeURIComponent(fixtureId)}` +
-        `?include=participants;scores;state;periods;league;venue;round;events;lineups;statistics`
+       `?include=participants;scores;state;periods;league;venue;round;events;lineups;statistics.type`
     );
 
     const match = fixtureData.data;
@@ -2077,12 +2077,34 @@ router.get('/api/football/fixture/:fixtureId/details', async (req, res) => {
           ]
         : [];
 
-    const getStatTypeName = (stat) =>
-      stat.type?.name ||
-      stat.type?.developer_name ||
-      stat.type?.code ||
-      stat.type_name ||
-      String(stat.type_id || '');
+    const getStatTypeName = (stat) => {
+  const developerName =
+    stat.type?.developer_name || '';
+
+  const typeMap = {
+    BALL_POSSESSION: 'Ball Possession',
+    SHOTS_TOTAL: 'Total Shots',
+    SHOTS_ON_TARGET: 'Shots on Goal',
+    SHOTS_OFF_TARGET: 'Shots off Goal',
+    SHOTS_BLOCKED: 'Blocked Shots',
+    CORNERS: 'Corner Kicks',
+    OFFSIDES: 'Offsides',
+    FOULS: 'Fouls',
+    YELLOWCARDS: 'Yellow Cards',
+    REDCARDS: 'Red Cards',
+    SAVES: 'Goalkeeper Saves',
+    PASSES: 'Total passes',
+    SUCCESSFUL_PASSES: 'Passes accurate',
+    SUCCESSFUL_PASSES_PERCENTAGE: 'Passes %',
+  };
+
+  return (
+    typeMap[developerName] ||
+    stat.type?.name ||
+    developerName ||
+    String(stat.type_id || '')
+  );
+};
 
     const getStatValue = (stat) => {
       if (
