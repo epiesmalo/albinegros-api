@@ -1717,6 +1717,9 @@ if (todayFixturesCacheIsValid) {
  *
  * GET /api/football/fixture/:fixtureId/details
  */
+/**
+ * GET /api/football/fixture/:fixtureId/details
+ */
 router.get('/api/football/fixture/:fixtureId/details', async (req, res) => {
   try {
     const fixtureId = String(req.params.fixtureId || '').trim();
@@ -1728,42 +1731,12 @@ router.get('/api/football/fixture/:fixtureId/details', async (req, res) => {
       });
     }
 
-    const safeFootballFetch = async (endpoint) => {
-      try {
-        return await footballFetch(endpoint);
-      } catch (error) {
-        console.warn(
-          `API-Football no devolvió datos para ${endpoint}:`,
-          error.message
-        );
+    const fixtureData = await sportmonksFetch(
+      `/fixtures/${encodeURIComponent(fixtureId)}` +
+        `?include=participants;scores;state;periods;league;venue;round;events;lineups;statistics`
+    );
 
-        return {
-          response: [],
-        };
-      }
-    };
-
-    const [
-      fixtureData,
-      eventsData,
-      lineupsData,
-      statisticsData,
-    ] = await Promise.all([
-      footballFetch(
-        `/fixtures?id=${encodeURIComponent(fixtureId)}&timezone=${encodeURIComponent(TIMEZONE)}`
-      ),
-      safeFootballFetch(
-        `/fixtures/events?fixture=${encodeURIComponent(fixtureId)}`
-      ),
-      safeFootballFetch(
-        `/fixtures/lineups?fixture=${encodeURIComponent(fixtureId)}`
-      ),
-      safeFootballFetch(
-        `/fixtures/statistics?fixture=${encodeURIComponent(fixtureId)}`
-      ),
-    ]);
-
-    const match = fixtureData.response?.[0];
+    const match = fixtureData.data;
 
     if (!match) {
       return res.status(404).json({
@@ -1772,161 +1745,533 @@ router.get('/api/football/fixture/:fixtureId/details', async (req, res) => {
       });
     }
 
-    const homeApiName = match.teams?.home?.name || '';
-    const awayApiName = match.teams?.away?.name || '';
+    const participants = Array.isArray(match.participants)
+      ? match.participants
+      : [];
 
-    const normalizeTeam = (team, apiName) => ({
-      id: team?.id ?? null,
-      name: getDisplayTeamName(apiName),
-      shortName: getShortTeamName(apiName),
-      logo: getTeamLogo(apiName, team?.logo || ''),
-      winner: team?.winner ?? null,
-      isCastellon: isCastellon(apiName),
+    const scores = Array.isArray(match.scores)
+      ? match.scores
+      : [];
+
+    const periods = Array.isArray(match.periods)
+      ? match.periods
+      : [];
+
+    const rawEvents = Array.isArray(match.events)
+      ? match.events
+      : [];
+
+    const rawLineups = Array.isArray(match.lineups)
+      ? match.lineups
+      : [];
+
+    const rawStatistics = Array.isArray(match.statistics)
+      ? match.statistics
+      : [];
+
+    const homeTeam = participants.find(
+      (team) => team.meta?.location === 'home'
+    );
+
+    const awayTeam = participants.find(
+      (team) => team.meta?.location === 'away'
+    );
+
+    if (!homeTeam || !awayTeam) {
+      return res.status(404).json({
+        ok: false,
+        error: 'No se encontraron los equipos del partido',
+      });
+    }
+
+    const getScore = (participantId, descriptions) => {
+      const descriptionList = Array.isArray(descriptions)
+        ? descriptions
+        : [descriptions];
+
+      const score = scores.find(
+        (item) =>
+          Number(item.participant_id) === Number(participantId) &&
+          descriptionList.includes(item.description)
+      );
+
+      return score?.score?.goals ?? null;
+    };
+
+    const sportmonksStatus =
+      match.state?.short_name || '';
+
+    const statusMap = {
+      '1st': '1H',
+      HT: 'HT',
+      '2nd': '2H',
+      ET: 'ET',
+      BT: 'BT',
+      FT: 'FT',
+      AET: 'AET',
+      PEN: 'PEN',
+      NS: 'NS',
+      LIVE: 'LIVE',
+    };
+
+    const normalizedStatus =
+      statusMap[sportmonksStatus] ||
+      sportmonksStatus;
+
+    const activePeriod = periods
+      .filter((period) => period.ticking === true)
+      .sort(
+        (a, b) =>
+          Number(b.id || 0) - Number(a.id || 0)
+      )[0];
+
+    const elapsed =
+      Number.isFinite(Number(activePeriod?.minutes))
+        ? Number(activePeriod.minutes)
+        : null;
+
+    const regulationEnd =
+      Number.isFinite(Number(activePeriod?.counts_from)) &&
+      Number.isFinite(Number(activePeriod?.period_length))
+        ? Number(activePeriod.counts_from) +
+          Number(activePeriod.period_length)
+        : null;
+
+    const extra =
+      elapsed !== null &&
+      regulationEnd !== null &&
+      elapsed > regulationEnd
+        ? elapsed - regulationEnd
+        : 0;
+
+    const homeCurrentScore =
+      normalizedStatus !== 'NS'
+        ? getScore(homeTeam.id, 'CURRENT')
+        : null;
+
+    const awayCurrentScore =
+      normalizedStatus !== 'NS'
+        ? getScore(awayTeam.id, 'CURRENT')
+        : null;
+
+    const normalizeParticipant = (
+      participant,
+      currentScore,
+      opponentScore
+    ) => {
+      const apiName = participant?.name || '';
+
+      return {
+        id: participant?.id ?? null,
+        name: getDisplayTeamName(apiName),
+        shortName: getShortTeamName(apiName),
+        logo: getTeamLogo(
+          apiName,
+          participant?.image_path || ''
+        ),
+        winner:
+          currentScore !== null &&
+          opponentScore !== null &&
+          currentScore !== opponentScore
+            ? currentScore > opponentScore
+            : null,
+        isCastellon: isCastellon(apiName),
+      };
+    };
+
+    const getParticipant = (participantId) =>
+      participants.find(
+        (participant) =>
+          Number(participant.id) ===
+          Number(participantId)
+      );
+
+    const normalizeEventType = (event) =>
+      event.type?.name ||
+      event.type?.developer_name ||
+      event.type?.code ||
+      event.type_name ||
+      '';
+
+    const events = rawEvents
+      .map((event) => {
+        const eventTeam = getParticipant(
+          event.participant_id
+        );
+
+        const eventTeamName =
+          eventTeam?.name || '';
+
+        return {
+          time: {
+            elapsed:
+              event.minute ??
+              event.time?.minute ??
+              event.time?.elapsed ??
+              null,
+
+            extra:
+              event.extra_minute ??
+              event.time?.extra ??
+              null,
+          },
+
+          team: {
+            id:
+              eventTeam?.id ??
+              event.participant_id ??
+              null,
+
+            name: getDisplayTeamName(
+              eventTeamName
+            ),
+
+            logo: getTeamLogo(
+              eventTeamName,
+              eventTeam?.image_path || ''
+            ),
+          },
+
+          player: {
+            id:
+              event.player_id ??
+              event.player?.id ??
+              null,
+
+            name:
+              event.player_name ||
+              event.player?.display_name ||
+              event.player?.name ||
+              '',
+          },
+
+          assist: {
+            id:
+              event.related_player_id ??
+              event.assist?.id ??
+              null,
+
+            name:
+              event.related_player_name ||
+              event.assist?.display_name ||
+              event.assist?.name ||
+              '',
+          },
+
+          type: normalizeEventType(event),
+
+          detail:
+            event.type?.name ||
+            event.type?.developer_name ||
+            event.result ||
+            '',
+
+          comments:
+            event.info ||
+            event.addition ||
+            '',
+        };
+      })
+      .sort((a, b) => {
+        const minuteA =
+          Number(a.time.elapsed || 0) * 100 +
+          Number(a.time.extra || 0);
+
+        const minuteB =
+          Number(b.time.elapsed || 0) * 100 +
+          Number(b.time.extra || 0);
+
+        return minuteA - minuteB;
+      });
+
+    const buildPlayer = (entry) => ({
+      id:
+        entry.player_id ??
+        entry.player?.id ??
+        null,
+
+      name:
+        entry.player_name ||
+        entry.player?.display_name ||
+        entry.player?.name ||
+        '',
+
+      number:
+        entry.jersey_number ??
+        entry.number ??
+        null,
+
+      position:
+  ({
+    24: 'G',
+    25: 'D',
+    26: 'M',
+    27: 'F',
+  })[Number(entry.position_id)] || '',
+
+      grid:
+        entry.formation_field ||
+        entry.formation_position ||
+        '',
     });
 
-    const events = Array.isArray(eventsData.response)
-      ? eventsData.response.map((event) => ({
-          time: {
-            elapsed: event.time?.elapsed ?? null,
-            extra: event.time?.extra ?? null,
-          },
-          team: {
-            id: event.team?.id ?? null,
-            name: getDisplayTeamName(event.team?.name || ''),
-            logo: getTeamLogo(
-              event.team?.name || '',
-              event.team?.logo || ''
-            ),
-          },
-          player: {
-            id: event.player?.id ?? null,
-            name: event.player?.name || '',
-          },
-          assist: {
-            id: event.assist?.id ?? null,
-            name: event.assist?.name || '',
-          },
-          type: event.type || '',
-          detail: event.detail || '',
-          comments: event.comments || '',
-        }))
-      : [];
+    const getFormation = (participantId) => {
+  const teamEntries = rawLineups.filter(
+    (entry) =>
+      Number(entry.team_id) ===
+      Number(participantId)
+  );
 
-    const lineups = Array.isArray(lineupsData.response)
-      ? lineupsData.response.map((lineup) => ({
-          team: {
-            id: lineup.team?.id ?? null,
-            name: getDisplayTeamName(lineup.team?.name || ''),
-            logo: getTeamLogo(
-              lineup.team?.name || '',
-              lineup.team?.logo || ''
-            ),
-          },
-          coach: {
-            id: lineup.coach?.id ?? null,
-            name: lineup.coach?.name || '',
-            photo: lineup.coach?.photo || '',
-          },
-          formation: lineup.formation || '',
-          startXI: Array.isArray(lineup.startXI)
-            ? lineup.startXI.map((entry) => ({
-                id: entry.player?.id ?? null,
-                name: entry.player?.name || '',
-                number: entry.player?.number ?? null,
-                position: entry.player?.pos || '',
-                grid: entry.player?.grid || '',
-              }))
-            : [],
-          substitutes: Array.isArray(lineup.substitutes)
-            ? lineup.substitutes.map((entry) => ({
-                id: entry.player?.id ?? null,
-                name: entry.player?.name || '',
-                number: entry.player?.number ?? null,
-                position: entry.player?.pos || '',
-                grid: entry.player?.grid || '',
-              }))
-            : [],
-        }))
-      : [];
+  return '';
+};
 
-    const statistics = Array.isArray(statisticsData.response)
-      ? statisticsData.response.map((item) => ({
-          team: {
-            id: item.team?.id ?? null,
-            name: getDisplayTeamName(item.team?.name || ''),
-            logo: getTeamLogo(
-              item.team?.name || '',
-              item.team?.logo || ''
-            ),
-          },
-          statistics: Array.isArray(item.statistics)
-            ? item.statistics.map((stat) => ({
-                type: stat.type || '',
-                value: stat.value ?? null,
-              }))
-            : [],
-        }))
-      : [];
+    const buildLineup = (participant) => {
+  const teamEntries = rawLineups.filter(
+    (entry) =>
+      Number(entry.team_id) ===
+      Number(participant.id)
+  );
+
+      const starters = teamEntries.filter(
+        (entry) => Number(entry.type_id) === 11
+      );
+
+      const substitutes = teamEntries.filter(
+        (entry) => Number(entry.type_id) === 12
+      );
+
+      return {
+        team: {
+          id: participant.id,
+          name: getDisplayTeamName(
+            participant.name || ''
+          ),
+          logo: getTeamLogo(
+            participant.name || '',
+            participant.image_path || ''
+          ),
+        },
+
+        coach: {
+          id: null,
+          name: '',
+          photo: '',
+        },
+
+        formation: getFormation(
+          participant.id
+        ),
+
+        startXI: starters.map(buildPlayer),
+
+        substitutes:
+          substitutes.map(buildPlayer),
+      };
+    };
+
+    const lineups =
+      rawLineups.length > 0
+        ? [
+            buildLineup(homeTeam),
+            buildLineup(awayTeam),
+          ]
+        : [];
+
+    const getStatTypeName = (stat) =>
+      stat.type?.name ||
+      stat.type?.developer_name ||
+      stat.type?.code ||
+      stat.type_name ||
+      String(stat.type_id || '');
+
+    const getStatValue = (stat) => {
+      if (
+        stat.data &&
+        typeof stat.data === 'object' &&
+        Object.prototype.hasOwnProperty.call(
+          stat.data,
+          'value'
+        )
+      ) {
+        return stat.data.value;
+      }
+
+      if (stat.value !== undefined) {
+        return stat.value;
+      }
+
+      return null;
+    };
+
+    const buildStatistics = (participant) => {
+      const teamStats = rawStatistics.filter(
+        (stat) =>
+          Number(stat.participant_id) ===
+          Number(participant.id)
+      );
+
+      return {
+        team: {
+          id: participant.id,
+          name: getDisplayTeamName(
+            participant.name || ''
+          ),
+          logo: getTeamLogo(
+            participant.name || '',
+            participant.image_path || ''
+          ),
+        },
+
+        statistics: teamStats.map((stat) => ({
+          type: getStatTypeName(stat),
+          value: getStatValue(stat),
+        })),
+      };
+    };
+
+    const statistics =
+      rawStatistics.length > 0
+        ? [
+            buildStatistics(homeTeam),
+            buildStatistics(awayTeam),
+          ]
+        : [];
+
+    const matchDate = match.starting_at
+      ? `${match.starting_at.replace(' ', 'T')}Z`
+      : null;
 
     return res.json({
       ok: true,
+      provider: 'sportmonks',
       updatedAt: new Date().toISOString(),
 
       fixture: {
-        id: match.fixture?.id ?? Number(fixtureId),
-        date: match.fixture?.date || null,
-        timestamp: match.fixture?.timestamp ?? null,
-        referee: match.fixture?.referee || '',
-        timezone: match.fixture?.timezone || TIMEZONE,
+        id: match.id ?? Number(fixtureId),
+
+        date: matchDate,
+
+        timestamp: matchDate
+          ? Math.floor(
+              new Date(matchDate).getTime() /
+                1000
+            )
+          : null,
+
+        referee:
+          match.referee?.common_name ||
+          match.referee?.display_name ||
+          match.referee?.name ||
+          '',
+
+        timezone: TIMEZONE,
 
         status: {
-          short: match.fixture?.status?.short || '',
-          long: match.fixture?.status?.long || '',
-          elapsed: match.fixture?.status?.elapsed ?? null,
-          extra: match.fixture?.status?.extra ?? null,
+          short: normalizedStatus,
+          long: match.state?.name || '',
+          elapsed,
+          extra,
         },
 
         venue: {
-          id: match.fixture?.venue?.id ?? null,
+          id: match.venue?.id ?? null,
+
           name: getCorrectVenue(
-            homeApiName,
-            match.fixture?.venue?.name || ''
+            homeTeam.name || '',
+            match.venue?.name || ''
           ),
-          city: match.fixture?.venue?.city || '',
+
+          city:
+            match.venue?.city_name ||
+            match.venue?.city ||
+            '',
         },
       },
 
       league: {
         id: match.league?.id ?? null,
-        name: getCompetitionName(match.league?.name || ''),
-        round: match.league?.round || '',
-        logo: match.league?.logo || '',
+
+        name: getCompetitionName(
+          match.league?.name || ''
+        ),
+
+        round:
+          match.round?.name !== undefined
+            ? `Regular Season - ${match.round.name}`
+            : '',
+
+        logo:
+          match.league?.image_path || '',
       },
 
-      home: normalizeTeam(match.teams?.home, homeApiName),
-      away: normalizeTeam(match.teams?.away, awayApiName),
+      home: normalizeParticipant(
+        homeTeam,
+        homeCurrentScore,
+        awayCurrentScore
+      ),
+
+      away: normalizeParticipant(
+        awayTeam,
+        awayCurrentScore,
+        homeCurrentScore
+      ),
 
       goals: {
-        home: match.goals?.home ?? null,
-        away: match.goals?.away ?? null,
+        home: homeCurrentScore,
+        away: awayCurrentScore,
       },
 
       score: {
         halftime: {
-          home: match.score?.halftime?.home ?? null,
-          away: match.score?.halftime?.away ?? null,
+          home: getScore(
+            homeTeam.id,
+            '1ST_HALF'
+          ),
+
+          away: getScore(
+            awayTeam.id,
+            '1ST_HALF'
+          ),
         },
+
         fulltime: {
-          home: match.score?.fulltime?.home ?? null,
-          away: match.score?.fulltime?.away ?? null,
+          home:
+            ['FT', 'AET', 'PEN'].includes(
+              normalizedStatus
+            )
+              ? homeCurrentScore
+              : null,
+
+          away:
+            ['FT', 'AET', 'PEN'].includes(
+              normalizedStatus
+            )
+              ? awayCurrentScore
+              : null,
         },
+
         extratime: {
-          home: match.score?.extratime?.home ?? null,
-          away: match.score?.extratime?.away ?? null,
+          home: getScore(homeTeam.id, [
+            'EXTRA_TIME',
+            'ET',
+          ]),
+
+          away: getScore(awayTeam.id, [
+            'EXTRA_TIME',
+            'ET',
+          ]),
         },
+
         penalty: {
-          home: match.score?.penalty?.home ?? null,
-          away: match.score?.penalty?.away ?? null,
+          home: getScore(homeTeam.id, [
+            'PENALTIES',
+            'PENALTY_SHOOTOUT',
+          ]),
+
+          away: getScore(awayTeam.id, [
+            'PENALTIES',
+            'PENALTY_SHOOTOUT',
+          ]),
         },
       },
 
@@ -1935,11 +2280,15 @@ router.get('/api/football/fixture/:fixtureId/details', async (req, res) => {
       statistics,
     });
   } catch (error) {
-    console.error('Error cargando detalle del partido:', error);
+    console.error(
+      'Error cargando detalle del partido con Sportmonks:',
+      error
+    );
 
     return res.status(500).json({
       ok: false,
-      error: 'No se pudo cargar el detalle del partido',
+      error:
+        'No se pudo cargar el detalle del partido',
       detail: error.message,
     });
   }
