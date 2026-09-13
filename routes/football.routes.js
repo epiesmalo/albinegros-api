@@ -214,6 +214,11 @@ const getLiveCacheMs = (cachedData) => {
 let liveCache = null;
 let liveCacheSavedAt = 0;
 let liveRefreshPromise = null;
+const SPORTMONKS_TODAY_FIXTURES_CACHE_MS = 60_000;
+
+let sportmonksTodayFixturesCache = null;
+let sportmonksTodayFixturesCacheDate = null;
+let sportmonksTodayFixturesSavedAt = 0;
 
 /**
  * Realiza peticiones a API-Football.
@@ -655,6 +660,257 @@ router.get(
     }
   }
 );
+
+/**
+ * LIVE Sportmonks - endpoint de prueba.
+ * No sustituye todavía /api/football/live.
+ */
+router.get('/api/sportmonks/live', async (req, res) => {
+  try {
+    const data = await sportmonksFetch(
+      '/livescores/inplay?include=participants;scores;state;periods;league'
+    );
+
+    const matches = (data.data || []).map((fixture) => {
+      const participants = fixture.participants || [];
+      const scores = fixture.scores || [];
+      const periods = fixture.periods || [];
+
+      const homeTeam = participants.find(
+        (team) => team.meta?.location === 'home'
+      );
+
+      const awayTeam = participants.find(
+        (team) => team.meta?.location === 'away'
+      );
+
+      const getCurrentScore = (participantId) => {
+        const currentScore = scores.find(
+          (score) =>
+            score.participant_id === participantId &&
+            score.description === 'CURRENT'
+        );
+
+        return currentScore?.score?.goals ?? null;
+      };
+
+      const activePeriod = periods
+        .filter((period) => period.ticking === true)
+        .sort(
+          (a, b) =>
+            Number(b.id || 0) - Number(a.id || 0)
+        )[0];
+
+      const elapsed =
+  Number.isFinite(Number(activePeriod?.minutes))
+    ? Number(activePeriod.minutes)
+    : null;
+
+const seconds =
+  Number.isFinite(Number(activePeriod?.seconds))
+    ? Number(activePeriod.seconds)
+    : null;
+
+const regulationEnd =
+  Number.isFinite(Number(activePeriod?.counts_from)) &&
+  Number.isFinite(Number(activePeriod?.period_length))
+    ? Number(activePeriod.counts_from) +
+      Number(activePeriod.period_length)
+    : null;
+
+const extra =
+  elapsed !== null &&
+  regulationEnd !== null &&
+  elapsed > regulationEnd
+    ? elapsed - regulationEnd
+    : 0;
+const sportmonksStatus =
+  fixture.state?.short_name || '';
+
+const statusMap = {
+  '1st': '1H',
+  HT: 'HT',
+  '2nd': '2H',
+  ET: 'ET',
+  FT: 'FT',
+  NS: 'NS',
+};
+
+const normalizedStatus =
+  statusMap[sportmonksStatus] ||
+  sportmonksStatus;
+
+      return {
+  fixtureId: fixture.id,
+
+  date: fixture.starting_at
+    ? `${fixture.starting_at.replace(' ', 'T')}Z`
+    : null,
+
+  timestamp: fixture.starting_at
+    ? Math.floor(
+        new Date(
+          `${fixture.starting_at.replace(' ', 'T')}Z`
+        ).getTime() / 1000
+      )
+    : null,
+
+  status: {
+    short: normalizedStatus,
+    long: fixture.state?.name ?? '',
+    elapsed,
+    extra,
+    seconds,
+  },
+
+  league: {
+    id: fixture.league?.id ?? null,
+    name: fixture.league?.name ?? '',
+    round: '',
+    logo: fixture.league?.image_path ?? '',
+  },
+
+  venue: {
+    id: null,
+    name: '',
+    city: '',
+  },
+
+  referee: '',
+
+  home: {
+    id: homeTeam?.id ?? null,
+    name: getDisplayTeamName(
+      homeTeam?.name || ''
+    ),
+    shortName: getShortTeamName(
+      homeTeam?.name || ''
+    ),
+    logo: getTeamLogo(
+      homeTeam?.name || '',
+      homeTeam?.image_path || ''
+    ),
+    winner:
+      homeTeam &&
+      awayTeam &&
+      getCurrentScore(homeTeam.id) !== null &&
+      getCurrentScore(awayTeam.id) !== null &&
+      getCurrentScore(homeTeam.id) !==
+        getCurrentScore(awayTeam.id)
+        ? getCurrentScore(homeTeam.id) >
+          getCurrentScore(awayTeam.id)
+        : null,
+    isCastellon: isCastellon(
+      homeTeam?.name || ''
+    ),
+  },
+
+  away: {
+    id: awayTeam?.id ?? null,
+    name: getDisplayTeamName(
+      awayTeam?.name || ''
+    ),
+    shortName: getShortTeamName(
+      awayTeam?.name || ''
+    ),
+    logo: getTeamLogo(
+      awayTeam?.name || '',
+      awayTeam?.image_path || ''
+    ),
+    winner:
+      homeTeam &&
+      awayTeam &&
+      getCurrentScore(homeTeam.id) !== null &&
+      getCurrentScore(awayTeam.id) !== null &&
+      getCurrentScore(homeTeam.id) !==
+        getCurrentScore(awayTeam.id)
+        ? getCurrentScore(awayTeam.id) >
+          getCurrentScore(homeTeam.id)
+        : null,
+    isCastellon: isCastellon(
+      awayTeam?.name || ''
+    ),
+  },
+
+  goals: {
+  home:
+    normalizedStatus !== 'NS' && homeTeam
+      ? getCurrentScore(homeTeam.id)
+      : null,
+
+  away:
+    normalizedStatus !== 'NS' && awayTeam
+      ? getCurrentScore(awayTeam.id)
+      : null,
+},
+
+  score: {
+    halftime: {
+  home:
+    normalizedStatus !== 'NS' && homeTeam
+      ? scores.find(
+          (score) =>
+            score.participant_id === homeTeam.id &&
+            score.description === '1ST_HALF'
+        )?.score?.goals ?? null
+      : null,
+
+  away:
+    normalizedStatus !== 'NS' && awayTeam
+      ? scores.find(
+          (score) =>
+            score.participant_id === awayTeam.id &&
+            score.description === '1ST_HALF'
+        )?.score?.goals ?? null
+      : null,
+},
+
+    fulltime: {
+      home:
+        normalizedStatus === 'FT' && homeTeam
+          ? getCurrentScore(homeTeam.id)
+          : null,
+
+      away:
+        normalizedStatus === 'FT' && awayTeam
+          ? getCurrentScore(awayTeam.id)
+          : null,
+    },
+
+    extratime: {
+      home: null,
+      away: null,
+    },
+
+    penalty: {
+      home: null,
+      away: null,
+    },
+  },
+};
+    });
+
+    return res.json({
+      ok: true,
+      provider: 'sportmonks',
+      updatedAt: new Date().toISOString(),
+      count: matches.length,
+      matches,
+    });
+  } catch (error) {
+    console.error(
+      'Error obteniendo directos Sportmonks:',
+      error
+    );
+
+    return res.status(500).json({
+      ok: false,
+      provider: 'sportmonks',
+      error: error.message,
+    });
+  }
+});
+
 /**
  * Comprueba que API-Football está conectada.
  */
@@ -957,18 +1213,11 @@ const nextMatch = {
  */
 router.get('/api/football/live', async (req, res) => {
   try {
-    if (!LEAGUE_ID) {
-      return res.status(500).json({
-        ok: false,
-        error: 'FOOTBALL_LEAGUE_ID no está configurado',
-      });
-    }
+    const now = Date.now();
 
-   const now = Date.now();
-
-const currentCacheMs = liveCache
-  ? getLiveCacheMs(liveCache)
-  : LIVE_CACHE_MS;
+    const currentCacheMs = liveCache
+      ? getLiveCacheMs(liveCache)
+      : LIVE_CACHE_MS;
 
 // Si tenemos datos recientes, no consultamos API-Football.
 if (
@@ -1055,189 +1304,366 @@ if (
       let fixtures = [];
 
 try {
-  const data = await footballFetch(
-    `/fixtures?league=${encodeURIComponent(
-      LEAGUE_ID
-    )}&season=${encodeURIComponent(
-      SEASON
-    )}&date=${encodeURIComponent(
-      today
-    )}&timezone=${encodeURIComponent(
-      TIMEZONE
-    )}`
-  );
+  const selectedLeagueIds = [
+    ...new Set(
+      Object.values(SPORTMONKS_COMPETITIONS)
+        .map((competition) => competition.leagueId)
+        .filter((id) => Number.isFinite(id))
+    ),
+  ];
 
-  const apiFixtures = Array.isArray(data.response)
-    ? data.response
-    : [];
+  /*
+   * 1. Obtenemos todos los partidos de HOY
+   * de nuestras cinco competiciones.
+   */
+  const todayFixturesCacheIsValid =
+  sportmonksTodayFixturesCacheDate === today &&
+  Array.isArray(sportmonksTodayFixturesCache) &&
+  Date.now() - sportmonksTodayFixturesSavedAt <
+    SPORTMONKS_TODAY_FIXTURES_CACHE_MS;
 
-  const fixtureIdSet = new Set(
-    fixtureIds.map((id) => String(id))
-  );
+let todayFixtures;
 
-  fixtures = apiFixtures.filter((match) =>
-    fixtureIdSet.has(
-      String(match.fixture?.id)
+if (todayFixturesCacheIsValid) {
+  todayFixtures = sportmonksTodayFixturesCache;
+} else {
+  const dailyResponses = await Promise.all(
+    selectedLeagueIds.map((leagueId) =>
+      sportmonksFetch(
+        `/fixtures/between/${today}/${today}` +
+          `?include=participants;scores;state;periods;league` +
+          `&filters=fixtureLeagues:${leagueId}`
+      )
     )
   );
+
+  todayFixtures = dailyResponses.flatMap(
+    (response) =>
+      Array.isArray(response.data)
+        ? response.data
+        : []
+  );
+
+  sportmonksTodayFixturesCache =
+    todayFixtures;
+
+  sportmonksTodayFixturesCacheDate =
+    today;
+
+  sportmonksTodayFixturesSavedAt =
+    Date.now();
+}
+
+  /*
+   * 2. Pedimos el directo actual.
+   *
+   * Sportmonks puede tener una versión más reciente
+   * del partido en este endpoint: marcador, estado,
+   * minuto, periodos, etc.
+   */
+  const liveData = await sportmonksFetch(
+    '/livescores/inplay?include=participants;scores;state;periods;league'
+  );
+
+  const liveFixtures = Array.isArray(liveData.data)
+    ? liveData.data
+    : [];
+
+  /*
+   * 3. Nos quedamos solo con las competiciones
+   * contratadas por Albinegros.
+   */
+  const allowedLeagueIds = new Set(
+    selectedLeagueIds.map(Number)
+  );
+
+  const filteredLiveFixtures =
+    liveFixtures.filter((fixture) =>
+      allowedLeagueIds.has(
+        Number(
+          fixture.league_id ??
+          fixture.league?.id
+        )
+      )
+    );
+
+  /*
+   * 4. Indexamos los datos LIVE por fixtureId.
+   */
+  const liveFixturesById = new Map(
+    filteredLiveFixtures.map((fixture) => [
+      String(fixture.id),
+      fixture,
+    ])
+  );
+
+  /*
+   * 5. Para cada partido del día usamos:
+   *
+   * - datos LIVE si existen;
+   * - datos normales del fixture si todavía
+   *   no está en directo o ya ha terminado.
+   */
+  fixtures = todayFixtures
+    .map((fixture) => {
+      const liveFixture =
+        liveFixturesById.get(
+          String(fixture.id)
+        );
+
+      return liveFixture || fixture;
+    })
+    .sort((a, b) => {
+      const dateA = a.starting_at
+        ? new Date(
+            `${a.starting_at.replace(' ', 'T')}Z`
+          ).getTime()
+        : 0;
+
+      const dateB = b.starting_at
+        ? new Date(
+            `${b.starting_at.replace(' ', 'T')}Z`
+          ).getTime()
+        : 0;
+
+      return dateA - dateB;
+    });
 } catch (error) {
   console.warn(
-    'No se pudieron actualizar los partidos del día:',
+    'No se pudieron actualizar los partidos del día con Sportmonks:',
     error.message
   );
 
   fixtures = [];
 }
+  const matches = fixtures.map((fixture) => {
+  const participants = fixture.participants || [];
+  const scores = fixture.scores || [];
+  const periods = fixture.periods || [];
 
-      const matches = fixtures.map((match) => {
-        const homeApiName =
-          match.teams?.home?.name || '';
+  const homeTeam = participants.find(
+    (team) => team.meta?.location === 'home'
+  );
 
-        const awayApiName =
-          match.teams?.away?.name || '';
+  const awayTeam = participants.find(
+    (team) => team.meta?.location === 'away'
+  );
 
-        return {
-          fixtureId:
-            match.fixture?.id ?? null,
+  const getCurrentScore = (participantId) => {
+    const currentScore = scores.find(
+      (score) =>
+        score.participant_id === participantId &&
+        score.description === 'CURRENT'
+    );
 
-          date:
-            match.fixture?.date || null,
+    return currentScore?.score?.goals ?? null;
+  };
 
-          timestamp:
-            match.fixture?.timestamp ?? null,
+  const activePeriod = periods
+    .filter((period) => period.ticking === true)
+    .sort(
+      (a, b) =>
+        Number(b.id || 0) - Number(a.id || 0)
+    )[0];
 
-          status: {
-            short:
-              match.fixture?.status?.short || '',
-            long:
-              match.fixture?.status?.long || '',
-            elapsed:
-              match.fixture?.status?.elapsed ?? null,
-            extra:
-              match.fixture?.status?.extra ?? null,
-          },
+  const elapsed =
+    Number.isFinite(Number(activePeriod?.minutes))
+      ? Number(activePeriod.minutes)
+      : null;
 
-          league: {
-            id:
-              match.league?.id ?? null,
-            name:
-              getCompetitionName(
-                match.league?.name || ''
-              ),
-            round:
-              match.league?.round || '',
-            logo:
-              match.league?.logo || '',
-          },
+  const seconds =
+    Number.isFinite(Number(activePeriod?.seconds))
+      ? Number(activePeriod.seconds)
+      : null;
 
-          venue: {
-            id:
-              match.fixture?.venue?.id ?? null,
-            name:
-              getCorrectVenue(
-                homeApiName,
-                match.fixture?.venue?.name || ''
-              ),
-            city:
-              match.fixture?.venue?.city || '',
-          },
+  const regulationEnd =
+    Number.isFinite(Number(activePeriod?.counts_from)) &&
+    Number.isFinite(Number(activePeriod?.period_length))
+      ? Number(activePeriod.counts_from) +
+        Number(activePeriod.period_length)
+      : null;
 
-          referee:
-            match.fixture?.referee || '',
+  const extra =
+    elapsed !== null &&
+    regulationEnd !== null &&
+    elapsed > regulationEnd
+      ? elapsed - regulationEnd
+      : 0;
 
-          home: {
-            id:
-              match.teams?.home?.id ?? null,
-            name:
-              getDisplayTeamName(homeApiName),
-            shortName:
-              getShortTeamName(homeApiName),
-            logo:
-              getTeamLogo(
-                homeApiName,
-                match.teams?.home?.logo || ''
-              ),
-            winner:
-              match.teams?.home?.winner ?? null,
-            isCastellon:
-              isCastellon(homeApiName),
-          },
+  const sportmonksStatus =
+    fixture.state?.short_name || '';
 
-          away: {
-            id:
-              match.teams?.away?.id ?? null,
-            name:
-              getDisplayTeamName(awayApiName),
-            shortName:
-              getShortTeamName(awayApiName),
-            logo:
-              getTeamLogo(
-                awayApiName,
-                match.teams?.away?.logo || ''
-              ),
-            winner:
-              match.teams?.away?.winner ?? null,
-            isCastellon:
-              isCastellon(awayApiName),
-          },
+  const statusMap = {
+    '1st': '1H',
+    HT: 'HT',
+    '2nd': '2H',
+    ET: 'ET',
+    FT: 'FT',
+    NS: 'NS',
+  };
 
-          goals: {
-            home:
-              match.goals?.home ?? null,
-            away:
-              match.goals?.away ?? null,
-          },
+  const normalizedStatus =
+    statusMap[sportmonksStatus] ||
+    sportmonksStatus;
 
-          score: {
-            halftime: {
-              home:
-                match.score?.halftime?.home ??
-                null,
-              away:
-                match.score?.halftime?.away ??
-                null,
-            },
+  const homeScore =
+    normalizedStatus !== 'NS' && homeTeam
+      ? getCurrentScore(homeTeam.id)
+      : null;
 
-            fulltime: {
-              home:
-                match.score?.fulltime?.home ??
-                null,
-              away:
-                match.score?.fulltime?.away ??
-                null,
-            },
+  const awayScore =
+    normalizedStatus !== 'NS' && awayTeam
+      ? getCurrentScore(awayTeam.id)
+      : null;
 
-            extratime: {
-              home:
-                match.score?.extratime?.home ??
-                null,
-              away:
-                match.score?.extratime?.away ??
-                null,
-            },
+  return {
+    fixtureId: fixture.id,
 
-            penalty: {
-              home:
-                match.score?.penalty?.home ??
-                null,
-              away:
-                match.score?.penalty?.away ??
-                null,
-            },
-          },
-        };
-      });
+    date: fixture.starting_at
+      ? `${fixture.starting_at.replace(' ', 'T')}Z`
+      : null,
+
+    timestamp: fixture.starting_at
+      ? Math.floor(
+          new Date(
+            `${fixture.starting_at.replace(' ', 'T')}Z`
+          ).getTime() / 1000
+        )
+      : null,
+
+    status: {
+      short: normalizedStatus,
+      long: fixture.state?.name ?? '',
+      elapsed,
+      extra,
+      seconds,
+    },
+
+    league: {
+      id: fixture.league?.id ?? null,
+      name: getCompetitionName(
+        fixture.league?.name || ''
+      ),
+      round: '',
+      logo: fixture.league?.image_path ?? '',
+    },
+
+    venue: {
+      id: null,
+      name: '',
+      city: '',
+    },
+
+    referee: '',
+
+    home: {
+      id: homeTeam?.id ?? null,
+      name: getDisplayTeamName(
+        homeTeam?.name || ''
+      ),
+      shortName: getShortTeamName(
+        homeTeam?.name || ''
+      ),
+      logo: getTeamLogo(
+        homeTeam?.name || '',
+        homeTeam?.image_path || ''
+      ),
+      winner:
+        homeScore !== null &&
+        awayScore !== null &&
+        homeScore !== awayScore
+          ? homeScore > awayScore
+          : null,
+      isCastellon: isCastellon(
+        homeTeam?.name || ''
+      ),
+    },
+
+    away: {
+      id: awayTeam?.id ?? null,
+      name: getDisplayTeamName(
+        awayTeam?.name || ''
+      ),
+      shortName: getShortTeamName(
+        awayTeam?.name || ''
+      ),
+      logo: getTeamLogo(
+        awayTeam?.name || '',
+        awayTeam?.image_path || ''
+      ),
+      winner:
+        homeScore !== null &&
+        awayScore !== null &&
+        homeScore !== awayScore
+          ? awayScore > homeScore
+          : null,
+      isCastellon: isCastellon(
+        awayTeam?.name || ''
+      ),
+    },
+
+    goals: {
+      home: homeScore,
+      away: awayScore,
+    },
+
+    score: {
+      halftime: {
+        home:
+          normalizedStatus !== 'NS' && homeTeam
+            ? scores.find(
+                (score) =>
+                  score.participant_id === homeTeam.id &&
+                  score.description === '1ST_HALF'
+              )?.score?.goals ?? null
+            : null,
+
+        away:
+          normalizedStatus !== 'NS' && awayTeam
+            ? scores.find(
+                (score) =>
+                  score.participant_id === awayTeam.id &&
+                  score.description === '1ST_HALF'
+              )?.score?.goals ?? null
+            : null,
+      },
+
+      fulltime: {
+        home:
+          normalizedStatus === 'FT'
+            ? homeScore
+            : null,
+
+        away:
+          normalizedStatus === 'FT'
+            ? awayScore
+            : null,
+      },
+
+      extratime: {
+        home: null,
+        away: null,
+      },
+
+      penalty: {
+        home: null,
+        away: null,
+      },
+    },
+  };
+});
 
       const result = {
-        ok: true,
-        live: true,
-        league: Number(LEAGUE_ID),
-        season: SEASON || null,
-        timezone: TIMEZONE,
-        count: matches.length,
-        updatedAt: new Date().toISOString(),
-        matches,
-      };
+  ok: true,
+  provider: 'sportmonks',
+  live: true,
+  league: null,
+  season: null,
+  timezone: TIMEZONE,
+  count: matches.length,
+  updatedAt: new Date().toISOString(),
+  matches,
+};
 
       // Guardamos el resultado para los siguientes usuarios.
       liveCache = result;
