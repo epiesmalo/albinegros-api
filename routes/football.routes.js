@@ -578,6 +578,84 @@ router.get(
 );
 
 /**
+ * Calendario completo por competición.
+ *
+ * Ejemplos:
+ * /api/sportmonks/calendar/competition/laliga
+ * /api/sportmonks/calendar/competition/laliga2
+ * /api/sportmonks/calendar/competition/primera-rfef-1
+ * /api/sportmonks/calendar/competition/primera-rfef-2
+ * /api/sportmonks/calendar/competition/segunda-rfef-3
+ */
+router.get(
+  '/api/sportmonks/calendar/competition/:competition',
+  async (req, res) => {
+    try {
+      const competitionKey = String(
+        req.params.competition || ''
+      ).trim();
+
+      const competition =
+        SPORTMONKS_COMPETITIONS[competitionKey];
+
+      if (!competition) {
+        return res.status(404).json({
+          ok: false,
+          error: 'Competición no válida',
+          available: Object.keys(
+            SPORTMONKS_COMPETITIONS
+          ),
+        });
+      }
+
+      const startDate =
+        req.query.from || '2026-08-01';
+
+      const endDate =
+        req.query.to || '2027-06-30';
+
+      const data = await sportmonksFetch(
+        `/fixtures/between/${startDate}/${endDate}?include=participants;scores;state;league&filters=fixtureLeagues:${competition.leagueId}`
+      );
+
+      const fixtures = (data.data || [])
+        .map(normalizeSportmonksFixture)
+        .sort(
+          (a, b) =>
+            new Date(a.date) - new Date(b.date)
+        );
+
+      return res.json({
+        ok: true,
+        provider: 'sportmonks',
+
+        competition: {
+          key: competition.key,
+          name: competition.name,
+          leagueId: competition.leagueId,
+          seasonId: competition.seasonId,
+        },
+
+        from: startDate,
+        to: endDate,
+        count: fixtures.length,
+        fixtures,
+      });
+    } catch (error) {
+      console.error(
+        'Error obteniendo calendario de competición Sportmonks:',
+        error
+      );
+
+      return res.status(500).json({
+        ok: false,
+        provider: 'sportmonks',
+        error: error.message,
+      });
+    }
+  }
+);
+/**
  * Comprueba que API-Football está conectada.
  */
 router.get('/api/football/test', async (req, res) => {
