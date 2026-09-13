@@ -42,6 +42,43 @@ const SPORTMONKS_LEAGUES = {
     process.env.SPORTMONKS_SEGUNDA_RFEF_G3_ID || 2338
   ),
 };
+const SPORTMONKS_COMPETITIONS = {
+  laliga: {
+    key: 'laliga',
+    name: 'LaLiga',
+    leagueId: Number(process.env.SPORTMONKS_LALIGA_ID),
+    seasonId: Number(process.env.SPORTMONKS_LALIGA_SEASON_ID),
+  },
+
+  laliga2: {
+    key: 'laliga2',
+    name: 'LaLiga Hypermotion',
+    leagueId: Number(process.env.SPORTMONKS_LALIGA2_ID),
+    seasonId: Number(process.env.SPORTMONKS_LALIGA2_SEASON_ID),
+  },
+
+  'primera-rfef-1': {
+    key: 'primera-rfef-1',
+    name: 'Primera RFEF Grupo 1',
+    leagueId: Number(process.env.SPORTMONKS_PRIMERA_RFEF_G1_ID),
+    seasonId: Number(process.env.SPORTMONKS_PRIMERA_RFEF_G1_SEASON_ID),
+  },
+
+  'primera-rfef-2': {
+    key: 'primera-rfef-2',
+    name: 'Primera RFEF Grupo 2',
+    leagueId: Number(process.env.SPORTMONKS_PRIMERA_RFEF_G2_ID),
+    seasonId: Number(process.env.SPORTMONKS_PRIMERA_RFEF_G2_SEASON_ID),
+  },
+
+  'segunda-rfef-3': {
+    key: 'segunda-rfef-3',
+    name: 'Segunda RFEF Grupo 3',
+    leagueId: Number(process.env.SPORTMONKS_SEGUNDA_RFEF_G3_ID),
+    seasonId: Number(process.env.SPORTMONKS_CASTELLON_B_SEASON_ID),
+  },
+};
+
 const TIMEZONE =
   process.env.FOOTBALL_TIMEZONE || 'Europe/Madrid';
 const LIVE_CACHE_MS = 20_000;
@@ -226,6 +263,47 @@ const sportmonksFetch = async (endpoint) => {
 };
 
 /**
+ * Normaliza una fila de clasificación de Sportmonks
+ * al formato utilizado por Albinegros.
+ */
+const normalizeSportmonksStanding = (item) => {
+  const details = item.details || [];
+
+  const getValue = (code) => {
+    const detail = details.find(
+      (entry) => entry.type?.code === code
+    );
+
+    return Number(detail?.value ?? 0);
+  };
+
+  return {
+    teamId: item.participant_id,
+    position: item.position,
+
+    team: getDisplayTeamName(
+      item.participant?.name || ''
+    ),
+
+    logo: getTeamLogo(
+      item.participant?.name || '',
+      item.participant?.image_path || ''
+    ),
+
+    points: Number(item.points ?? 0),
+
+    playedgames: getValue('overall-matches-played'),
+    won: getValue('overall-won'),
+    draw: getValue('overall-draw'),
+    lost: getValue('overall-lost'),
+
+    goalsfor: getValue('overall-goals-for'),
+    goalsagainst: getValue('overall-goals-against'),
+    goaldiff: getValue('goal-difference'),
+  };
+};
+
+/**
  * Comprueba la conexión del servidor con Sportmonks.
  * GET /api/sportmonks/test
  */
@@ -260,6 +338,71 @@ router.get('/api/sportmonks/test', async (req, res) => {
     });
   }
 });
+/**
+ * Clasificación por competición.
+ *
+ * Ejemplos:
+ * /api/sportmonks/standings/laliga
+ * /api/sportmonks/standings/laliga2
+ * /api/sportmonks/standings/primera-rfef-1
+ * /api/sportmonks/standings/primera-rfef-2
+ * /api/sportmonks/standings/segunda-rfef-3
+ */
+router.get(
+  '/api/sportmonks/standings/:competition',
+  async (req, res) => {
+    try {
+      const competitionKey = String(
+        req.params.competition || ''
+      ).trim();
+
+      const competition =
+        SPORTMONKS_COMPETITIONS[competitionKey];
+
+      if (!competition) {
+        return res.status(404).json({
+          ok: false,
+          error: 'Competición no válida',
+          available: Object.keys(
+            SPORTMONKS_COMPETITIONS
+          ),
+        });
+      }
+
+      const data = await sportmonksFetch(
+        `/standings/seasons/${competition.seasonId}?include=participant;details.type`
+      );
+
+      const standings = (data.data || [])
+        .map(normalizeSportmonksStanding)
+        .sort((a, b) => a.position - b.position);
+
+      return res.json({
+        ok: true,
+        provider: 'sportmonks',
+        competition: {
+          key: competition.key,
+          name: competition.name,
+          leagueId: competition.leagueId,
+          seasonId: competition.seasonId,
+        },
+        count: standings.length,
+        standings,
+      });
+    } catch (error) {
+      console.error(
+        'Error obteniendo clasificación Sportmonks:',
+        error
+      );
+
+      return res.status(500).json({
+        ok: false,
+        provider: 'sportmonks',
+        error: error.message,
+      });
+    }
+  }
+);
 
 /**
  * Comprueba que API-Football está conectada.
@@ -283,6 +426,7 @@ router.get('/api/football/test', async (req, res) => {
     });
   }
 });
+
 
 /**
  * Sincroniza la clasificación.

@@ -83,7 +83,22 @@ const teams = [
     shortName: 'CÁDIZ',
     stadium: 'Nuevo Mirandilla',
   },
-
+{
+  aliases: [
+    'CD Castellón B',
+    'CD Castellon B',
+    'C.D. Castellón B',
+    'C.D. Castellon B',
+    'Castellón B',
+    'Castellon B',
+    'Castellón II',
+    'Castellon II',
+  ],
+  displayName: 'C.D. CASTELLÓN B',
+  shortName: 'CASTELLÓN B',
+  stadium: '',
+  logo: CASTELLON_LOGO,
+},
   {
     aliases: [
       'CD Castellón',
@@ -346,20 +361,36 @@ const getTeamInfo = (apiName = '') => {
    * Y seguiríamos detectando:
    * "Real Sociedad II"
    */
-  const partialMatch = teams.find((team) =>
-    team.aliases.some((alias) => {
-      const normalizedAlias = normalizeKey(alias);
+const partialMatches = [];
 
-      if (!normalizedAlias || normalizedAlias.length < 5) {
-        return false;
-      }
+teams.forEach((team) => {
+  team.aliases.forEach((alias) => {
+    const normalizedAlias = normalizeKey(alias);
 
-      return (
-        normalizedName.includes(normalizedAlias) ||
-        normalizedAlias.includes(normalizedName)
-      );
-    })
-  );
+    if (!normalizedAlias || normalizedAlias.length < 5) {
+      return;
+    }
+
+    const matches =
+      normalizedName === normalizedAlias ||
+      normalizedName.startsWith(`${normalizedAlias} `) ||
+      normalizedAlias.startsWith(`${normalizedName} `);
+
+    if (matches) {
+      partialMatches.push({
+        team,
+        aliasLength: normalizedAlias.length,
+      });
+    }
+  });
+});
+
+partialMatches.sort(
+  (a, b) => b.aliasLength - a.aliasLength
+);
+
+const partialMatch =
+  partialMatches[0]?.team || null;
 
   if (partialMatch) {
     return {
