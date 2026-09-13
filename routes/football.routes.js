@@ -262,6 +262,83 @@ const sportmonksFetch = async (endpoint) => {
   return data;
 };
 
+const normalizeSportmonksFixture = (fixture) => {
+  const participants = fixture.participants || [];
+  const scores = fixture.scores || [];
+
+  const homeTeam = participants.find(
+    (team) => team.meta?.location === 'home'
+  );
+
+  const awayTeam = participants.find(
+    (team) => team.meta?.location === 'away'
+  );
+
+  const getCurrentScore = (participantId) => {
+    const currentScore = scores.find(
+      (score) =>
+        score.participant_id === participantId &&
+        score.description === 'CURRENT'
+    );
+
+    return currentScore?.score?.goals ?? null;
+  };
+
+  return {
+    fixtureId: fixture.id,
+
+    date: fixture.starting_at
+      ? `${fixture.starting_at.replace(' ', 'T')}Z`
+      : null,
+
+    status: {
+      id: fixture.state?.id ?? null,
+      name: fixture.state?.name ?? '',
+      shortName: fixture.state?.short_name ?? '',
+      state: fixture.state?.state ?? '',
+    },
+
+    league: {
+      id: fixture.league?.id ?? null,
+      name: fixture.league?.name ?? '',
+    },
+
+    home: {
+      teamId: homeTeam?.id ?? null,
+      name: getDisplayTeamName(
+        homeTeam?.name || ''
+      ),
+      shortName: getShortTeamName(
+        homeTeam?.name || ''
+      ),
+      logo: getTeamLogo(
+        homeTeam?.name || '',
+        homeTeam?.image_path || ''
+      ),
+      score: homeTeam
+        ? getCurrentScore(homeTeam.id)
+        : null,
+    },
+
+    away: {
+      teamId: awayTeam?.id ?? null,
+      name: getDisplayTeamName(
+        awayTeam?.name || ''
+      ),
+      shortName: getShortTeamName(
+        awayTeam?.name || ''
+      ),
+      logo: getTeamLogo(
+        awayTeam?.name || '',
+        awayTeam?.image_path || ''
+      ),
+      score: awayTeam
+        ? getCurrentScore(awayTeam.id)
+        : null,
+    },
+  };
+};
+
 /**
  * Normaliza una fila de clasificación de Sportmonks
  * al formato utilizado por Albinegros.
@@ -392,6 +469,102 @@ router.get(
     } catch (error) {
       console.error(
         'Error obteniendo clasificación Sportmonks:',
+        error
+      );
+
+      return res.status(500).json({
+        ok: false,
+        provider: 'sportmonks',
+        error: error.message,
+      });
+    }
+  }
+);
+
+/**
+ * Calendario del C.D. Castellón desde Sportmonks.
+ *
+ * Ejemplo:
+ * /api/sportmonks/calendar/castellon
+ */
+router.get(
+  '/api/sportmonks/calendar/castellon',
+  async (req, res) => {
+    try {
+      const startDate =
+        req.query.from || '2026-08-01';
+
+      const endDate =
+        req.query.to || '2027-06-30';
+
+      const data = await sportmonksFetch(
+        `/fixtures/between/${startDate}/${endDate}/${SPORTMONKS_CASTELLON_TEAM_ID}?include=participants;scores;state;league`
+      );
+
+const fixtures = (data.data || []).map(
+  normalizeSportmonksFixture
+);
+
+      return res.json({
+        ok: true,
+        provider: 'sportmonks',
+        teamId: SPORTMONKS_CASTELLON_TEAM_ID,
+        from: startDate,
+        to: endDate,
+        count: fixtures.length,
+        fixtures,
+      });
+    } catch (error) {
+      console.error(
+        'Error obteniendo calendario Sportmonks:',
+        error
+      );
+
+      return res.status(500).json({
+        ok: false,
+        provider: 'sportmonks',
+        error: error.message,
+      });
+    }
+  }
+);
+
+/**
+ * Calendario del C.D. Castellón B desde Sportmonks.
+ *
+ * Ejemplo:
+ * /api/sportmonks/calendar/castellon-b
+ */
+router.get(
+  '/api/sportmonks/calendar/castellon-b',
+  async (req, res) => {
+    try {
+      const startDate =
+        req.query.from || '2026-08-01';
+
+      const endDate =
+        req.query.to || '2027-06-30';
+
+      const data = await sportmonksFetch(
+        `/fixtures/between/${startDate}/${endDate}/${SPORTMONKS_CASTELLON_B_TEAM_ID}?include=participants;scores;state;league`
+      );
+
+      const fixtures = (data.data || []).map(
+  normalizeSportmonksFixture
+);
+
+      return res.json({
+        ok: true,
+        provider: 'sportmonks',
+        teamId: SPORTMONKS_CASTELLON_B_TEAM_ID,
+        from: startDate,
+        to: endDate,
+        count: fixtures.length,
+        fixtures,
+      });
+    } catch (error) {
+      console.error(
+        'Error obteniendo calendario Castellón B Sportmonks:',
         error
       );
 
