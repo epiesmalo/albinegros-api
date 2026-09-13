@@ -16,6 +16,32 @@ const API_BASE_URL = process.env.API_FOOTBALL_BASE_URL;
 const API_KEY = process.env.API_FOOTBALL_KEY;
 const LEAGUE_ID = process.env.FOOTBALL_LEAGUE_ID;
 const SEASON = process.env.FOOTBALL_SEASON;
+const SPORTMONKS_BASE_URL =
+  process.env.SPORTMONKS_BASE_URL ||
+  'https://api.sportmonks.com/v3/football';
+
+const SPORTMONKS_TOKEN =
+  process.env.SPORTMONKS_TOKEN;
+
+const SPORTMONKS_CASTELLON_TEAM_ID =
+  Number(process.env.SPORTMONKS_CASTELLON_TEAM_ID || 10008);
+
+const SPORTMONKS_CASTELLON_B_TEAM_ID =
+  Number(process.env.SPORTMONKS_CASTELLON_B_TEAM_ID || 29495);
+
+const SPORTMONKS_LEAGUES = {
+  laliga: Number(process.env.SPORTMONKS_LALIGA_ID || 564),
+  laliga2: Number(process.env.SPORTMONKS_LALIGA2_ID || 567),
+  primeraRFEF1: Number(
+    process.env.SPORTMONKS_PRIMERA_RFEF_G1_ID || 2333
+  ),
+  primeraRFEF2: Number(
+    process.env.SPORTMONKS_PRIMERA_RFEF_G2_ID || 2334
+  ),
+  segundaRFEF3: Number(
+    process.env.SPORTMONKS_SEGUNDA_RFEF_G3_ID || 2338
+  ),
+};
 const TIMEZONE =
   process.env.FOOTBALL_TIMEZONE || 'Europe/Madrid';
 const LIVE_CACHE_MS = 20_000;
@@ -170,6 +196,70 @@ const footballFetch = async (endpoint) => {
 
   return data;
 };
+
+/**
+ * Realiza peticiones a Sportmonks.
+ * El token permanece exclusivamente en el servidor.
+ */
+const sportmonksFetch = async (endpoint) => {
+  if (!SPORTMONKS_TOKEN) {
+    throw new Error(
+      'SPORTMONKS_TOKEN no está configurado'
+    );
+  }
+
+  const separator = endpoint.includes('?') ? '&' : '?';
+
+  const response = await fetch(
+    `${SPORTMONKS_BASE_URL}${endpoint}${separator}api_token=${encodeURIComponent(
+      SPORTMONKS_TOKEN
+    )}`
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(JSON.stringify(data));
+  }
+
+  return data;
+};
+
+/**
+ * Comprueba la conexión del servidor con Sportmonks.
+ * GET /api/sportmonks/test
+ */
+router.get('/api/sportmonks/test', async (req, res) => {
+  try {
+    const data = await sportmonksFetch(
+      `/teams/${SPORTMONKS_CASTELLON_TEAM_ID}`
+    );
+
+    res.json({
+      ok: true,
+      provider: 'sportmonks',
+      message: 'Sportmonks conectado correctamente',
+      team: {
+        id: data.data?.id ?? null,
+        name: data.data?.name || '',
+        shortCode: data.data?.short_code || '',
+        logo: data.data?.image_path || '',
+      },
+      leagues: SPORTMONKS_LEAGUES,
+    });
+  } catch (error) {
+    console.error(
+      'Error comprobando Sportmonks:',
+      error
+    );
+
+    res.status(500).json({
+      ok: false,
+      provider: 'sportmonks',
+      error: error.message,
+    });
+  }
+});
 
 /**
  * Comprueba que API-Football está conectada.
