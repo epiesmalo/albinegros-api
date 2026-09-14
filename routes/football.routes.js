@@ -3013,9 +3013,9 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
     };
 
     const playerData = await sportmonksFetch(
-      `/players/${encodeURIComponent(playerId)}` +
-        `?include=statistics.details.type`
-    );
+  `/players/${encodeURIComponent(playerId)}` +
+    `?include=statistics.details.type;statistics.team;statistics.season`
+);
 
     const player = playerData?.data;
 
@@ -3668,12 +3668,75 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
     };
 
     /*
-     * Trayectoria:
-     * de momento la dejamos preparada pero vacía.
-     * No mezclamos IDs de temporadas con nombres/años
-     * hasta migrar esa relación correctamente.
+        /*
+     * Trayectoria del jugador.
+     *
+     * Sportmonks puede devolver varias estadísticas para
+     * el mismo equipo y temporada, así que agrupamos por equipo
+     * y eliminamos temporadas duplicadas.
      */
-    const career = [];
+    const careerMap = new Map();
+
+    for (const stat of allStatistics) {
+      const rawTeam = stat?.team;
+
+      if (!rawTeam?.id) {
+        continue;
+      }
+
+      const rawTeamName = rawTeam.name || '';
+
+      const seasonName =
+        stat?.season?.name !== null &&
+        stat?.season?.name !== undefined
+          ? String(stat.season.name).trim()
+          : '';
+
+      const teamKey = String(rawTeam.id);
+
+      if (!careerMap.has(teamKey)) {
+        careerMap.set(teamKey, {
+          team: {
+            id: Number(rawTeam.id),
+            name: getDisplayTeamName(rawTeamName),
+            shortName: getShortTeamName(rawTeamName),
+            logo: getTeamLogo(
+              rawTeamName,
+              rawTeam.image_path || ''
+            ),
+            isCastellon: isCastellon(rawTeamName),
+          },
+          seasons: [],
+        });
+      }
+
+      const careerEntry = careerMap.get(teamKey);
+
+      if (
+        seasonName &&
+        !careerEntry.seasons.includes(seasonName)
+      ) {
+        careerEntry.seasons.push(seasonName);
+      }
+    }
+
+    const career = Array.from(careerMap.values()).sort(
+      (a, b) => {
+        const latestA =
+          a.seasons
+            .slice()
+            .sort()
+            .at(-1) || '';
+
+        const latestB =
+          b.seasons
+            .slice()
+            .sort()
+            .at(-1) || '';
+
+        return latestB.localeCompare(latestA);
+      }
+    );
 
     const preferredCompetition =
       competitionList.find(
