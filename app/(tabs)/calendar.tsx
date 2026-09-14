@@ -39,8 +39,32 @@ type FixtureItem = {
 };
 
 const getLogoUrl = (teamName: string, logo?: string) => {
-  if (teamName.toLowerCase().includes('castell')) {
+  const team = teamName
+    .toLowerCase()
+    .trim();
+
+  const isCastellon =
+    team === 'c.d. castellón' ||
+    team === 'c.d. castellon' ||
+    team === 'cd castellón' ||
+    team === 'cd castellon' ||
+    team === 'castellón' ||
+    team === 'castellon';
+
+  if (isCastellon) {
     return 'https://archivos.albinegroscastellon.com/cas.png?v=2';
+  }
+
+  if (team.includes('andorra')) {
+    return 'https://archivos.albinegroscastellon.com/images/8157.png';
+  }
+
+  if (team.includes('eldense')) {
+    return 'https://archivos.albinegroscastellon.com/images/9692.png';
+  }
+
+  if (team.includes('ceuta')) {
+    return 'https://archivos.albinegroscastellon.com/images/10139.png';
   }
 
   return logo;
@@ -654,6 +678,7 @@ const isFinished =
                 uri: getLogoUrl(item.homeTeam, item.homeLogo),
               }}
               style={styles.directTeamLogo}
+              resizeMode="contain"
             />
           </Pressable>
 
@@ -696,6 +721,7 @@ const isFinished =
                 uri: getLogoUrl(item.awayTeam, item.awayLogo),
               }}
               style={styles.directTeamLogo}
+              resizeMode="contain"
             />
           </Pressable>
 

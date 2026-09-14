@@ -120,6 +120,25 @@ function TeamSkeleton() {
     </View>
   );
 }
+const getTeamLogoUrl = (teamName: string, logo?: string) => {
+  const team = teamName
+    .toLowerCase()
+    .trim();
+
+  if (team.includes('andorra')) {
+    return 'https://archivos.albinegroscastellon.com/images/8157.png';
+  }
+
+  if (team.includes('eldense')) {
+    return 'https://archivos.albinegroscastellon.com/images/9692.png';
+  }
+
+  if (team.includes('ceuta')) {
+    return 'https://archivos.albinegroscastellon.com/images/10139.png';
+  }
+
+  return logo;
+};
 
 export default function TeamDetailScreen() {
   const params = useLocalSearchParams<{ teamId?: string | string[] }>();
@@ -512,7 +531,9 @@ export default function TeamDetailScreen() {
               data.team.isCastellon && styles.castellonHero,
             ]}>
               <Image
-                source={{ uri: data.team.logo }}
+                source={{
+  uri: getTeamLogoUrl(data.team.name, data.team.logo),
+}}
                 style={styles.teamLogo}
                 contentFit="contain"
                 cachePolicy="disk"
