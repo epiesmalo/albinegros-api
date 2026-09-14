@@ -1,7 +1,8 @@
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Image,
   Pressable,
   RefreshControl,
@@ -37,6 +38,42 @@ const getLogoUrl = (teamName: string, logo?: string) => {
   return logo;
 };
 
+function LiveDot() {
+  const opacity = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, {
+          toValue: 0.2,
+          duration: 650,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 650,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    animation.start();
+
+    return () => animation.stop();
+  }, [opacity]);
+
+  return (
+    <Animated.View
+      style={[
+        styles.liveDot,
+        {
+          opacity,
+        },
+      ]}
+    />
+  );
+}
+
 export default function StandingsScreen() {
   const [standings, setStandings] = useState<StandingItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,7 +83,59 @@ export default function StandingsScreen() {
   const [usingCachedData, setUsingCachedData] = useState(false);
   const [cacheSavedAt, setCacheSavedAt] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(Date.now());
+const [liveTeamIds, setLiveTeamIds] = useState<Set<number>>(new Set());
+const loadLiveTeams = async () => {
+  try {
+    const response = await fetch(
+      'https://api.albinegroscastellon.com/api/football/live'
+    );
 
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    const activeStatuses = new Set([
+      '1H',
+      'HT',
+      '2H',
+      'ET',
+      'BT',
+      'P',
+      'LIVE',
+    ]);
+
+    const matches = Array.isArray(data?.matches)
+      ? data.matches
+      : [];
+
+    const ids = new Set<number>();
+
+    matches.forEach((match: any) => {
+      if (Number(match?.league?.id) !== 567) return;
+
+      if (!activeStatuses.has(String(match?.status?.short || ''))) {
+        return;
+      }
+
+      const homeId = Number(match?.home?.id);
+      const awayId = Number(match?.away?.id);
+
+      if (Number.isFinite(homeId)) {
+        ids.add(homeId);
+      }
+
+      if (Number.isFinite(awayId)) {
+        ids.add(awayId);
+      }
+    });
+
+    setLiveTeamIds(ids);
+  } catch (err) {
+    console.log('Error cargando equipos en directo:', err);
+  }
+};
 const loadStandings = async (isRefresh = false) => {
   try {
     if (isRefresh) {
@@ -137,13 +226,19 @@ const loadStandings = async (isRefresh = false) => {
  useFocusEffect(
   useCallback(() => {
     loadStandings();
+    loadLiveTeams();
 
-    const interval = setInterval(() => {
+    const standingsInterval = setInterval(() => {
       loadStandings(true);
     }, 60_000);
 
+    const liveInterval = setInterval(() => {
+      loadLiveTeams();
+    }, 30_000);
+
     return () => {
-      clearInterval(interval);
+      clearInterval(standingsInterval);
+      clearInterval(liveInterval);
     };
   }, [])
 );
@@ -258,6 +353,9 @@ const loadStandings = async (isRefresh = false) => {
 
               {standings.map((item, index) => {
                 const isCastellon = item.team.toLowerCase().includes('castell');
+                const isLive =
+  item.teamId !== null &&
+  liveTeamIds.has(Number(item.teamId));
                 const isDirectPromotion = item.position <= 2;
                 const isPlayoff = item.position >= 3 && item.position <= 6;
                 const isRelegation = item.position >= standings.length - 3;
@@ -303,15 +401,24 @@ const loadStandings = async (isRefresh = false) => {
                           <View style={styles.logoPlaceholder} />
                         )}
 
-                        <Text
-                          style={[
-                            styles.teamText,
-                            isCastellon && styles.castellonTeamText,
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {item.team}
-                        </Text>
+                        <View style={styles.teamNameRow}>
+  <Text
+    style={[
+      styles.teamText,
+      isCastellon && styles.castellonTeamText,
+    ]}
+    numberOfLines={1}
+  >
+    {item.team}
+  </Text>
+
+  {isLive && (
+    <View style={styles.liveIndicator}>
+      <Text style={styles.liveText}>En directo</Text>
+      <LiveDot />
+    </View>
+  )}
+</View>
                       </View>
                     </View>
 
@@ -342,6 +449,9 @@ const loadStandings = async (isRefresh = false) => {
 
                 {standings.map((item, index) => {
                   const isCastellon = item.team.toLowerCase().includes('castell');
+                  const isLive =
+  item.teamId !== null &&
+  liveTeamIds.has(Number(item.teamId));
                   const isDirectPromotion = item.position <= 2;
                   const isPlayoff = item.position >= 3 && item.position <= 6;
                   const isRelegation = item.position >= standings.length - 3;
@@ -385,15 +495,24 @@ const loadStandings = async (isRefresh = false) => {
                             <View style={styles.logoPlaceholder} />
                           )}
 
-                          <Text
-                            style={[
-                              styles.teamText,
-                              isCastellon && styles.castellonTeamText,
-                            ]}
-                            numberOfLines={1}
-                          >
-                            {item.team}
-                          </Text>
+                          <View style={styles.teamNameRow}>
+  <Text
+    style={[
+      styles.teamText,
+      isCastellon && styles.castellonTeamText,
+    ]}
+    numberOfLines={1}
+  >
+    {item.team}
+  </Text>
+
+  {isLive && (
+    <View style={styles.liveIndicator}>
+      <Text style={styles.liveText}>En directo</Text>
+      <LiveDot />
+    </View>
+  )}
+</View>
                         </View>
                       </View>
                     </Pressable>
@@ -658,6 +777,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  teamNameRow: {
+  flex: 1,
+  flexDirection: 'row',
+  alignItems: 'center',
+},
+liveIndicator: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  marginLeft: 6,
+},
+
+liveText: {
+  color: '#ff2d2d',
+  fontSize: 9,
+  fontWeight: '800',
+  marginRight: 4,
+},
+
+liveDot: {
+  width: 8,
+  height: 8,
+  borderRadius: 4,
+  backgroundColor: '#ff2d2d',
+  marginLeft: 6,
+  shadowColor: '#ff2d2d',
+  shadowOpacity: 0.9,
+  shadowRadius: 5,
+  elevation: 4,
+},
   teamLogo: {
     width: 30,
     height: 30,
