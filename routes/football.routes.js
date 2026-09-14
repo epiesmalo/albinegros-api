@@ -2974,29 +2974,6 @@ router.get('/api/football/team/:teamId/details', async (req, res) => {
       ),
     };
 
-const cleanSheet = {
-  home: Number(
-    cleanSheetStat?.value?.home?.count ?? 0
-  ),
-  away: Number(
-    cleanSheetStat?.value?.away?.count ?? 0
-  ),
-  total: Number(
-    cleanSheetStat?.value?.all?.count ?? 0
-  ),
-};
-
-const failedToScore = {
-  home: Number(
-    failedToScoreStat?.value?.home?.count ?? 0
-  ),
-  away: Number(
-    failedToScoreStat?.value?.away?.count ?? 0
-  ),
-  total: Number(
-    failedToScoreStat?.value?.all?.count ?? 0
-  ),
-};
 
 
     return res.json({
