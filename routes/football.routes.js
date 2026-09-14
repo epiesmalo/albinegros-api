@@ -2602,7 +2602,7 @@ router.get('/api/football/team/:teamId/details', async (req, res) => {
     ] = await Promise.all([
       sportmonksFetch(
         `/teams/${encodeURIComponent(teamId)}` +
-          `?include=venue;coaches.coach;statistics`
+          `?include=venue;coaches.coach;statistics.details.type`
       ),
       sportmonksFetch(
         `/squads/teams/${encodeURIComponent(teamId)}` +
@@ -2922,6 +2922,83 @@ router.get('/api/football/team/:teamId/details', async (req, res) => {
         standing?.goalsagainst ?? 0
       );
 
+          const currentTeamStatistic =
+      statisticRows.find(
+        (stat) =>
+          Number(stat.season_id) ===
+          Number(currentCompetition?.seasonId)
+      ) || null;
+
+    const statisticDetails =
+      Array.isArray(
+        currentTeamStatistic?.details
+      )
+        ? currentTeamStatistic.details
+        : [];
+
+    const cleanSheetStat =
+      statisticDetails.find(
+        (detail) =>
+          detail?.type?.developer_name ===
+          'CLEANSHEET'
+      );
+
+    const failedToScoreStat =
+      statisticDetails.find(
+        (detail) =>
+          detail?.type?.developer_name ===
+          'FAILED_TO_SCORE'
+      );
+
+    const cleanSheet = {
+      home: Number(
+        cleanSheetStat?.value?.home?.count ?? 0
+      ),
+      away: Number(
+        cleanSheetStat?.value?.away?.count ?? 0
+      ),
+      total: Number(
+        cleanSheetStat?.value?.all?.count ?? 0
+      ),
+    };
+
+    const failedToScore = {
+      home: Number(
+        failedToScoreStat?.value?.home?.count ?? 0
+      ),
+      away: Number(
+        failedToScoreStat?.value?.away?.count ?? 0
+      ),
+      total: Number(
+        failedToScoreStat?.value?.all?.count ?? 0
+      ),
+    };
+
+const cleanSheet = {
+  home: Number(
+    cleanSheetStat?.value?.home?.count ?? 0
+  ),
+  away: Number(
+    cleanSheetStat?.value?.away?.count ?? 0
+  ),
+  total: Number(
+    cleanSheetStat?.value?.all?.count ?? 0
+  ),
+};
+
+const failedToScore = {
+  home: Number(
+    failedToScoreStat?.value?.home?.count ?? 0
+  ),
+  away: Number(
+    failedToScoreStat?.value?.away?.count ?? 0
+  ),
+  total: Number(
+    failedToScoreStat?.value?.all?.count ?? 0
+  ),
+};
+
+
     return res.json({
       ok: true,
       provider: 'sportmonks',
@@ -3121,18 +3198,8 @@ router.get('/api/football/team/:teamId/details', async (req, res) => {
           },
         },
 
-        cleanSheet: {
-          home: 0,
-          away: 0,
-          total: 0,
-        },
-
-        failedToScore: {
-          home: 0,
-          away: 0,
-          total: 0,
-        },
-
+        cleanSheet,
+        failedToScore,
         lineups: [],
       },
     });

@@ -232,12 +232,6 @@ export default function TeamDetailScreen() {
             <Text style={styles.infoValue}>{data.team.founded ?? '-'}</Text>
           </View>
 
-          {data.team.code ? (
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Código</Text>
-              <Text style={styles.infoValue}>{data.team.code}</Text>
-            </View>
-          ) : null}
         </View>
 
         {data.coach ? (
