@@ -14,6 +14,12 @@ const {
 
 const API_BASE_URL = process.env.API_FOOTBALL_BASE_URL;
 const API_KEY = process.env.API_FOOTBALL_KEY;
+const API_FOOTBALL_FREE_BASE_URL =
+  process.env.API_FOOTBALL_FREE_BASE_URL ||
+  'https://v3.football.api-sports.io';
+
+const API_FOOTBALL_FREE_KEY =
+  process.env.API_FOOTBALL_FREE_KEY;
 const LEAGUE_ID = process.env.FOOTBALL_LEAGUE_ID;
 const SEASON = process.env.FOOTBALL_SEASON;
 const SPORTMONKS_BASE_URL =
@@ -214,6 +220,8 @@ const getLiveCacheMs = (cachedData) => {
 let liveCache = null;
 let liveCacheSavedAt = 0;
 let liveRefreshPromise = null;
+const PLAYER_CAREER_CACHE_MS =
+  30 * 24 * 60 * 60 * 1000;
 const SPORTMONKS_TODAY_FIXTURES_CACHE_MS = 60_000;
 
 let sportmonksTodayFixturesCache = null;
@@ -237,6 +245,322 @@ const footballFetch = async (endpoint) => {
   }
 
   return data;
+};
+
+/**
+ * Realiza peticiones a API-Football con la cuenta FREE.
+ * Se utiliza exclusivamente para datos históricos de jugadores.
+ */
+const footballFreeFetch = async (endpoint) => {
+  if (!API_FOOTBALL_FREE_KEY) {
+    throw new Error(
+      'API_FOOTBALL_FREE_KEY no está configurado'
+    );
+  }
+
+  const response = await fetch(
+    `${API_FOOTBALL_FREE_BASE_URL}${endpoint}`,
+    {
+      headers: {
+        'x-apisports-key': API_FOOTBALL_FREE_KEY,
+      },
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(JSON.stringify(data));
+  }
+
+  if (
+    data?.errors &&
+    (
+      Array.isArray(data.errors)
+        ? data.errors.length > 0
+        : Object.keys(data.errors).length > 0
+    )
+  ) {
+    throw new Error(
+      `API-Football FREE: ${JSON.stringify(data.errors)}`
+    );
+  }
+
+  return data;
+};
+
+const findApiFootballFreePlayer = async (player) => {
+  const lastname = String(
+    player?.lastname || ''
+  ).trim();
+
+  const displayName = String(
+    player?.display_name ||
+    player?.name ||
+    ''
+  ).trim();
+
+  const birthDate = String(
+    player?.date_of_birth || ''
+  ).trim();
+
+  const searchTerm =
+    lastname.length >= 3
+      ? lastname
+      : displayName;
+
+  if (!searchTerm) {
+    return null;
+  }
+
+  const data = await footballFreeFetch(
+    `/players/profiles?search=${encodeURIComponent(searchTerm)}`
+  );
+
+  const candidates = Array.isArray(data?.response)
+    ? data.response
+        .map((entry) => entry?.player)
+        .filter(Boolean)
+    : [];
+
+  if (!candidates.length) {
+    return null;
+  }
+
+  if (birthDate) {
+    const birthMatch = candidates.find(
+      (candidate) =>
+        String(candidate?.birth?.date || '') ===
+        birthDate
+    );
+
+    if (birthMatch) {
+      return birthMatch;
+    }
+  }
+
+  const normalizeName = (value) =>
+    String(value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+
+  const expectedName = normalizeName(
+    displayName
+  );
+
+  const nameMatch = candidates.find(
+    (candidate) =>
+      normalizeName(
+        `${candidate.firstname || ''}${candidate.lastname || ''}`
+      ) === expectedName ||
+      normalizeName(candidate.name) ===
+        expectedName
+  );
+
+  return nameMatch || null;
+};
+
+const getCachedPlayerCareer = async (sportmonksPlayerId) => {
+  const { data, error } = await supabase
+    .from('player_career_cache')
+    .select(
+      'sportmonks_player_id, api_football_player_id, player_name, birth_date, career, updated_at'
+    )
+    .eq('sportmonks_player_id', sportmonksPlayerId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  const updatedAt = new Date(data.updated_at).getTime();
+
+  return {
+    apiFootballPlayerId:
+      data.api_football_player_id !== null
+        ? Number(data.api_football_player_id)
+        : null,
+    career: Array.isArray(data.career)
+      ? data.career
+      : [],
+    updatedAt: data.updated_at,
+    fresh:
+      Number.isFinite(updatedAt) &&
+      Date.now() - updatedAt <
+        PLAYER_CAREER_CACHE_MS,
+  };
+};
+
+const savePlayerCareerCache = async (
+  player,
+  apiFootballPlayerId,
+  career
+) => {
+  const { error } = await supabase
+    .from('player_career_cache')
+    .upsert(
+      {
+        sportmonks_player_id: Number(player.id),
+        api_football_player_id:
+          apiFootballPlayerId !== null
+            ? Number(apiFootballPlayerId)
+            : null,
+        player_name:
+          player.display_name ||
+          player.name ||
+          '',
+        birth_date: player.date_of_birth || null,
+        career: Array.isArray(career)
+          ? career
+          : [],
+        updated_at: new Date().toISOString(),
+      },
+      {
+        onConflict: 'sportmonks_player_id',
+      }
+    );
+
+  if (error) {
+    throw error;
+  }
+};
+
+const getApiFootballFreeCareer = async (player) => {
+  let cached = null;
+
+  try {
+    cached = await getCachedPlayerCareer(
+      Number(player.id)
+    );
+  } catch (error) {
+    console.error(
+      'Error leyendo caché de trayectoria:',
+      error
+    );
+  }
+
+  if (cached?.fresh) {
+    return {
+      apiFootballPlayerId:
+        cached.apiFootballPlayerId,
+      career: cached.career,
+      source: 'cache',
+    };
+  }
+
+  try {
+    const apiPlayer =
+      await findApiFootballFreePlayer(player);
+
+    if (!apiPlayer?.id) {
+      if (cached) {
+        return {
+          apiFootballPlayerId:
+            cached.apiFootballPlayerId,
+          career: cached.career,
+          source: 'stale-cache',
+        };
+      }
+
+      return null;
+    }
+
+    const data = await footballFreeFetch(
+      `/players/teams?player=${encodeURIComponent(
+        apiPlayer.id
+      )}`
+    );
+
+    const teams = Array.isArray(data?.response)
+      ? data.response
+      : [];
+
+    if (!teams.length) {
+      if (cached) {
+        return {
+          apiFootballPlayerId:
+            cached.apiFootballPlayerId,
+          career: cached.career,
+          source: 'stale-cache',
+        };
+      }
+
+      return null;
+    }
+
+    const career = teams
+      .map((entry) => ({
+        team: {
+          id: null,
+          apiFootballId: Number(
+            entry?.team?.id
+          ),
+          name: getDisplayTeamName(
+            entry?.team?.name || ''
+          ),
+          shortName: getShortTeamName(
+            entry?.team?.name || ''
+          ),
+          logo: getTeamLogo(
+            entry?.team?.name || '',
+            entry?.team?.logo || ''
+          ),
+          isCastellon: isCastellon(
+            entry?.team?.name || ''
+          ),
+        },
+        seasons: Array.isArray(entry?.seasons)
+          ? entry.seasons.map(String)
+          : [],
+      }))
+      .filter(
+        (entry) =>
+          entry.team.apiFootballId &&
+          entry.team.name
+      );
+
+        try {
+      await savePlayerCareerCache(
+        player,
+        Number(apiPlayer.id),
+        career
+      );
+    } catch (cacheError) {
+      console.error(
+        'Error guardando caché de trayectoria:',
+        cacheError
+      );
+    }
+
+    return {
+      apiFootballPlayerId:
+        Number(apiPlayer.id),
+      career,
+      source: 'api-football-free',
+    };
+  } catch (error) {
+    console.error(
+      'Error cargando trayectoria desde API-Football FREE:',
+      error
+    );
+
+    if (cached) {
+      return {
+        apiFootballPlayerId:
+          cached.apiFootballPlayerId,
+        career: cached.career,
+        source: 'stale-cache',
+      };
+    }
+
+    return null;
+  }
 };
 
 /**
@@ -3937,11 +4261,12 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
 
     /*
         /*
+         /*
      * Trayectoria del jugador.
      *
-     * Sportmonks puede devolver varias estadísticas para
-     * el mismo equipo y temporada, así que agrupamos por equipo
-     * y eliminamos temporadas duplicadas.
+     * Sportmonks se mantiene como fallback.
+     * API-Football FREE aporta la trayectoria histórica
+     * completa cuando está disponible.
      */
     const careerMap = new Map();
 
@@ -3978,18 +4303,25 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
         });
       }
 
-      const careerEntry = careerMap.get(teamKey);
+      const careerEntry =
+        careerMap.get(teamKey);
 
       if (
         seasonName &&
-        !careerEntry.seasons.includes(seasonName)
+        !careerEntry.seasons.includes(
+          seasonName
+        )
       ) {
-        careerEntry.seasons.push(seasonName);
+        careerEntry.seasons.push(
+          seasonName
+        );
       }
     }
 
-    const career = Array.from(careerMap.values()).sort(
-      (a, b) => {
+    const sportmonksCareer =
+      Array.from(
+        careerMap.values()
+      ).sort((a, b) => {
         const latestA =
           a.seasons
             .slice()
@@ -4002,9 +4334,36 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
             .sort()
             .at(-1) || '';
 
-        return latestB.localeCompare(latestA);
+        return latestB.localeCompare(
+          latestA
+        );
+      });
+
+    let career = sportmonksCareer;
+    let careerSource = 'sportmonks';
+
+    try {
+      const historicalCareer =
+        await getApiFootballFreeCareer(
+          player
+        );
+
+      if (
+        historicalCareer?.career?.length
+      ) {
+        career =
+          historicalCareer.career;
+
+        careerSource =
+          historicalCareer.source ||
+          'api-football-free';
       }
-    );
+    } catch (error) {
+      console.error(
+        'Error aplicando trayectoria histórica:',
+        error
+      );
+    }
 
     const preferredCompetition =
       competitionList.find(
@@ -4053,9 +4412,11 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
                 : null
             ),
 
-      preferredStatistics,
+            preferredStatistics,
 
       statistics,
+
+      careerSource,
 
       career,
     });
