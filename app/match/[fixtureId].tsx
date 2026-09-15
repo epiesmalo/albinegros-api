@@ -99,6 +99,28 @@ type Section = 'summary' | 'stats' | 'lineups' | 'comments';
 
 const API_BASE = 'https://api.albinegroscastellon.com/api/football';
 
+function getTeamLogoUrl(teamName: string, originalLogo: string) {
+  const normalizedName = teamName
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+  if (normalizedName.includes('andorra')) {
+    return 'https://archivos.albinegroscastellon.com/images/8157.png';
+  }
+
+  if (normalizedName.includes('eldense')) {
+    return 'https://archivos.albinegroscastellon.com/images/9692.png';
+  }
+
+  if (normalizedName.includes('ceuta')) {
+    return 'https://archivos.albinegroscastellon.com/images/10139.png';
+  }
+
+  return originalLogo;
+}
+
 const STAT_LABELS: Record<string, string> = {
   'Ball Possession': 'Posesión',
   'Total Shots': 'Tiros',
@@ -474,13 +496,13 @@ export default function MatchDetailScreen() {
             </View>
 
             {event.team.logo ? (
-              <Image
-                source={{ uri: event.team.logo }}
-                style={styles.eventTeamLogo}
-                contentFit="contain"
-                cachePolicy="disk"
-              />
-            ) : null}
+  <Image
+    source={{ uri: getTeamLogoUrl(event.team.name, event.team.logo) }}
+    style={styles.eventTeamLogo}
+    contentFit="contain"
+    cachePolicy="disk"
+  />
+) : null}
           </View>
         ))}
       </View>
@@ -506,12 +528,20 @@ export default function MatchDetailScreen() {
       <View style={styles.sectionCard}>
         <View style={styles.statsTeamHeader}>
           <View style={styles.statsTeam}>
-            <Image source={{ uri: data.home.logo }} style={styles.statsLogo} contentFit="contain" />
+            <Image
+  source={{ uri: getTeamLogoUrl(data.home.name, data.home.logo) }}
+  style={styles.statsLogo}
+  contentFit="contain"
+/>
             <Text numberOfLines={1} style={styles.statsTeamName}>{data.home.shortName}</Text>
           </View>
 
           <View style={styles.statsTeam}>
-            <Image source={{ uri: data.away.logo }} style={styles.statsLogo} contentFit="contain" />
+            <Image
+  source={{ uri: getTeamLogoUrl(data.away.name, data.away.logo) }}
+  style={styles.statsLogo}
+  contentFit="contain"
+/>
             <Text numberOfLines={1} style={styles.statsTeamName}>{data.away.shortName}</Text>
           </View>
         </View>
@@ -536,7 +566,11 @@ export default function MatchDetailScreen() {
   const renderLineupTeam = (lineup: Lineup) => (
     <View key={String(lineup.team.id)} style={styles.lineupCard}>
       <View style={styles.lineupHeader}>
-        <Image source={{ uri: lineup.team.logo }} style={styles.lineupLogo} contentFit="contain" />
+        <Image
+  source={{ uri: getTeamLogoUrl(lineup.team.name, lineup.team.logo) }}
+  style={styles.lineupLogo}
+  contentFit="contain"
+/>
         <View style={styles.lineupHeaderText}>
           <Text style={styles.lineupTeamName}>{lineup.team.name}</Text>
           <Text style={styles.formation}>
@@ -785,7 +819,7 @@ export default function MatchDetailScreen() {
   }}
 >
   <Image
-    source={{ uri: data.home.logo }}
+   source={{ uri: getTeamLogoUrl(data.home.name, data.home.logo) }}
     style={styles.bigLogo}
     contentFit="contain"
     cachePolicy="disk"
@@ -820,7 +854,7 @@ export default function MatchDetailScreen() {
   }}
 >
   <Image
-    source={{ uri: data.away.logo }}
+    source={{ uri: getTeamLogoUrl(data.away.name, data.away.logo) }}
     style={styles.bigLogo}
     contentFit="contain"
     cachePolicy="disk"
