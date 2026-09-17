@@ -447,12 +447,14 @@ export default function TeamDetailScreen() {
                 ? 'D'
                 : result;
 
-        const resultStyle =
-          result === 'W'
+                const resultStyle =
+          result === 'W' || result === 'V'
             ? styles.formWin
-            : result === 'D'
+            : result === 'E'
               ? styles.formDraw
-              : styles.formLoss;
+              : result === 'D'
+                ? styles.formDraw
+                : styles.formLoss;
 
         return (
           <View

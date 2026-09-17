@@ -3223,6 +3223,86 @@ router.get('/api/football/team/:teamId/details', async (req, res) => {
           )
       ) || null;
 
+    let form = '';
+
+    if (
+      currentCompetition?.leagueId &&
+      currentCompetition?.seasonId
+    ) {
+      try {
+        const today =
+          new Date()
+            .toISOString()
+            .slice(0, 10);
+
+        const formData =
+          await sportmonksFetch(
+            `/fixtures/between/2026-08-01/${today}/${teamId}` +
+              `?include=participants;scores;state;league`
+          );
+
+        const finishedFixtures =
+          (formData?.data || [])
+            .map(normalizeSportmonksFixture)
+            .filter(
+              (fixture) =>
+                Number(fixture.league?.id) ===
+                  Number(
+                    currentCompetition.leagueId
+                  ) &&
+                ['FT', 'AET', 'PEN'].includes(
+                  fixture.status?.shortName
+                ) &&
+                fixture.home?.score !== null &&
+                fixture.away?.score !== null
+            )
+            .sort(
+              (a, b) =>
+                new Date(b.date) -
+                new Date(a.date)
+            )
+            .slice(0, 5);
+
+        form = finishedFixtures
+          .map((fixture) => {
+            const isHome =
+              Number(fixture.home?.teamId) ===
+              Number(teamId);
+
+            const teamScore =
+              Number(
+                isHome
+                  ? fixture.home?.score
+                  : fixture.away?.score
+              );
+
+            const opponentScore =
+              Number(
+                isHome
+                  ? fixture.away?.score
+                  : fixture.home?.score
+              );
+
+            if (teamScore > opponentScore) {
+              return 'V';
+            }
+
+            if (teamScore < opponentScore) {
+              return 'D';
+            }
+
+            return 'E';
+          })
+          .reverse()
+          .join('');
+      } catch (formError) {
+        console.warn(
+          `No se pudo cargar la forma del equipo ${teamId}:`,
+          formError.message
+        );
+      }
+        }
+
     let standing = null;
 
     if (currentCompetition?.seasonId) {
@@ -3450,7 +3530,7 @@ router.get('/api/football/team/:teamId/details', async (req, res) => {
               )
             : null,
 
-        form: '',
+        form,
 
         fixtures: {
           played: {
