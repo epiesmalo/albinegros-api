@@ -304,39 +304,69 @@ const findApiFootballFreePlayer = async (player) => {
     player?.date_of_birth || ''
   ).trim();
 
-  const searchTerm =
-    lastname.length >= 3
-      ? lastname
+    const lastnameSearchTerm = String(lastname || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')[0];
+
+  const rawSearchTerm =
+    lastnameSearchTerm.length >= 3
+      ? lastnameSearchTerm
       : displayName;
+
+  const searchTerm = String(rawSearchTerm || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 
   if (!searchTerm) {
     return null;
   }
 
-  const data = await footballFreeFetch(
-    `/players/profiles?search=${encodeURIComponent(searchTerm)}`
-  );
+  const candidates = [];
+  let page = 1;
+  let totalPages = 1;
 
-  const candidates = Array.isArray(data?.response)
-    ? data.response
-        .map((entry) => entry?.player)
-        .filter(Boolean)
-    : [];
+  do {
+    const data = await footballFreeFetch(
+      `/players/profiles?search=${encodeURIComponent(searchTerm)}&page=${page}`
+    );
+
+    const pageCandidates = Array.isArray(data?.response)
+      ? data.response
+          .map((entry) => entry?.player)
+          .filter(Boolean)
+      : [];
+
+    candidates.push(...pageCandidates);
+
+    if (birthDate) {
+      const birthMatch = pageCandidates.find(
+        (candidate) =>
+          String(candidate?.birth?.date || '') ===
+          birthDate
+      );
+
+      if (birthMatch) {
+        return birthMatch;
+      }
+    }
+
+    totalPages = Math.max(
+      1,
+      Number(data?.paging?.total) || 1
+    );
+
+    page += 1;
+  } while (page <= totalPages);
 
   if (!candidates.length) {
     return null;
-  }
-
-  if (birthDate) {
-    const birthMatch = candidates.find(
-      (candidate) =>
-        String(candidate?.birth?.date || '') ===
-        birthDate
-    );
-
-    if (birthMatch) {
-      return birthMatch;
-    }
   }
 
   const normalizeName = (value) =>
@@ -466,6 +496,19 @@ const getApiFootballFreeCareer = async (player) => {
           career: cached.career,
           source: 'stale-cache',
         };
+      }
+
+      try {
+        await savePlayerCareerCache(
+          player,
+          null,
+          []
+        );
+      } catch (cacheError) {
+        console.error(
+          'Error guardando caché negativa de trayectoria:',
+          cacheError
+        );
       }
 
       return null;
