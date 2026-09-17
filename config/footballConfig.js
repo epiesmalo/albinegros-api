@@ -48,6 +48,7 @@ const teams = [
     displayName: 'AD CEUTA FC',
     shortName: 'CEUTA',
     stadium: 'Alfonso Murube',
+    logo: 'https://archivos.albinegroscastellon.com/images/10139.png',
   },
 
   {
@@ -122,6 +123,7 @@ const teams = [
     displayName: 'CD ELDENSE',
     shortName: 'ELDENSE',
     stadium: 'Nuevo Pepico Amat',
+    logo: 'https://archivos.albinegroscastellon.com/images/9692.png',
   },
 
   {
@@ -190,6 +192,7 @@ const teams = [
     displayName: 'FC ANDORRA',
     shortName: 'ANDORRA',
     stadium: 'Nou Estadi de la FAF',
+    logo: 'https://archivos.albinegroscastellon.com/images/8157.png',
   },
 
   {
