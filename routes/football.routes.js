@@ -4364,6 +4364,33 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
         )
       ] || '';
 
+
+    let playerPhotoOverride = '';
+
+    if (Number(resolvedTeamId) === 10008) {
+      const {
+        data: playerOverride,
+        error: playerOverrideError,
+      } = await supabase
+        .from('castellon_player_overrides')
+        .select('photo')
+        .eq(
+          'sportmonks_player_id',
+          Number(player.id)
+        )
+        .maybeSingle();
+
+      if (playerOverrideError) {
+        console.warn(
+          `No se pudo cargar el override de foto del jugador ${playerId}:`,
+          playerOverrideError.message
+        );
+      } else {
+        playerPhotoOverride =
+          playerOverride?.photo || '';
+      }
+    }
+
     const playerProfile = {
       id: Number(player.id),
 
@@ -4408,11 +4435,11 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
 
       injured: false,
 
-      photo:
+            photo:
+        playerPhotoOverride ||
         normalizeImage(
           player.image_path || ''
         ),
-
       number:
         playerNumber,
 
