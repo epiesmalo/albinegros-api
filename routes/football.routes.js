@@ -12,8 +12,7 @@ const {
   isCastellon,
 } = require('../config/footballConfig');
 
-const API_BASE_URL = process.env.API_FOOTBALL_BASE_URL;
-const API_KEY = process.env.API_FOOTBALL_KEY;
+
 const API_FOOTBALL_FREE_BASE_URL =
   process.env.API_FOOTBALL_FREE_BASE_URL ||
   'https://v3.football.api-sports.io';
@@ -228,24 +227,7 @@ let sportmonksTodayFixturesCache = null;
 let sportmonksTodayFixturesCacheDate = null;
 let sportmonksTodayFixturesSavedAt = 0;
 
-/**
- * Realiza peticiones a API-Football.
- */
-const footballFetch = async (endpoint) => {
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    headers: {
-      'x-apisports-key': API_KEY,
-    },
-  });
 
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(JSON.stringify(data));
-  }
-
-  return data;
-};
 
 /**
  * Realiza peticiones a API-Football con la cuenta FREE.
@@ -1278,29 +1260,6 @@ const normalizedStatus =
   }
 });
 
-/**
- * Comprueba que API-Football está conectada.
- */
-router.get('/api/football/test', async (req, res) => {
-  try {
-    const data = await footballFetch('/status');
-
-    res.json({
-      ok: true,
-      message: 'API-Football conectada correctamente',
-      account: data.response?.account || null,
-      requests: data.response?.requests || null,
-    });
-  } catch (error) {
-    console.error('Error comprobando API-Football:', error);
-
-    res.status(500).json({
-      ok: false,
-      error: error.message,
-    });
-  }
-});
-
 
 /**
  * Sincroniza la clasificación.
@@ -1595,82 +1554,204 @@ router.post('/api/football/sync-standings', async (req, res) => {
 });
 
 /**
- * Sincroniza el calendario completo.
+ * Sincroniza el calendario completo de LaLiga2
+ * desde Sportmonks hacia Supabase.
  */
 router.post('/api/football/sync-calendar', async (req, res) => {
   try {
-    const data = await footballFetch(
-      `/fixtures?league=${LEAGUE_ID}&season=${SEASON}&timezone=${TIMEZONE}`
-    );
+    const competition =
+      SPORTMONKS_COMPETITIONS.laliga2;
 
-    const fixtures = data.response || [];
+    if (
+      !competition?.leagueId ||
+      !competition?.seasonId
+    ) {
+      throw new Error(
+        'Configuración de LaLiga2 incompleta'
+      );
+    }
 
-    const rows = fixtures.map((match) => {
-      const homeApiName = match.teams.home.name;
-      const awayApiName = match.teams.away.name;
+    const dateRanges = [
+      ['2026-08-01', '2026-10-31'],
+      ['2026-11-01', '2027-01-31'],
+      ['2027-02-01', '2027-04-30'],
+      ['2027-05-01', '2027-06-30'],
+    ];
+
+    const fixtures = [];
+
+    for (const [from, to] of dateRanges) {
+      let page = 1;
+      let hasMore = true;
+
+      while (hasMore) {
+        const data = await sportmonksFetch(
+          `/fixtures/between/${from}/${to}` +
+            `?include=participants;scores;state;league;round;venue` +
+            `&filters=fixtureLeagues:${competition.leagueId}` +
+            `&per_page=50&page=${page}`
+        );
+
+        const pageFixtures =
+          Array.isArray(data.data)
+            ? data.data
+            : [];
+
+        fixtures.push(...pageFixtures);
+
+        hasMore =
+          data.pagination?.has_more === true;
+
+        page += 1;
+      }
+    }
+
+    const uniqueFixtures =
+      Array.from(
+        new Map(
+          fixtures.map((fixture) => [
+            String(fixture.id),
+            fixture,
+          ])
+        ).values()
+      );
+
+    const rows = uniqueFixtures.map((fixture) => {
+      const participants =
+        fixture.participants || [];
+
+      const scores =
+        fixture.scores || [];
+
+      const homeTeam = participants.find(
+        (team) =>
+          team.meta?.location === 'home'
+      );
+
+      const awayTeam = participants.find(
+        (team) =>
+          team.meta?.location === 'away'
+      );
+
+      const getCurrentScore = (
+        participantId
+      ) => {
+        const score = scores.find(
+          (item) =>
+            item.participant_id ===
+              participantId &&
+            item.description === 'CURRENT'
+        );
+
+        return score?.score?.goals ?? null;
+      };
+
+      const sportmonksStatus =
+        fixture.state?.short_name || '';
+
+      const statusMap = {
+        '1st': '1H',
+        HT: 'HT',
+        '2nd': '2H',
+        ET: 'ET',
+        FT: 'FT',
+        NS: 'NS',
+      };
+
+      const status =
+        statusMap[sportmonksStatus] ||
+        sportmonksStatus ||
+        'NS';
+
+      const hasStarted =
+        status !== 'NS';
+
+      const homeApiName =
+        homeTeam?.name || '';
+
+      const awayApiName =
+        awayTeam?.name || '';
 
       return {
-        fixtureId: match.fixture.id,
-        homeTeamId: match.teams.home.id,
-        awayTeamId: match.teams.away.id,
+        fixtureId: fixture.id,
 
-        date: match.fixture.date,
-        status: match.fixture.status.short,
+        homeTeamId:
+          homeTeam?.id ?? null,
 
-        league: getCompetitionName(
-          match.league.name
-        ),
+        awayTeamId:
+          awayTeam?.id ?? null,
 
-        round: match.league.round,
+        date: fixture.starting_at
+          ? `${fixture.starting_at.replace(
+              ' ',
+              'T'
+            )}Z`
+          : null,
 
-        venue: getCorrectVenue(
-          homeApiName,
-          match.fixture.venue?.name
-        ),
+        status,
 
-        homeTeam: getDisplayTeamName(
-          homeApiName
-        ),
+        league:
+          competition.name,
 
-        awayTeam: getDisplayTeamName(
-          awayApiName
-        ),
+        round: fixture.round?.name
+          ? `Regular Season - ${fixture.round.name}`
+          : '',
 
-        homeLogo: getTeamLogo(
-          homeApiName,
-          match.teams.home.logo
-        ),
+        venue:
+          getCorrectVenue(
+            homeApiName,
+            fixture.venue?.name
+          ),
 
-        awayLogo: getTeamLogo(
-          awayApiName,
-          match.teams.away.logo
-        ),
+        homeTeam:
+          getDisplayTeamName(
+            homeApiName
+          ),
+
+        awayTeam:
+          getDisplayTeamName(
+            awayApiName
+          ),
+
+        homeLogo:
+          getTeamLogo(
+            homeApiName,
+            homeTeam?.image_path || ''
+          ),
+
+        awayLogo:
+          getTeamLogo(
+            awayApiName,
+            awayTeam?.image_path || ''
+          ),
 
         homeGoals:
-          match.goals.home === null
-            ? ''
-            : String(match.goals.home),
+          hasStarted && homeTeam
+            ? getCurrentScore(homeTeam.id)
+            : null,
 
         awayGoals:
-          match.goals.away === null
-            ? ''
-            : String(match.goals.away),
+          hasStarted && awayTeam
+            ? getCurrentScore(awayTeam.id)
+            : null,
       };
     });
 
-    const { error: deleteError } = await supabase
-      .from('calendar')
-      .delete()
-      .neq('id', 0);
+    const { error: deleteError } =
+      await supabase
+        .from('calendar')
+        .delete()
+        .neq('id', 0);
 
     if (deleteError) {
       throw deleteError;
     }
 
     if (rows.length > 0) {
-      const { error: insertError } = await supabase
-        .from('calendar')
-        .insert(rows);
+      const { error: insertError } =
+        await supabase
+          .from('calendar')
+          .insert(rows);
 
       if (insertError) {
         throw insertError;
@@ -1679,12 +1760,16 @@ router.post('/api/football/sync-calendar', async (req, res) => {
 
     res.json({
       ok: true,
+      provider: 'sportmonks',
       inserted: rows.length,
-      season: SEASON,
-      league: LEAGUE_ID,
+      season: competition.seasonId,
+      league: competition.leagueId,
     });
   } catch (error) {
-    console.error('Error sincronizando calendario:', error);
+    console.error(
+      'Error sincronizando calendario:',
+      error
+    );
 
     res.status(500).json({
       ok: false,
