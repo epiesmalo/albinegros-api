@@ -438,23 +438,14 @@ export default function TeamDetailScreen() {
 
     <View style={styles.formRow}>
       {stats.form.slice(-5).split('').map((result, index) => {
-        const translated =
-          result === 'W'
-            ? 'V'
-            : result === 'D'
-              ? 'E'
-              : result === 'L'
-                ? 'D'
-                : result;
+        const translated = result;
 
-                const resultStyle =
-          result === 'W' || result === 'V'
-            ? styles.formWin
-            : result === 'E'
-              ? styles.formDraw
-              : result === 'D'
-                ? styles.formDraw
-                : styles.formLoss;
+const resultStyle =
+  result === 'V'
+    ? styles.formWin
+    : result === 'E'
+      ? styles.formDraw
+      : styles.formLoss;
 
         return (
           <View
