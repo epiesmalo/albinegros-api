@@ -2963,19 +2963,28 @@ router.get('/api/football/team/:teamId/details', async (req, res) => {
       27: 'Attacker',
     };
 
-    const [
-      teamData,
-      squadData,
-    ] = await Promise.all([
-      sportmonksFetch(
-        `/teams/${encodeURIComponent(teamId)}` +
-          `?include=venue;coaches.coach;statistics.details.type`
-      ),
-      sportmonksFetch(
-        `/squads/teams/${encodeURIComponent(teamId)}` +
-          `?include=player`
-      ),
-    ]);
+const [
+  teamData,
+  squadData,
+  playerOverridesResult,
+] = await Promise.all([
+  sportmonksFetch(
+    `/teams/${encodeURIComponent(teamId)}` +
+      `?include=venue;coaches.coach;statistics.details.type`
+  ),
+  sportmonksFetch(
+    `/squads/teams/${encodeURIComponent(teamId)}` +
+      `?include=player`
+  ),
+  Number(teamId) === 10008
+    ? supabase
+        .from('castellon_player_overrides')
+        .select('sportmonks_player_id, photo')
+    : Promise.resolve({
+        data: [],
+        error: null,
+      }),
+]);
 
     const team = teamData?.data;
 
@@ -2992,6 +3001,27 @@ router.get('/api/football/team/:teamId/details', async (req, res) => {
     const squadRows = Array.isArray(squadData?.data)
       ? squadData.data
       : [];
+
+      if (playerOverridesResult?.error) {
+  console.warn(
+    `No se pudieron cargar los overrides de jugadores del Castellón:`,
+    playerOverridesResult.error.message
+  );
+}
+
+const playerPhotoOverrides = new Map(
+  (playerOverridesResult?.data || [])
+    .filter(
+      (row) =>
+        row.sportmonks_player_id !== null &&
+        row.sportmonks_player_id !== undefined &&
+        row.photo
+    )
+    .map((row) => [
+      String(row.sportmonks_player_id),
+      row.photo,
+    ])
+);
 
     const squad = squadRows
       .filter((entry) => entry?.player)
@@ -3026,9 +3056,17 @@ router.get('/api/football/team/:teamId/details', async (req, res) => {
               )
             ] || '',
 
-          photo: normalizeImage(
-            player.image_path || ''
-          ),
+          photo:
+  playerPhotoOverrides.get(
+    String(
+      player.id ??
+      entry.player_id ??
+      ''
+    )
+  ) ||
+  normalizeImage(
+    player.image_path || ''
+  ),
         };
       });
 
