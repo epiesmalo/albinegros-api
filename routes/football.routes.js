@@ -4456,17 +4456,19 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
         place: '',
 
         country:
-          player.country?.name ||
-          '',
-
-        countryCode:
-          player.country?.iso2 ||
-          '',
+  player.country?.iso2
+    ? new Intl.DisplayNames(['es'], { type: 'region' }).of(player.country.iso2) ||
+      player.country?.name ||
+      ''
+    : player.country?.name || '',
       },
 
       nationality:
-        player.nationality?.name ||
-        '',
+  player.nationality?.iso2
+    ? new Intl.DisplayNames(['es'], { type: 'region' }).of(player.nationality.iso2) ||
+      player.nationality?.name ||
+      ''
+    : player.nationality?.name || '',
 
       nationalityCode:
         player.nationality?.iso2 ||
