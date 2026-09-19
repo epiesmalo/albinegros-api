@@ -302,6 +302,21 @@ export default function PlayerDetailScreen() {
 
     return (
       <>
+        <View style={styles.statsMeta}>
+          <Text style={styles.statsCompetition}>
+            {stats.league.name || 'LaLiga Hypermotion'}
+          </Text>
+
+          {stats.games.rating != null && (
+            <Text style={styles.statsRating}>
+              Valoración{' '}
+              {Number(stats.games.rating).toLocaleString('es-ES', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </Text>
+          )}
+        </View>
         <View style={styles.statsGrid}>
           {main.map(([label, value]) => (
             <View key={String(label)} style={styles.statBox}>
@@ -312,13 +327,23 @@ export default function PlayerDetailScreen() {
         </View>
 
         <View style={styles.infoCard}>
-          <Text style={styles.cardTitle}>ATAQUE</Text>
+          <Text style={styles.cardTitle}>ATAQUE Y CREACIÓN</Text>
           <StatRow label="Asistencias" value={stats.goals.assists} />
           <StatRow label="Tiros" value={stats.shots.total} />
           <StatRow label="Tiros a puerta" value={stats.shots.on} />
           <StatRow label="Pases" value={stats.passes.total} />
           <StatRow label="Pases clave" value={stats.passes.key} />
-          <StatRow label="Precisión de pase" value={stats.passes.accuracy ?? '-'} />
+          <StatRow
+            label="Precisión de pase"
+            value={
+              stats.passes.accuracy != null
+                ? `${Number(stats.passes.accuracy).toLocaleString('es-ES', {
+                    minimumFractionDigits: 1,
+                    maximumFractionDigits: 1,
+                  })} %`
+                : '-'
+            }
+          />
           <StatRow label="Regates completados" value={stats.dribbles.success} />
         </View>
 
@@ -674,6 +699,24 @@ const styles = StyleSheet.create({
   noticeText: { flex: 1, marginLeft: 10 },
   noticeTitle: { color: '#D4AF37', fontSize: 12, fontWeight: '900' },
   noticeBody: { color: '#888', fontSize: 10, lineHeight: 16, marginTop: 4 },
+  statsMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+    paddingHorizontal: 3,
+  },
+  statsCompetition: {
+    flex: 1,
+    color: '#888',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  statsRating: {
+    color: '#D4AF37',
+    fontSize: 10,
+    fontWeight: '900',
+  },
   statsGrid: { flexDirection: 'row', gap: 7, marginBottom: 12 },
   statBox: {
     flex: 1,
