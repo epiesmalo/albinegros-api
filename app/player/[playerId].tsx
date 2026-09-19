@@ -68,8 +68,14 @@ type PlayerDetails = {
     firstname: string;
     lastname: string;
     age: number | null;
-    birth: { date: string | null; place: string; country: string };
+        birth: {
+      date: string | null;
+      place: string;
+      country: string;
+      countryCode?: string;
+    };
     nationality: string;
+    nationalityCode?: string;
     height: string;
     weight?: string;
     injured: boolean;
@@ -93,6 +99,23 @@ type PlayerDetails = {
 type Section = 'profile' | 'stats' | 'career';
 
 const API_BASE = 'https://api.albinegroscastellon.com/api/football';
+const getCountryNameEs = (code?: string, fallback = '') => {
+  if (!code) return fallback;
+
+  try {
+    const DisplayNames = (Intl as any).DisplayNames;
+
+    if (DisplayNames) {
+      const regionNames = new DisplayNames(['es'], { type: 'region' });
+      return regionNames.of(code) || fallback;
+    }
+  } catch {
+    // Si el dispositivo no soporta Intl.DisplayNames,
+    // usamos el nombre original recibido del backend.
+  }
+
+  return fallback;
+};
 
 function PlayerSkeleton() {
   return (
@@ -217,9 +240,21 @@ export default function PlayerDetailScreen() {
             ['Nombre completo', [data.player.firstname, data.player.lastname].filter(Boolean).join(' ') || data.player.name],
             ['Edad', data.player.age ? `${data.player.age} años` : '-'],
             ['Nacimiento', birthText || '-'],
-            ['Lugar', [data.player.birth.place, data.player.birth.country].filter(Boolean).join(', ') || '-'],
-            ['Nacionalidad', data.player.nationality || '-'],
-            ['Altura', data.player.height || '-'],
+[
+  'Lugar',
+  [
+    data.player.birth.place,
+    getCountryNameEs(data.player.birth.countryCode, data.player.birth.country),
+  ]
+    .filter(Boolean)
+    .join(', ') || '-',
+],
+[
+  'Nacionalidad',
+  getCountryNameEs(data.player.nationalityCode, data.player.nationality) || '-',
+],
+['Altura', data.player.height || '-'],
+['Peso', data.player.weight || '-'],
           ].map(([label, value]) => (
             <View key={String(label)} style={styles.infoRow}>
               <Text style={styles.infoLabel}>{label}</Text>

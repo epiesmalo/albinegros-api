@@ -3804,7 +3804,7 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
 
     const playerData = await sportmonksFetch(
   `/players/${encodeURIComponent(playerId)}` +
-    `?include=statistics.details.type;statistics.team;statistics.season`
+    `?include=country;nationality;statistics.details.type;statistics.team;statistics.season`
 );
 
     const player = playerData?.data;
@@ -4448,17 +4448,29 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
           player.date_of_birth
         ),
 
-      birth: {
+            birth: {
         date:
           player.date_of_birth ||
           null,
 
         place: '',
 
-        country: '',
+        country:
+          player.country?.name ||
+          '',
+
+        countryCode:
+          player.country?.iso2 ||
+          '',
       },
 
-      nationality: '',
+      nationality:
+        player.nationality?.name ||
+        '',
+
+      nationalityCode:
+        player.nationality?.iso2 ||
+        '',
 
       height:
         player.height
