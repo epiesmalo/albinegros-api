@@ -1925,57 +1925,9 @@ if (
         day: '2-digit',
       }).format(new Date());
 
-      const [year, month, day] = today
+       const [year, month, day] = today
         .split('-')
         .map(Number);
-
-      const startOfDay =
-        zonedDateTimeToUtcIso(
-          year,
-          month,
-          day,
-          0,
-          0,
-          0,
-          TIMEZONE
-        );
-
-      const nextDay = new Date(
-        Date.UTC(year, month - 1, day + 1)
-      );
-
-      const endOfDay =
-        zonedDateTimeToUtcIso(
-          nextDay.getUTCFullYear(),
-          nextDay.getUTCMonth() + 1,
-          nextDay.getUTCDate(),
-          0,
-          0,
-          0,
-          TIMEZONE
-        );
-
-      const {
-        data: calendarMatches,
-        error: calendarError,
-      } = await supabase
-        .from('calendar')
-        .select('*')
-        .gte('date', startOfDay)
-        .lt('date', endOfDay)
-        .order('date', { ascending: true });
-
-      if (calendarError) {
-        throw calendarError;
-      }
-
-      const fixtureIds = (calendarMatches || [])
-        .map((match) => match.fixtureId)
-        .filter(
-          (id) =>
-            id !== null &&
-            id !== undefined
-        );
 
       let fixtures = [];
 
