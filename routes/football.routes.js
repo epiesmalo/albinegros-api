@@ -3725,10 +3725,7 @@ const playerPhotoOverrides = new Map(
  *
  * GET /api/football/player/:playerId/details
  */
-
-
 router.get('/api/football/player/:playerId/details', async (req, res) => {
-  console.time(`PERF player ${req.params.playerId} - TOTAL ENDPOINT`);
   try {
     const playerId = String(req.params.playerId || '').trim();
     const requestedTeamId = String(req.query.teamId || '').trim();
@@ -3805,14 +3802,10 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
       return age;
     };
 
-    console.time(`PERF player ${playerId} - Sportmonks jugador`);
-
     const playerData = await sportmonksFetch(
   `/players/${encodeURIComponent(playerId)}` +
     `?include=country;nationality;statistics.details.type;statistics.team;statistics.season`
 );
-
-console.timeEnd(`PERF player ${playerId} - Sportmonks jugador`);
 
     const player = playerData?.data;
 
@@ -3886,57 +3879,23 @@ console.timeEnd(`PERF player ${playerId} - Sportmonks jugador`);
       );
 
     /*
-     * Cargamos todos los equipos que necesitamos
-     * para poder formar statistics y la ficha.
+     * Reutilizamos los equipos incluidos por Sportmonks
+     * en statistics.team para evitar llamadas adicionales.
      */
-    const relevantTeamIds = Array.from(
-      new Set(
-        [
-          resolvedTeamId,
-          ...currentStatistics.map(
+    const teamEntries = Array.from(
+      new Map(
+        currentStatistics
+          .filter(
             (stat) =>
-              String(stat.team_id || '')
-          ),
-        ].filter(
-          (id) =>
-            id &&
-            /^\d+$/.test(id)
-        )
-      )
+              stat?.team?.id
+          )
+          .map((stat) => [
+            String(stat.team.id),
+            stat.team,
+          ])
+      ).entries()
     );
 
-console.time(`PERF player ${playerId} - Sportmonks equipos`);
-
-    const teamEntries =
-      await Promise.all(
-        relevantTeamIds.map(
-          async (id) => {
-            try {
-              const teamData =
-                await sportmonksFetch(
-                  `/teams/${encodeURIComponent(id)}`
-                );
-
-              return [
-                String(id),
-                teamData?.data || null,
-              ];
-            } catch (error) {
-              console.warn(
-                `No se pudo cargar el equipo ${id} del jugador ${playerId}:`,
-                error.message
-              );
-
-              return [
-                String(id),
-                null,
-              ];
-            }
-          }
-        )
-      );
-
-console.timeEnd(`PERF player ${playerId} - Sportmonks equipos`);
 
     const teamMap = new Map(
       teamEntries
@@ -4415,8 +4374,6 @@ console.timeEnd(`PERF player ${playerId} - Sportmonks equipos`);
 
     let playerPhotoOverride = '';
 
-console.time(`PERF player ${playerId} - Supabase foto`);
-
     if (Number(resolvedTeamId) === 10008) {
       const {
         data: playerOverride,
@@ -4440,8 +4397,6 @@ console.time(`PERF player ${playerId} - Supabase foto`);
           playerOverride?.photo || '';
       }
     }
-
-console.timeEnd(`PERF player ${playerId} - Supabase foto`);
 
     const playerProfile = {
       id: Number(player.id),
@@ -4596,8 +4551,6 @@ console.timeEnd(`PERF player ${playerId} - Supabase foto`);
     let career = sportmonksCareer;
     let careerSource = 'sportmonks';
 
-console.time(`PERF player ${playerId} - Trayectoria`);
-
     try {
       const historicalCareer =
         await getApiFootballFreeCareer(
@@ -4621,8 +4574,6 @@ console.time(`PERF player ${playerId} - Trayectoria`);
       );
     }
 
-console.timeEnd(`PERF player ${playerId} - Trayectoria`);
-
     const preferredCompetition =
       competitionList.find(
         (competition) =>
@@ -4634,8 +4585,6 @@ console.timeEnd(`PERF player ${playerId} - Trayectoria`);
               ?.season_id
           )
       ) || null;
-
-console.timeEnd(`PERF player ${req.params.playerId} - TOTAL ENDPOINT`);
 
     return res.json({
       ok: true,
@@ -4679,7 +4628,6 @@ console.timeEnd(`PERF player ${req.params.playerId} - TOTAL ENDPOINT`);
       careerSource,
 
       career,
-      
     });
   } catch (error) {
     console.error(
