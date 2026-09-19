@@ -3748,10 +3748,10 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
     }
 
     const positionMap = {
-      24: 'Goalkeeper',
-      25: 'Defender',
-      26: 'Midfielder',
-      27: 'Attacker',
+      24: 'Portero',
+      25: 'Defensa',
+      26: 'Centrocampista',
+      27: 'Delantero',
     };
 
     const normalizeImage = (image) => {
