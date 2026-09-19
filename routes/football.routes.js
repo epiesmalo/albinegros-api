@@ -3725,7 +3725,10 @@ const playerPhotoOverrides = new Map(
  *
  * GET /api/football/player/:playerId/details
  */
+
+
 router.get('/api/football/player/:playerId/details', async (req, res) => {
+  console.time(`PERF player ${req.params.playerId} - TOTAL ENDPOINT`);
   try {
     const playerId = String(req.params.playerId || '').trim();
     const requestedTeamId = String(req.query.teamId || '').trim();
@@ -3802,10 +3805,14 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
       return age;
     };
 
+    console.time(`PERF player ${playerId} - Sportmonks jugador`);
+
     const playerData = await sportmonksFetch(
   `/players/${encodeURIComponent(playerId)}` +
     `?include=country;nationality;statistics.details.type;statistics.team;statistics.season`
 );
+
+console.timeEnd(`PERF player ${playerId} - Sportmonks jugador`);
 
     const player = playerData?.data;
 
@@ -3898,6 +3905,8 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
       )
     );
 
+console.time(`PERF player ${playerId} - Sportmonks equipos`);
+
     const teamEntries =
       await Promise.all(
         relevantTeamIds.map(
@@ -3926,6 +3935,8 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
           }
         )
       );
+
+console.timeEnd(`PERF player ${playerId} - Sportmonks equipos`);
 
     const teamMap = new Map(
       teamEntries
@@ -4404,6 +4415,8 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
 
     let playerPhotoOverride = '';
 
+console.time(`PERF player ${playerId} - Supabase foto`);
+
     if (Number(resolvedTeamId) === 10008) {
       const {
         data: playerOverride,
@@ -4427,6 +4440,8 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
           playerOverride?.photo || '';
       }
     }
+
+console.timeEnd(`PERF player ${playerId} - Supabase foto`);
 
     const playerProfile = {
       id: Number(player.id),
@@ -4581,6 +4596,8 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
     let career = sportmonksCareer;
     let careerSource = 'sportmonks';
 
+console.time(`PERF player ${playerId} - Trayectoria`);
+
     try {
       const historicalCareer =
         await getApiFootballFreeCareer(
@@ -4604,6 +4621,8 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
       );
     }
 
+console.timeEnd(`PERF player ${playerId} - Trayectoria`);
+
     const preferredCompetition =
       competitionList.find(
         (competition) =>
@@ -4615,6 +4634,8 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
               ?.season_id
           )
       ) || null;
+
+console.timeEnd(`PERF player ${req.params.playerId} - TOTAL ENDPOINT`);
 
     return res.json({
       ok: true,
@@ -4658,6 +4679,7 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
       careerSource,
 
       career,
+      
     });
   } catch (error) {
     console.error(
