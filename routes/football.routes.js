@@ -3319,42 +3319,27 @@ customCastellonTeam =
           )
       ) || null;
 
-    let form = '';
-let standing = null;
+        let form = '';
 
-const today =
-  new Date()
-    .toISOString()
-    .slice(0, 10);
+    const today =
+      new Date()
+        .toISOString()
+        .slice(0, 10);
 
-const [formResult, standingsResult] =
-  await Promise.allSettled([
-    currentCompetition?.leagueId &&
-    currentCompetition?.seasonId
-      ? sportmonksFetch(
-          `/fixtures/between/2026-08-01/${today}/${teamId}` +
-            `?include=participants;scores;state;league`
-        )
-      : Promise.resolve(null),
-
-    currentCompetition?.seasonId
-      ? sportmonksFetch(
-          `/standings/seasons/${currentCompetition.seasonId}` +
-            `?include=participant;details.type`
-        )
-      : Promise.resolve(null),
-  ]);
-
+    /*
+     * La forma reciente necesita consultar los partidos.
+     * El resto de estadísticas (PJ, V, E, D y goles)
+     * ya vienen incluidas en team.statistics.details.
+     */
     if (
       currentCompetition?.leagueId &&
       currentCompetition?.seasonId
     ) {
       try {
-        if (formResult.status === 'rejected') {
-  throw formResult.reason;
-}
-
-const formData = formResult.value;
+        const formData = await sportmonksFetch(
+          `/fixtures/between/2026-08-01/${today}/${teamId}` +
+            `?include=participants;scores;state;league`
+        );
 
         const finishedFixtures =
           (formData?.data || [])
@@ -3416,74 +3401,9 @@ const formData = formResult.value;
           formError.message
         );
       }
-        }
-
-
-    if (currentCompetition?.seasonId) {
-  try {
-    if (standingsResult.status === 'rejected') {
-      throw standingsResult.reason;
     }
 
-    const standingsData = standingsResult.value;
-
-    const standingsRows =
-      Array.isArray(standingsData?.data)
-        ? standingsData.data
-        : [];
-
-        const standingRow =
-          standingsRows.find(
-            (row) =>
-              Number(row.participant_id) ===
-              Number(teamId)
-          );
-
-        if (standingRow) {
-          standing =
-            normalizeSportmonksStanding(
-              standingRow
-            );
-        }
-      } catch (standingError) {
-        console.warn(
-          `No se pudo cargar la clasificación del equipo ${teamId}:`,
-          standingError.message
-        );
-      }
-    }
-
-    const played =
-      Number(
-        standing?.playedgames ?? 0
-      );
-
-    const wins =
-      Number(
-        standing?.won ?? 0
-      );
-
-    const draws =
-      Number(
-        standing?.draw ?? 0
-      );
-
-    const losses =
-      Number(
-        standing?.lost ?? 0
-      );
-
-    const goalsFor =
-      Number(
-        standing?.goalsfor ?? 0
-      );
-
-    const goalsAgainst =
-      Number(
-        standing?.goalsagainst ?? 0
-      );
-
-          const currentTeamStatistic =
+    const currentTeamStatistic =
       statisticRows.find(
         (stat) =>
           Number(stat.season_id) ===
@@ -3497,18 +3417,67 @@ const formData = formResult.value;
         ? currentTeamStatistic.details
         : [];
 
-    const cleanSheetStat =
+    const getStatisticDetail = (developerName) =>
       statisticDetails.find(
         (detail) =>
           detail?.type?.developer_name ===
-          'CLEANSHEET'
+          developerName
       );
 
+    const gamesPlayedStat =
+      getStatisticDetail('GAMES_PLAYED');
+
+    const winStat =
+      getStatisticDetail('WIN');
+
+    const drawStat =
+      getStatisticDetail('DRAW');
+
+    const lostStat =
+      getStatisticDetail('LOST');
+
+    const goalsStat =
+      getStatisticDetail('GOALS');
+
+    const goalsConcededStat =
+      getStatisticDetail('GOALS_CONCEDED');
+
+    const cleanSheetStat =
+      getStatisticDetail('CLEANSHEET');
+
     const failedToScoreStat =
-      statisticDetails.find(
-        (detail) =>
-          detail?.type?.developer_name ===
-          'FAILED_TO_SCORE'
+      getStatisticDetail('FAILED_TO_SCORE');
+
+    const played =
+      Number(
+        gamesPlayedStat?.value?.total ??
+        gamesPlayedStat?.value?.all?.count ??
+        0
+      );
+
+    const wins =
+      Number(
+        winStat?.value?.all?.count ?? 0
+      );
+
+    const draws =
+      Number(
+        drawStat?.value?.all?.count ?? 0
+      );
+
+    const losses =
+      Number(
+        lostStat?.value?.all?.count ?? 0
+      );
+
+    const goalsFor =
+      Number(
+        goalsStat?.value?.all?.count ?? 0
+      );
+
+    const goalsAgainst =
+      Number(
+        goalsConcededStat?.value?.all?.count ?? 0
       );
 
     const cleanSheet = {
@@ -3534,7 +3503,6 @@ const formData = formResult.value;
         failedToScoreStat?.value?.all?.count ?? 0
       ),
     };
-
 
 
     const responseData = {
