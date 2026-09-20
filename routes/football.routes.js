@@ -2944,6 +2944,9 @@ router.get('/api/football/fixture/:fixtureId/details', async (req, res) => {
   }
 });
 
+const teamDetailsCache = new Map();
+const TEAM_DETAILS_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 días
+
 router.get('/api/football/team/:teamId/details', async (req, res) => {
   try {
     const teamId = String(req.params.teamId || '').trim();
@@ -2953,6 +2956,18 @@ router.get('/api/football/team/:teamId/details', async (req, res) => {
         ok: false,
         error: 'ID de equipo no válido',
       });
+    }
+    const cachedTeamDetails = teamDetailsCache.get(teamId);
+
+    if (
+      cachedTeamDetails &&
+      Date.now() - cachedTeamDetails.timestamp < TEAM_DETAILS_CACHE_TTL
+    ) {
+      return res.json(cachedTeamDetails.data);
+    }
+
+    if (cachedTeamDetails) {
+      teamDetailsCache.delete(teamId);
     }
 
     const calculateAge = (birthDate) => {
@@ -3522,7 +3537,7 @@ const formData = formResult.value;
 
 
 
-    return res.json({
+    const responseData = {
       ok: true,
       provider: 'sportmonks',
       updatedAt: new Date().toISOString(),
@@ -3725,7 +3740,14 @@ const formData = formResult.value;
         failedToScore,
         lineups: [],
       },
+    };
+
+    teamDetailsCache.set(teamId, {
+      timestamp: Date.now(),
+      data: responseData,
     });
+
+    return res.json(responseData);
   } catch (error) {
     console.error(
       'Error cargando ficha del equipo:',
