@@ -3004,6 +3004,7 @@ const [
   teamData,
   squadData,
   playerOverridesResult,
+  customTeamResult,
 ] = await Promise.all([
   sportmonksFetch(
     `/teams/${encodeURIComponent(teamId)}` +
@@ -3021,6 +3022,19 @@ const [
         data: [],
         error: null,
       }),
+
+      Number(teamId) === 10008
+  ? supabase
+      .from('castellon_team')
+      .select(
+        'team_id,name,founded,country,coach_name,coach_photo,coach_birth_date,coach_birth_place,coach_birth_country,coach_nationality,coach_height,stadium_name,stadium_city,stadium_capacity,stadium_surface,stadium_image'
+      )
+      .limit(1)
+  : Promise.resolve({
+      data: [],
+      error: null,
+    }),
+
 ]);
 
     const team = teamData?.data;
@@ -3180,30 +3194,22 @@ const playerPhotoOverrides = new Map(
      */
     let customCastellonTeam = null;
 
-    if (Number(teamId) === 10008) {
-      const {
-        data: customTeamRows,
-        error: customTeamError,
-      } = await supabase
-        .from('castellon_team')
-        .select(
-          'team_id,name,founded,country,coach_name,coach_photo,coach_birth_date,coach_birth_place,coach_birth_country,coach_nationality,coach_height,stadium_name,stadium_city,stadium_capacity,stadium_surface,stadium_image'
-        )
-        .limit(1);
+if (customTeamResult?.error) {
+  console.warn(
+  'No se pudieron cargar los datos propios del Castellón:',
+  customTeamResult.error.message
+);
+}
 
-      if (customTeamError) {
-        console.warn(
-          'No se pudieron cargar los datos propios del Castellón:',
-          customTeamError.message
-        );
-      }
+const customTeamRows =
+  Array.isArray(customTeamResult?.data)
+    ? customTeamResult.data
+    : [];
 
-      customCastellonTeam =
-        Array.isArray(customTeamRows) &&
-        customTeamRows.length > 0
-          ? customTeamRows[0]
-          : null;
-    }
+customCastellonTeam =
+  customTeamRows.length > 0
+    ? customTeamRows[0]
+    : null;
 
     if (
       Number(teamId) === 10008 &&
@@ -3299,22 +3305,41 @@ const playerPhotoOverrides = new Map(
       ) || null;
 
     let form = '';
+let standing = null;
+
+const today =
+  new Date()
+    .toISOString()
+    .slice(0, 10);
+
+const [formResult, standingsResult] =
+  await Promise.allSettled([
+    currentCompetition?.leagueId &&
+    currentCompetition?.seasonId
+      ? sportmonksFetch(
+          `/fixtures/between/2026-08-01/${today}/${teamId}` +
+            `?include=participants;scores;state;league`
+        )
+      : Promise.resolve(null),
+
+    currentCompetition?.seasonId
+      ? sportmonksFetch(
+          `/standings/seasons/${currentCompetition.seasonId}` +
+            `?include=participant;details.type`
+        )
+      : Promise.resolve(null),
+  ]);
 
     if (
       currentCompetition?.leagueId &&
       currentCompetition?.seasonId
     ) {
       try {
-        const today =
-          new Date()
-            .toISOString()
-            .slice(0, 10);
+        if (formResult.status === 'rejected') {
+  throw formResult.reason;
+}
 
-        const formData =
-          await sportmonksFetch(
-            `/fixtures/between/2026-08-01/${today}/${teamId}` +
-              `?include=participants;scores;state;league`
-          );
+const formData = formResult.value;
 
         const finishedFixtures =
           (formData?.data || [])
@@ -3378,20 +3403,19 @@ const playerPhotoOverrides = new Map(
       }
         }
 
-    let standing = null;
 
     if (currentCompetition?.seasonId) {
-      try {
-        const standingsData =
-          await sportmonksFetch(
-            `/standings/seasons/${currentCompetition.seasonId}` +
-              `?include=participant;details.type`
-          );
+  try {
+    if (standingsResult.status === 'rejected') {
+      throw standingsResult.reason;
+    }
 
-        const standingsRows =
-          Array.isArray(standingsData?.data)
-            ? standingsData.data
-            : [];
+    const standingsData = standingsResult.value;
+
+    const standingsRows =
+      Array.isArray(standingsData?.data)
+        ? standingsData.data
+        : [];
 
         const standingRow =
           standingsRows.find(
