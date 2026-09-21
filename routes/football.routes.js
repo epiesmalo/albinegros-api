@@ -221,6 +221,10 @@ let liveCacheSavedAt = 0;
 let liveRefreshPromise = null;
 const PLAYER_CAREER_CACHE_MS =
   30 * 24 * 60 * 60 * 1000;
+
+const TEAM_DETAILS_CACHE_TTL =
+  7 * 24 * 60 * 60 * 1000;
+
 const SPORTMONKS_TODAY_FIXTURES_CACHE_MS = 60_000;
 
 let sportmonksTodayFixturesCache = null;
@@ -442,7 +446,56 @@ const savePlayerCareerCache = async (
     throw error;
   }
 };
+const getCachedTeamDetails = async (teamId) => {
+  const { data, error } = await supabase
+    .from('team_details_cache')
+    .select('team_id, data, updated_at')
+    .eq('team_id', Number(teamId))
+    .maybeSingle();
 
+  if (error) {
+    throw error;
+  }
+
+  if (!data?.data) {
+    return null;
+  }
+
+  const updatedAt = new Date(
+    data.updated_at
+  ).getTime();
+
+  return {
+    data: data.data,
+    updatedAt: data.updated_at,
+    fresh:
+      Number.isFinite(updatedAt) &&
+      Date.now() - updatedAt <
+        TEAM_DETAILS_CACHE_TTL,
+  };
+};
+
+const saveTeamDetailsCache = async (
+  teamId,
+  responseData
+) => {
+  const { error } = await supabase
+    .from('team_details_cache')
+    .upsert(
+      {
+        team_id: Number(teamId),
+        data: responseData,
+        updated_at: new Date().toISOString(),
+      },
+      {
+        onConflict: 'team_id',
+      }
+    );
+
+  if (error) {
+    throw error;
+  }
+};
 const getApiFootballFreeCareer = async (player) => {
   let cached = null;
 
@@ -2944,801 +2997,1014 @@ router.get('/api/football/fixture/:fixtureId/details', async (req, res) => {
   }
 });
 
-const teamDetailsCache = new Map();
-const TEAM_DETAILS_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 días
+const cacheTeamDetails = async (
+  teamId,
+  responseData
+) => {
+  teamDetailsCache.set(String(teamId), {
+    timestamp: Date.now(),
+    data: responseData,
+  });
 
-router.get('/api/football/team/:teamId/details', async (req, res) => {
   try {
-    const teamId = String(req.params.teamId || '').trim();
+    await saveTeamDetailsCache(
+      teamId,
+      responseData
+    );
+  } catch (error) {
+    console.error(
+      `Error guardando caché persistente del equipo ${teamId}:`,
+      error.message
+    );
+  }
+};
 
-    if (!/^\d+$/.test(teamId)) {
-      return res.status(400).json({
-        ok: false,
-        error: 'ID de equipo no válido',
-      });
+const teamDetailsCache = new Map();
+const teamDetailsRefreshPromises = new Map();
+
+/**
+ * Precarga en RAM todas las fichas persistentes guardadas en Supabase.
+ *
+ * Se lanza al cargar este módulo para que el coste de la primera lectura
+ * de Supabase lo pague el arranque del servidor y no el primer usuario
+ * que abra una ficha de equipo. Conservamos updated_at como timestamp
+ * para que el SWR siga sabiendo qué fichas superan los 7 días.
+ */
+const preloadTeamDetailsCache = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('team_details_cache')
+      .select('team_id, data, updated_at');
+
+    if (error) {
+      throw error;
     }
-    const cachedTeamDetails = teamDetailsCache.get(teamId);
 
-    if (
-      cachedTeamDetails &&
-      Date.now() - cachedTeamDetails.timestamp < TEAM_DETAILS_CACHE_TTL
-    ) {
-      return res.json(cachedTeamDetails.data);
-    }
+    let loaded = 0;
 
-    if (cachedTeamDetails) {
-      teamDetailsCache.delete(teamId);
-    }
-
-    const calculateAge = (birthDate) => {
-      if (!birthDate) return null;
-
-      const birth = new Date(`${birthDate}T12:00:00Z`);
-
-      if (Number.isNaN(birth.getTime())) {
-        return null;
+    for (const row of data || []) {
+      if (!row?.team_id || !row?.data) {
+        continue;
       }
 
-      const today = new Date();
-      let age = today.getUTCFullYear() - birth.getUTCFullYear();
+      const updatedAt = new Date(
+        row.updated_at
+      ).getTime();
 
-      const hasNotHadBirthday =
-        today.getUTCMonth() < birth.getUTCMonth() ||
-        (
-          today.getUTCMonth() === birth.getUTCMonth() &&
-          today.getUTCDate() < birth.getUTCDate()
-        );
+      teamDetailsCache.set(
+        String(row.team_id),
+        {
+          timestamp: Number.isFinite(updatedAt)
+            ? updatedAt
+            : 0,
+          data: row.data,
+        }
+      );
 
-      if (hasNotHadBirthday) {
-        age -= 1;
-      }
+      loaded += 1;
+    }
 
-      return age;
-    };
+    console.log(
+      `Caché de fichas de equipo precargada: ${loaded} equipos`
+    );
+  } catch (error) {
+    console.error(
+      'Error precargando caché de fichas de equipo:',
+      error.message
+    );
+  }
+};
 
-    const normalizeImage = (image) => {
-      if (!image) return '';
+void preloadTeamDetailsCache();
 
-      if (
-        String(image).toLowerCase().includes('placeholder')
-      ) {
-        return '';
-      }
+/**
+ * Construye la ficha completa de un equipo desde Sportmonks.
+ *
+ * No gestiona caché ni respuesta HTTP: únicamente obtiene y normaliza
+ * los datos. Esto permite reutilizar la misma función para las peticiones
+ * normales y para la actualización en segundo plano.
+ */
+const buildTeamDetails = async (teamId) => {
+      const calculateAge = (birthDate) => {
+        if (!birthDate) return null;
 
-      return image;
-    };
+        const birth = new Date(`${birthDate}T12:00:00Z`);
 
-    const positionMap = {
-      24: 'Goalkeeper',
-      25: 'Defender',
-      26: 'Midfielder',
-      27: 'Attacker',
-    };
+        if (Number.isNaN(birth.getTime())) {
+          return null;
+        }
 
-const [
-  teamData,
-  squadData,
-  playerOverridesResult,
-  customTeamResult,
-] = await Promise.all([
-  sportmonksFetch(
-    `/teams/${encodeURIComponent(teamId)}` +
-      `?include=venue;coaches.coach;statistics.details.type`
-  ),
-  sportmonksFetch(
-    `/squads/teams/${encodeURIComponent(teamId)}` +
-      `?include=player`
-  ),
-  Number(teamId) === 10008
+        const today = new Date();
+        let age = today.getUTCFullYear() - birth.getUTCFullYear();
+
+        const hasNotHadBirthday =
+          today.getUTCMonth() < birth.getUTCMonth() ||
+          (
+            today.getUTCMonth() === birth.getUTCMonth() &&
+            today.getUTCDate() < birth.getUTCDate()
+          );
+
+        if (hasNotHadBirthday) {
+          age -= 1;
+        }
+
+        return age;
+      };
+
+      const normalizeImage = (image) => {
+        if (!image) return '';
+
+        if (
+          String(image).toLowerCase().includes('placeholder')
+        ) {
+          return '';
+        }
+
+        return image;
+      };
+
+      const positionMap = {
+        24: 'Goalkeeper',
+        25: 'Defender',
+        26: 'Midfielder',
+        27: 'Attacker',
+      };
+
+  const [
+    teamData,
+    squadData,
+    playerOverridesResult,
+    customTeamResult,
+  ] = await Promise.all([
+    sportmonksFetch(
+      `/teams/${encodeURIComponent(teamId)}` +
+        `?include=venue;coaches.coach;statistics.details.type`
+    ),
+    sportmonksFetch(
+      `/squads/teams/${encodeURIComponent(teamId)}` +
+        `?include=player`
+    ),
+    Number(teamId) === 10008
+      ? supabase
+          .from('castellon_player_overrides')
+          .select('sportmonks_player_id, photo')
+      : Promise.resolve({
+          data: [],
+          error: null,
+        }),
+
+        Number(teamId) === 10008
     ? supabase
-        .from('castellon_player_overrides')
-        .select('sportmonks_player_id, photo')
+        .from('castellon_team')
+        .select(
+          'team_id,name,founded,country,coach_name,coach_photo,coach_birth_date,coach_birth_place,coach_birth_country,coach_nationality,coach_height,stadium_name,stadium_city,stadium_capacity,stadium_surface,stadium_image'
+        )
+        .limit(1)
     : Promise.resolve({
         data: [],
         error: null,
       }),
 
-      Number(teamId) === 10008
-  ? supabase
-      .from('castellon_team')
-      .select(
-        'team_id,name,founded,country,coach_name,coach_photo,coach_birth_date,coach_birth_place,coach_birth_country,coach_nationality,coach_height,stadium_name,stadium_city,stadium_capacity,stadium_surface,stadium_image'
+  ]);
+
+      const team = teamData?.data;
+
+      if (!team?.id) {
+    const error = new Error('Equipo no encontrado');
+    error.statusCode = 404;
+    throw error;
+  }
+
+      const apiTeamName = team.name || '';
+      const venue = team.venue || {};
+
+      const squadRows = Array.isArray(squadData?.data)
+        ? squadData.data
+        : [];
+
+        if (playerOverridesResult?.error) {
+    console.warn(
+      `No se pudieron cargar los overrides de jugadores del Castellón:`,
+      playerOverridesResult.error.message
+    );
+  }
+
+  const playerPhotoOverrides = new Map(
+    (playerOverridesResult?.data || [])
+      .filter(
+        (row) =>
+          row.sportmonks_player_id !== null &&
+          row.sportmonks_player_id !== undefined &&
+          row.photo
       )
-      .limit(1)
-  : Promise.resolve({
-      data: [],
-      error: null,
-    }),
-
-]);
-
-    const team = teamData?.data;
-
-    if (!team?.id) {
-      return res.status(404).json({
-        ok: false,
-        error: 'Equipo no encontrado',
-      });
-    }
-
-    const apiTeamName = team.name || '';
-    const venue = team.venue || {};
-
-    const squadRows = Array.isArray(squadData?.data)
-      ? squadData.data
-      : [];
-
-      if (playerOverridesResult?.error) {
-  console.warn(
-    `No se pudieron cargar los overrides de jugadores del Castellón:`,
-    playerOverridesResult.error.message
+      .map((row) => [
+        String(row.sportmonks_player_id),
+        row.photo,
+      ])
   );
-}
 
-const playerPhotoOverrides = new Map(
-  (playerOverridesResult?.data || [])
-    .filter(
-      (row) =>
-        row.sportmonks_player_id !== null &&
-        row.sportmonks_player_id !== undefined &&
-        row.photo
-    )
-    .map((row) => [
-      String(row.sportmonks_player_id),
-      row.photo,
-    ])
-);
+      const squad = squadRows
+        .filter((entry) => entry?.player)
+        .map((entry) => {
+          const player = entry.player || {};
 
-    const squad = squadRows
-      .filter((entry) => entry?.player)
-      .map((entry) => {
-        const player = entry.player || {};
+          return {
+            id:
+              player.id ??
+              entry.player_id ??
+              null,
 
-        return {
-          id:
-            player.id ??
-            entry.player_id ??
-            null,
+            name:
+              player.display_name ||
+              player.name ||
+              player.common_name ||
+              '',
 
-          name:
-            player.display_name ||
-            player.name ||
-            player.common_name ||
-            '',
+            age: calculateAge(
+              player.date_of_birth
+            ),
 
-          age: calculateAge(
-            player.date_of_birth
-          ),
+            number:
+              entry.jersey_number ??
+              null,
 
-          number:
-            entry.jersey_number ??
-            null,
+            position:
+              positionMap[
+                Number(
+                  entry.position_id ??
+                  player.position_id
+                )
+              ] || '',
 
-          position:
-            positionMap[
-              Number(
-                entry.position_id ??
-                player.position_id
-              )
-            ] || '',
+            photo:
+    playerPhotoOverrides.get(
+      String(
+        player.id ??
+        entry.player_id ??
+        ''
+      )
+    ) ||
+    normalizeImage(
+      player.image_path || ''
+    ),
+          };
+        });
 
-          photo:
-  playerPhotoOverrides.get(
-    String(
-      player.id ??
-      entry.player_id ??
-      ''
-    )
-  ) ||
-  normalizeImage(
-    player.image_path || ''
-  ),
-        };
-      });
+      const coachRows = Array.isArray(team.coaches)
+        ? team.coaches
+        : [];
 
-    const coachRows = Array.isArray(team.coaches)
-      ? team.coaches
+      const activeCoachEntry =
+        coachRows.find(
+          (entry) => entry.active === true
+        ) ||
+        coachRows.find(
+          (entry) => entry.coach
+        ) ||
+        null;
+
+      const activeCoach =
+        activeCoachEntry?.coach || null;
+
+      let coach = activeCoach
+        ? {
+            id: activeCoach.id ?? null,
+
+            name:
+              activeCoach.display_name ||
+              activeCoach.name ||
+              activeCoach.common_name ||
+              '',
+
+            firstname:
+              activeCoach.firstname || '',
+
+            lastname:
+              activeCoach.lastname || '',
+
+            age: calculateAge(
+              activeCoach.date_of_birth
+            ),
+
+            birth: {
+              date:
+                activeCoach.date_of_birth ||
+                null,
+              place: '',
+              country: '',
+            },
+
+            nationality: '',
+
+            height:
+              activeCoach.height
+                ? String(activeCoach.height)
+                : '',
+
+            weight:
+              activeCoach.weight
+                ? String(activeCoach.weight)
+                : '',
+
+            photo: normalizeImage(
+              activeCoach.image_path || ''
+            ),
+
+            career: [],
+          }
+        : null;
+
+      /*
+       * Conservamos temporalmente los datos propios del Castellón
+       * mientras Sportmonks no tenga fotografía/datos completos
+       * del entrenador.
+       *
+       * El ID usado por la APP ya es Sportmonks: 10008.
+       */
+      let customCastellonTeam = null;
+
+  if (customTeamResult?.error) {
+    console.warn(
+    'No se pudieron cargar los datos propios del Castellón:',
+    customTeamResult.error.message
+  );
+  }
+
+  const customTeamRows =
+    Array.isArray(customTeamResult?.data)
+      ? customTeamResult.data
       : [];
 
-    const activeCoachEntry =
-      coachRows.find(
-        (entry) => entry.active === true
-      ) ||
-      coachRows.find(
-        (entry) => entry.coach
-      ) ||
-      null;
+  customCastellonTeam =
+    customTeamRows.length > 0
+      ? customTeamRows[0]
+      : null;
 
-    const activeCoach =
-      activeCoachEntry?.coach || null;
-
-    let coach = activeCoach
-      ? {
-          id: activeCoach.id ?? null,
+      if (
+        Number(teamId) === 10008 &&
+        customCastellonTeam?.coach_name
+      ) {
+        coach = {
+          id: activeCoach?.id ?? null,
 
           name:
-            activeCoach.display_name ||
-            activeCoach.name ||
-            activeCoach.common_name ||
-            '',
+            customCastellonTeam.coach_name,
 
           firstname:
-            activeCoach.firstname || '',
+            activeCoach?.firstname ||
+            'Pablo',
 
           lastname:
-            activeCoach.lastname || '',
+            activeCoach?.lastname ||
+            'Hernández',
 
           age: calculateAge(
-            activeCoach.date_of_birth
+            customCastellonTeam.coach_birth_date ||
+            activeCoach?.date_of_birth
           ),
 
           birth: {
             date:
-              activeCoach.date_of_birth ||
+              customCastellonTeam.coach_birth_date ||
+              activeCoach?.date_of_birth ||
               null,
-            place: '',
-            country: '',
+
+            place:
+              customCastellonTeam.coach_birth_place ||
+              '',
+
+            country:
+              customCastellonTeam.coach_birth_country ||
+              '',
           },
 
-          nationality: '',
+          nationality:
+            customCastellonTeam.coach_nationality ||
+            '',
 
           height:
-            activeCoach.height
-              ? String(activeCoach.height)
-              : '',
+            customCastellonTeam.coach_height ||
+            (
+              activeCoach?.height
+                ? String(activeCoach.height)
+                : ''
+            ),
 
           weight:
-            activeCoach.weight
+            activeCoach?.weight
               ? String(activeCoach.weight)
               : '',
 
-          photo: normalizeImage(
-            activeCoach.image_path || ''
-          ),
+          photo:
+            customCastellonTeam.coach_photo ||
+            normalizeImage(
+              activeCoach?.image_path || ''
+            ),
 
           career: [],
-        }
-      : null;
-
-    /*
-     * Conservamos temporalmente los datos propios del Castellón
-     * mientras Sportmonks no tenga fotografía/datos completos
-     * del entrenador.
-     *
-     * El ID usado por la APP ya es Sportmonks: 10008.
-     */
-    let customCastellonTeam = null;
-
-if (customTeamResult?.error) {
-  console.warn(
-  'No se pudieron cargar los datos propios del Castellón:',
-  customTeamResult.error.message
-);
-}
-
-const customTeamRows =
-  Array.isArray(customTeamResult?.data)
-    ? customTeamResult.data
-    : [];
-
-customCastellonTeam =
-  customTeamRows.length > 0
-    ? customTeamRows[0]
-    : null;
-
-    if (
-      Number(teamId) === 10008 &&
-      customCastellonTeam?.coach_name
-    ) {
-      coach = {
-        id: activeCoach?.id ?? null,
-
-        name:
-          customCastellonTeam.coach_name,
-
-        firstname:
-          activeCoach?.firstname ||
-          'Pablo',
-
-        lastname:
-          activeCoach?.lastname ||
-          'Hernández',
-
-        age: calculateAge(
-          customCastellonTeam.coach_birth_date ||
-          activeCoach?.date_of_birth
-        ),
-
-        birth: {
-          date:
-            customCastellonTeam.coach_birth_date ||
-            activeCoach?.date_of_birth ||
-            null,
-
-          place:
-            customCastellonTeam.coach_birth_place ||
-            '',
-
-          country:
-            customCastellonTeam.coach_birth_country ||
-            '',
-        },
-
-        nationality:
-          customCastellonTeam.coach_nationality ||
-          '',
-
-        height:
-          customCastellonTeam.coach_height ||
-          (
-            activeCoach?.height
-              ? String(activeCoach.height)
-              : ''
-          ),
-
-        weight:
-          activeCoach?.weight
-            ? String(activeCoach.weight)
-            : '',
-
-        photo:
-          customCastellonTeam.coach_photo ||
-          normalizeImage(
-            activeCoach?.image_path || ''
-          ),
-
-        career: [],
-      };
-    }
-
-    /*
-     * Detectamos cuál de nuestras competiciones corresponde
-     * a la temporada actual del equipo.
-     */
-    const statisticRows = Array.isArray(
-      team.statistics
-    )
-      ? team.statistics
-      : [];
-
-    const competitionList =
-      Object.values(
-        SPORTMONKS_COMPETITIONS
-      ).filter(
-        (competition) =>
-          competition?.seasonId
-      );
-
-    const currentCompetition =
-      competitionList.find(
-        (competition) =>
-          statisticRows.some(
-            (stat) =>
-              Number(stat.season_id) ===
-              Number(competition.seasonId)
-          )
-      ) || null;
-
-        let form = '';
-
-    const today =
-      new Date()
-        .toISOString()
-        .slice(0, 10);
-
-    /*
-     * La forma reciente necesita consultar los partidos.
-     * El resto de estadísticas (PJ, V, E, D y goles)
-     * ya vienen incluidas en team.statistics.details.
-     */
-    if (
-      currentCompetition?.leagueId &&
-      currentCompetition?.seasonId
-    ) {
-      try {
-        const formData = await sportmonksFetch(
-          `/fixtures/between/2026-08-01/${today}/${teamId}` +
-            `?include=participants;scores;state;league`
-        );
-
-        const finishedFixtures =
-          (formData?.data || [])
-            .map(normalizeSportmonksFixture)
-            .filter(
-              (fixture) =>
-                Number(fixture.league?.id) ===
-                  Number(
-                    currentCompetition.leagueId
-                  ) &&
-                ['FT', 'AET', 'PEN'].includes(
-                  fixture.status?.shortName
-                ) &&
-                fixture.home?.score !== null &&
-                fixture.away?.score !== null
-            )
-            .sort(
-              (a, b) =>
-                new Date(b.date) -
-                new Date(a.date)
-            )
-            .slice(0, 5);
-
-        form = finishedFixtures
-          .map((fixture) => {
-            const isHome =
-              Number(fixture.home?.teamId) ===
-              Number(teamId);
-
-            const teamScore =
-              Number(
-                isHome
-                  ? fixture.home?.score
-                  : fixture.away?.score
-              );
-
-            const opponentScore =
-              Number(
-                isHome
-                  ? fixture.away?.score
-                  : fixture.home?.score
-              );
-
-            if (teamScore > opponentScore) {
-              return 'V';
-            }
-
-            if (teamScore < opponentScore) {
-              return 'D';
-            }
-
-            return 'E';
-          })
-          .reverse()
-          .join('');
-      } catch (formError) {
-        console.warn(
-          `No se pudo cargar la forma del equipo ${teamId}:`,
-          formError.message
-        );
+        };
       }
-    }
 
-    const currentTeamStatistic =
-      statisticRows.find(
-        (stat) =>
-          Number(stat.season_id) ===
-          Number(currentCompetition?.seasonId)
-      ) || null;
-
-    const statisticDetails =
-      Array.isArray(
-        currentTeamStatistic?.details
+      /*
+       * Detectamos cuál de nuestras competiciones corresponde
+       * a la temporada actual del equipo.
+       */
+      const statisticRows = Array.isArray(
+        team.statistics
       )
-        ? currentTeamStatistic.details
+        ? team.statistics
         : [];
 
-    const getStatisticDetail = (developerName) =>
-      statisticDetails.find(
-        (detail) =>
-          detail?.type?.developer_name ===
-          developerName
-      );
+      const competitionList =
+        Object.values(
+          SPORTMONKS_COMPETITIONS
+        ).filter(
+          (competition) =>
+            competition?.seasonId
+        );
 
-    const gamesPlayedStat =
-      getStatisticDetail('GAMES_PLAYED');
+      const currentCompetition =
+        competitionList.find(
+          (competition) =>
+            statisticRows.some(
+              (stat) =>
+                Number(stat.season_id) ===
+                Number(competition.seasonId)
+            )
+        ) || null;
 
-    const winStat =
-      getStatisticDetail('WIN');
+          let form = '';
 
-    const drawStat =
-      getStatisticDetail('DRAW');
+      const today =
+        new Date()
+          .toISOString()
+          .slice(0, 10);
 
-    const lostStat =
-      getStatisticDetail('LOST');
+      /*
+       * La forma reciente necesita consultar los partidos.
+       * El resto de estadísticas (PJ, V, E, D y goles)
+       * ya vienen incluidas en team.statistics.details.
+       */
+      if (
+        currentCompetition?.leagueId &&
+        currentCompetition?.seasonId
+      ) {
+        try {
+          const formData = await sportmonksFetch(
+            `/fixtures/between/2026-08-01/${today}/${teamId}` +
+              `?include=participants;scores;state;league`
+          );
 
-    const goalsStat =
-      getStatisticDetail('GOALS');
-
-    const goalsConcededStat =
-      getStatisticDetail('GOALS_CONCEDED');
-
-    const cleanSheetStat =
-      getStatisticDetail('CLEANSHEET');
-
-    const failedToScoreStat =
-      getStatisticDetail('FAILED_TO_SCORE');
-
-    const played =
-      Number(
-        gamesPlayedStat?.value?.total ??
-        gamesPlayedStat?.value?.all?.count ??
-        0
-      );
-
-    const wins =
-      Number(
-        winStat?.value?.all?.count ?? 0
-      );
-
-    const draws =
-      Number(
-        drawStat?.value?.all?.count ?? 0
-      );
-
-    const losses =
-      Number(
-        lostStat?.value?.all?.count ?? 0
-      );
-
-    const goalsFor =
-      Number(
-        goalsStat?.value?.all?.count ?? 0
-      );
-
-    const goalsAgainst =
-      Number(
-        goalsConcededStat?.value?.all?.count ?? 0
-      );
-
-    const cleanSheet = {
-      home: Number(
-        cleanSheetStat?.value?.home?.count ?? 0
-      ),
-      away: Number(
-        cleanSheetStat?.value?.away?.count ?? 0
-      ),
-      total: Number(
-        cleanSheetStat?.value?.all?.count ?? 0
-      ),
-    };
-
-    const failedToScore = {
-      home: Number(
-        failedToScoreStat?.value?.home?.count ?? 0
-      ),
-      away: Number(
-        failedToScoreStat?.value?.away?.count ?? 0
-      ),
-      total: Number(
-        failedToScoreStat?.value?.all?.count ?? 0
-      ),
-    };
-
-
-    const responseData = {
-      ok: true,
-      provider: 'sportmonks',
-      updatedAt: new Date().toISOString(),
-
-      team: {
-        id: Number(team.id),
-
-        name:
-          customCastellonTeam?.name ||
-          getDisplayTeamName(
-            apiTeamName
-          ),
-
-        shortName:
-          getShortTeamName(
-            customCastellonTeam?.name ||
-            apiTeamName
-          ),
-
-        code:
-          team.short_code || '',
-
-        country:
-          customCastellonTeam?.country ||
-          (
-            Number(team.country_id) === 32
-              ? 'España'
-              : ''
-          ),
-
-        founded:
-          customCastellonTeam?.founded ??
-          team.founded ??
-          null,
-
-        national:
-          team.type === 'national',
-
-        logo:
-          getTeamLogo(
-            apiTeamName,
-            team.image_path || ''
-          ),
-
-        isCastellon:
-          isCastellon(apiTeamName),
-      },
-
-      venue: {
-        id:
-          venue.id ??
-          null,
-
-        name:
-          customCastellonTeam?.stadium_name ||
-          getCorrectVenue(
-            apiTeamName,
-            venue.name || ''
-          ),
-
-        address:
-          venue.address || '',
-
-        city:
-          customCastellonTeam?.stadium_city ||
-          venue.city_name ||
-          '',
-
-        capacity:
-          customCastellonTeam?.stadium_capacity ??
-          venue.capacity ??
-          null,
-
-        surface:
-          customCastellonTeam?.stadium_surface ||
-          venue.surface ||
-          '',
-
-        image:
-          customCastellonTeam?.stadium_image ||
-          normalizeImage(
-            venue.image_path || ''
-          ),
-      },
-
-      coach,
-
-      coaches:
-        coach
-          ? [coach]
-          : [],
-
-      squad,
-
-      season: {
-        leagueId:
-          currentCompetition?.leagueId ??
-          null,
-
-        season:
-          currentCompetition?.seasonId
-            ? String(
-                currentCompetition.seasonId
+          const finishedFixtures =
+            (formData?.data || [])
+              .map(normalizeSportmonksFixture)
+              .filter(
+                (fixture) =>
+                  Number(fixture.league?.id) ===
+                    Number(
+                      currentCompetition.leagueId
+                    ) &&
+                  ['FT', 'AET', 'PEN'].includes(
+                    fixture.status?.shortName
+                  ) &&
+                  fixture.home?.score !== null &&
+                  fixture.away?.score !== null
               )
-            : null,
+              .sort(
+                (a, b) =>
+                  new Date(b.date) -
+                  new Date(a.date)
+              )
+              .slice(0, 5);
 
-        form,
+          form = finishedFixtures
+            .map((fixture) => {
+              const isHome =
+                Number(fixture.home?.teamId) ===
+                Number(teamId);
 
-        fixtures: {
-          played: {
-            home: 0,
-            away: 0,
-            total: played,
-          },
+              const teamScore =
+                Number(
+                  isHome
+                    ? fixture.home?.score
+                    : fixture.away?.score
+                );
 
-          wins: {
-            home: 0,
-            away: 0,
-            total: wins,
-          },
+              const opponentScore =
+                Number(
+                  isHome
+                    ? fixture.away?.score
+                    : fixture.home?.score
+                );
 
-          draws: {
-            home: 0,
-            away: 0,
-            total: draws,
-          },
+              if (teamScore > opponentScore) {
+                return 'V';
+              }
 
-          loses: {
-            home: 0,
-            away: 0,
-            total: losses,
-          },
+              if (teamScore < opponentScore) {
+                return 'D';
+              }
+
+              return 'E';
+            })
+            .reverse()
+            .join('');
+        } catch (formError) {
+          console.warn(
+            `No se pudo cargar la forma del equipo ${teamId}:`,
+            formError.message
+          );
+        }
+      }
+
+      const currentTeamStatistic =
+        statisticRows.find(
+          (stat) =>
+            Number(stat.season_id) ===
+            Number(currentCompetition?.seasonId)
+        ) || null;
+
+      const statisticDetails =
+        Array.isArray(
+          currentTeamStatistic?.details
+        )
+          ? currentTeamStatistic.details
+          : [];
+
+      const getStatisticDetail = (developerName) =>
+        statisticDetails.find(
+          (detail) =>
+            detail?.type?.developer_name ===
+            developerName
+        );
+
+      const gamesPlayedStat =
+        getStatisticDetail('GAMES_PLAYED');
+
+      const winStat =
+        getStatisticDetail('WIN');
+
+      const drawStat =
+        getStatisticDetail('DRAW');
+
+      const lostStat =
+        getStatisticDetail('LOST');
+
+      const goalsStat =
+        getStatisticDetail('GOALS');
+
+      const goalsConcededStat =
+        getStatisticDetail('GOALS_CONCEDED');
+
+      const cleanSheetStat =
+        getStatisticDetail('CLEANSHEET');
+
+      const failedToScoreStat =
+        getStatisticDetail('FAILED_TO_SCORE');
+
+      const played =
+        Number(
+          gamesPlayedStat?.value?.total ??
+          gamesPlayedStat?.value?.all?.count ??
+          0
+        );
+
+      const wins =
+        Number(
+          winStat?.value?.all?.count ?? 0
+        );
+
+      const draws =
+        Number(
+          drawStat?.value?.all?.count ?? 0
+        );
+
+      const losses =
+        Number(
+          lostStat?.value?.all?.count ?? 0
+        );
+
+      const goalsFor =
+        Number(
+          goalsStat?.value?.all?.count ?? 0
+        );
+
+      const goalsAgainst =
+        Number(
+          goalsConcededStat?.value?.all?.count ?? 0
+        );
+
+      const cleanSheet = {
+        home: Number(
+          cleanSheetStat?.value?.home?.count ?? 0
+        ),
+        away: Number(
+          cleanSheetStat?.value?.away?.count ?? 0
+        ),
+        total: Number(
+          cleanSheetStat?.value?.all?.count ?? 0
+        ),
+      };
+
+      const failedToScore = {
+        home: Number(
+          failedToScoreStat?.value?.home?.count ?? 0
+        ),
+        away: Number(
+          failedToScoreStat?.value?.away?.count ?? 0
+        ),
+        total: Number(
+          failedToScoreStat?.value?.all?.count ?? 0
+        ),
+      };
+
+
+      const responseData = {
+        ok: true,
+        provider: 'sportmonks',
+        updatedAt: new Date().toISOString(),
+
+        team: {
+          id: Number(team.id),
+
+          name:
+            customCastellonTeam?.name ||
+            getDisplayTeamName(
+              apiTeamName
+            ),
+
+          shortName:
+            getShortTeamName(
+              customCastellonTeam?.name ||
+              apiTeamName
+            ),
+
+          code:
+            team.short_code || '',
+
+          country:
+            customCastellonTeam?.country ||
+            (
+              Number(team.country_id) === 32
+                ? 'España'
+                : ''
+            ),
+
+          founded:
+            customCastellonTeam?.founded ??
+            team.founded ??
+            null,
+
+          national:
+            team.type === 'national',
+
+          logo:
+            getTeamLogo(
+              apiTeamName,
+              team.image_path || ''
+            ),
+
+          isCastellon:
+            isCastellon(apiTeamName),
         },
 
-        goals: {
-          for: {
-            total: {
+        venue: {
+          id:
+            venue.id ??
+            null,
+
+          name:
+            customCastellonTeam?.stadium_name ||
+            getCorrectVenue(
+              apiTeamName,
+              venue.name || ''
+            ),
+
+          address:
+            venue.address || '',
+
+          city:
+            customCastellonTeam?.stadium_city ||
+            venue.city_name ||
+            '',
+
+          capacity:
+            customCastellonTeam?.stadium_capacity ??
+            venue.capacity ??
+            null,
+
+          surface:
+            customCastellonTeam?.stadium_surface ||
+            venue.surface ||
+            '',
+
+          image:
+            customCastellonTeam?.stadium_image ||
+            normalizeImage(
+              venue.image_path || ''
+            ),
+        },
+
+        coach,
+
+        coaches:
+          coach
+            ? [coach]
+            : [],
+
+        squad,
+
+        season: {
+          leagueId:
+            currentCompetition?.leagueId ??
+            null,
+
+          season:
+            currentCompetition?.seasonId
+              ? String(
+                  currentCompetition.seasonId
+                )
+              : null,
+
+          form,
+
+          fixtures: {
+            played: {
               home: 0,
               away: 0,
-              total: goalsFor,
+              total: played,
             },
 
-            average: {
-              home: null,
-              away: null,
-              total:
-                played > 0
-                  ? Number(
-                      (
-                        goalsFor /
-                        played
-                      ).toFixed(2)
-                    )
-                  : null,
-            },
-          },
-
-          against: {
-            total: {
+            wins: {
               home: 0,
               away: 0,
-              total: goalsAgainst,
+              total: wins,
             },
 
-            average: {
+            draws: {
+              home: 0,
+              away: 0,
+              total: draws,
+            },
+
+            loses: {
+              home: 0,
+              away: 0,
+              total: losses,
+            },
+          },
+
+          goals: {
+            for: {
+              total: {
+                home: 0,
+                away: 0,
+                total: goalsFor,
+              },
+
+              average: {
+                home: null,
+                away: null,
+                total:
+                  played > 0
+                    ? Number(
+                        (
+                          goalsFor /
+                          played
+                        ).toFixed(2)
+                      )
+                    : null,
+              },
+            },
+
+            against: {
+              total: {
+                home: 0,
+                away: 0,
+                total: goalsAgainst,
+              },
+
+              average: {
+                home: null,
+                away: null,
+                total:
+                  played > 0
+                    ? Number(
+                        (
+                          goalsAgainst /
+                          played
+                        ).toFixed(2)
+                      )
+                    : null,
+              },
+            },
+          },
+
+          biggest: {
+            streak: {
+              wins: 0,
+              draws: 0,
+              loses: 0,
+            },
+
+            wins: {
               home: null,
               away: null,
-              total:
-                played > 0
-                  ? Number(
-                      (
-                        goalsAgainst /
-                        played
-                      ).toFixed(2)
-                    )
-                  : null,
+            },
+
+            loses: {
+              home: null,
+              away: null,
             },
           },
+
+          cleanSheet,
+          failedToScore,
+          lineups: [],
         },
+      };
 
-        biggest: {
-          streak: {
-            wins: 0,
-            draws: 0,
-            loses: 0,
-          },
-
-          wins: {
-            home: null,
-            away: null,
-          },
-
-          loses: {
-            home: null,
-            away: null,
-          },
-        },
-
-        cleanSheet,
-        failedToScore,
-        lineups: [],
-      },
-    };
-
-    teamDetailsCache.set(teamId, {
-      timestamp: Date.now(),
-      data: responseData,
-    });
-
-    return res.json(responseData);
-  } catch (error) {
-    console.error(
-      'Error cargando ficha del equipo:',
-      error
-    );
-
-    return res.status(500).json({
-      ok: false,
-      error:
-        'No se pudo cargar la ficha del equipo',
-      detail: error.message,
-    });
-  }
-});
-
+      return responseData;
+};
 
 /**
- * Ficha completa de un jugador.
- *
- * Devuelve perfil personal y estadísticas de la temporada configurada.
- *
- * GET /api/football/player/:playerId/details
+ * Actualiza la ficha de un equipo evitando peticiones duplicadas
+ * simultáneas para el mismo teamId.
  */
+const refreshTeamDetails = async (teamId) => {
+  const key = String(teamId);
+
+  const existingRefresh =
+    teamDetailsRefreshPromises.get(key);
+
+  if (existingRefresh) {
+    return existingRefresh;
+  }
+
+  const refreshPromise = (async () => {
+    try {
+      const responseData =
+        await buildTeamDetails(key);
+
+      await cacheTeamDetails(
+        key,
+        responseData
+      );
+
+      return responseData;
+    } finally {
+      teamDetailsRefreshPromises.delete(key);
+    }
+  })();
+
+  teamDetailsRefreshPromises.set(
+    key,
+    refreshPromise
+  );
+
+  return refreshPromise;
+};
+
+router.get(
+  '/api/football/team/:teamId/details',
+  async (req, res) => {
+    try {
+      const teamId = String(
+        req.params.teamId || ''
+      ).trim();
+
+      if (!/^\d+$/.test(teamId)) {
+        return res.status(400).json({
+          ok: false,
+          error: 'ID de equipo no válido',
+        });
+      }
+
+      const now = Date.now();
+      const memoryCache =
+        teamDetailsCache.get(teamId);
+
+      /*
+       * 1. Caché RAM fresca:
+       * respuesta inmediata, sin tocar Supabase ni Sportmonks.
+       */
+      if (
+        memoryCache &&
+        now - memoryCache.timestamp <
+          TEAM_DETAILS_CACHE_TTL
+      ) {
+        return res.json(
+          memoryCache.data
+        );
+      }
+
+      /*
+       * 2. Caché RAM antigua:
+       * devolvemos inmediatamente los datos que ya tenemos
+       * y actualizamos en segundo plano.
+       */
+      if (memoryCache?.data) {
+        refreshTeamDetails(teamId).catch(
+          (error) => {
+            console.error(
+              `Error actualizando ficha del equipo ${teamId}:`,
+              error.message
+            );
+          }
+        );
+
+        return res.json(
+          memoryCache.data
+        );
+      }
+
+      /*
+       * 3. Caché persistente de Supabase.
+       */
+      let persistentTeamDetails = null;
+
+      try {
+        persistentTeamDetails =
+          await getCachedTeamDetails(
+            teamId
+          );
+      } catch (error) {
+        console.error(
+          `Error leyendo caché persistente del equipo ${teamId}:`,
+          error.message
+        );
+      }
+
+      if (persistentTeamDetails?.data) {
+        teamDetailsCache.set(teamId, {
+          timestamp: new Date(
+            persistentTeamDetails.updatedAt
+          ).getTime(),
+          data: persistentTeamDetails.data,
+        });
+
+        if (
+          persistentTeamDetails.fresh
+        ) {
+          return res.json(
+            persistentTeamDetails.data
+          );
+        }
+
+        /*
+         * Datos antiguos pero válidos:
+         * los entregamos ya y refrescamos detrás.
+         */
+        refreshTeamDetails(teamId).catch(
+          (error) => {
+            console.error(
+              `Error actualizando ficha antigua del equipo ${teamId}:`,
+              error.message
+            );
+          }
+        );
+
+        return res.json(
+          persistentTeamDetails.data
+        );
+      }
+
+      /*
+       * 4. Primera carga:
+       * no hay caché, por lo que necesitamos obtener
+       * la ficha antes de responder.
+       */
+      const responseData =
+        await refreshTeamDetails(
+          teamId
+        );
+
+      return res.json(
+        responseData
+      );
+    } catch (error) {
+      console.error(
+        'Error cargando ficha del equipo:',
+        error
+      );
+
+      if (error.statusCode === 404) {
+        return res.status(404).json({
+          ok: false,
+          error: 'Equipo no encontrado',
+        });
+      }
+
+      return res.status(500).json({
+        ok: false,
+        error:
+          'No se pudo cargar la ficha del equipo',
+        detail: error.message,
+      });
+    }
+  }
+);
+
 router.get('/api/football/player/:playerId/details', async (req, res) => {
   try {
     const playerId = String(req.params.playerId || '').trim();
