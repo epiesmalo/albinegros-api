@@ -378,19 +378,10 @@ const findApiFootballFreePlayer = async (player) => {
   return nameMatch || null;
 };
 
-const getCachedPlayerCareer = async (sportmonksPlayerId) => {
-  const { data, error } = await supabase
-    .from('player_career_cache')
-    .select(
-      'sportmonks_player_id, api_football_player_id, player_name, birth_date, career, updated_at'
-    )
-    .eq('sportmonks_player_id', sportmonksPlayerId)
-    .maybeSingle();
+const playerCareerMemoryCache = new Map();
+const castellonPlayerPhotoCache = new Map();
 
-  if (error) {
-    throw error;
-  }
-
+const normalizePlayerCareerCacheRow = (data) => {
   if (!data) {
     return null;
   }
@@ -413,16 +404,142 @@ const getCachedPlayerCareer = async (sportmonksPlayerId) => {
   };
 };
 
+/**
+ * Precarga en RAM las trayectorias históricas y las fotos personalizadas.
+ *
+ * Son datos muy poco volátiles. De esta forma abrir una ficha de jugador
+ * no necesita hacer dos lecturas adicionales a Supabase en cada petición.
+ * La paginación evita depender del límite de filas de la Data API si la app
+ * crece a más competiciones en el futuro.
+ */
+const preloadPlayerAuxiliaryCaches = async () => {
+  const PAGE_SIZE = 1000;
+
+  const loadCareerCache = async () => {
+    let from = 0;
+    let loaded = 0;
+
+    while (true) {
+      const { data, error } = await supabase
+        .from('player_career_cache')
+        .select(
+          'sportmonks_player_id, api_football_player_id, career, updated_at'
+        )
+        .range(from, from + PAGE_SIZE - 1);
+
+      if (error) {
+        throw error;
+      }
+
+      const rows = Array.isArray(data) ? data : [];
+
+      for (const row of rows) {
+        const playerId = Number(row?.sportmonks_player_id);
+
+        if (!Number.isFinite(playerId)) {
+          continue;
+        }
+
+        playerCareerMemoryCache.set(
+          playerId,
+          normalizePlayerCareerCacheRow(row)
+        );
+        loaded += 1;
+      }
+
+      if (rows.length < PAGE_SIZE) {
+        break;
+      }
+
+      from += PAGE_SIZE;
+    }
+
+    return loaded;
+  };
+
+  const loadPhotoCache = async () => {
+    let from = 0;
+    let loaded = 0;
+
+    while (true) {
+      const { data, error } = await supabase
+        .from('castellon_player_overrides')
+        .select('sportmonks_player_id, photo')
+        .range(from, from + PAGE_SIZE - 1);
+
+      if (error) {
+        throw error;
+      }
+
+      const rows = Array.isArray(data) ? data : [];
+
+      for (const row of rows) {
+        const playerId = Number(row?.sportmonks_player_id);
+
+        if (!Number.isFinite(playerId)) {
+          continue;
+        }
+
+        castellonPlayerPhotoCache.set(
+          playerId,
+          row?.photo || ''
+        );
+        loaded += 1;
+      }
+
+      if (rows.length < PAGE_SIZE) {
+        break;
+      }
+
+      from += PAGE_SIZE;
+    }
+
+    return loaded;
+  };
+
+  try {
+    const [careerCount, photoCount] = await Promise.all([
+      loadCareerCache(),
+      loadPhotoCache(),
+    ]);
+
+    console.log(
+      `Caché auxiliar de jugadores precargada: ${careerCount} trayectorias, ${photoCount} fotos`
+    );
+  } catch (error) {
+    console.error(
+      'Error precargando caché auxiliar de jugadores:',
+      error.message
+    );
+  }
+};
+
+const playerAuxiliaryCachesReady =
+  preloadPlayerAuxiliaryCaches();
+
+const getCachedPlayerCareer = async (sportmonksPlayerId) => {
+  await playerAuxiliaryCachesReady;
+
+  return (
+    playerCareerMemoryCache.get(
+      Number(sportmonksPlayerId)
+    ) || null
+  );
+};
+
 const savePlayerCareerCache = async (
   player,
   apiFootballPlayerId,
   career
 ) => {
+  const updatedAt = new Date().toISOString();
+  const playerId = Number(player.id);
+
   const { error } = await supabase
     .from('player_career_cache')
     .upsert(
       {
-        sportmonks_player_id: Number(player.id),
+        sportmonks_player_id: playerId,
         api_football_player_id:
           apiFootballPlayerId !== null
             ? Number(apiFootballPlayerId)
@@ -435,7 +552,7 @@ const savePlayerCareerCache = async (
         career: Array.isArray(career)
           ? career
           : [],
-        updated_at: new Date().toISOString(),
+        updated_at: updatedAt,
       },
       {
         onConflict: 'sportmonks_player_id',
@@ -445,7 +562,22 @@ const savePlayerCareerCache = async (
   if (error) {
     throw error;
   }
+
+  playerCareerMemoryCache.set(
+    playerId,
+    normalizePlayerCareerCacheRow({
+      api_football_player_id:
+        apiFootballPlayerId !== null
+          ? Number(apiFootballPlayerId)
+          : null,
+      career: Array.isArray(career)
+        ? career
+        : [],
+      updated_at: updatedAt,
+    })
+  );
 };
+
 const getCachedTeamDetails = async (teamId) => {
   const { data, error } = await supabase
     .from('team_details_cache')
@@ -4083,9 +4215,9 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
     };
 
     const playerData = await sportmonksFetch(
-  `/players/${encodeURIComponent(playerId)}` +
-    `?include=country;nationality;statistics.details.type;statistics.team;statistics.season`
-);
+      `/players/${encodeURIComponent(playerId)}` +
+        `?include=country;nationality;statistics.details.type;statistics.team;statistics.season`
+    );
 
     const player = playerData?.data;
 
@@ -4655,27 +4787,12 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
     let playerPhotoOverride = '';
 
     if (Number(resolvedTeamId) === 10008) {
-      const {
-        data: playerOverride,
-        error: playerOverrideError,
-      } = await supabase
-        .from('castellon_player_overrides')
-        .select('photo')
-        .eq(
-          'sportmonks_player_id',
-          Number(player.id)
-        )
-        .maybeSingle();
+      await playerAuxiliaryCachesReady;
 
-      if (playerOverrideError) {
-        console.warn(
-          `No se pudo cargar el override de foto del jugador ${playerId}:`,
-          playerOverrideError.message
-        );
-      } else {
-        playerPhotoOverride =
-          playerOverride?.photo || '';
-      }
+      playerPhotoOverride =
+        castellonPlayerPhotoCache.get(
+          Number(player.id)
+        ) || '';
     }
 
     const playerProfile = {
@@ -4854,6 +4971,7 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
       );
     }
 
+
     const preferredCompetition =
       competitionList.find(
         (competition) =>
@@ -4865,6 +4983,7 @@ router.get('/api/football/player/:playerId/details', async (req, res) => {
               ?.season_id
           )
       ) || null;
+
 
     return res.json({
       ok: true,

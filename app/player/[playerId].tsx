@@ -99,6 +99,17 @@ type PlayerDetails = {
 type Section = 'profile' | 'stats' | 'career';
 
 const API_BASE = 'https://api.albinegroscastellon.com/api/football';
+
+const PLAYER_DETAILS_CACHE_MS = 5 * 60 * 1000;
+const playerDetailsCache = new Map<
+  string,
+  { data: PlayerDetails; savedAt: number }
+>();
+
+const getPlayerCacheKey = (
+  playerId?: string,
+  teamId?: string
+) => `${playerId || ''}:${teamId || ''}`;
 const getCountryNameEs = (code?: string, fallback = '') => {
   if (!code) return fallback;
 
@@ -150,9 +161,37 @@ export default function PlayerDetailScreen() {
       return;
     }
 
+    const cacheKey = getPlayerCacheKey(playerId, teamId);
+    const cached = playerDetailsCache.get(cacheKey);
+    const cacheIsFresh =
+      !!cached &&
+      Date.now() - cached.savedAt < PLAYER_DETAILS_CACHE_MS;
+
+    /*
+     * Al volver a una ficha ya visitada mostramos inmediatamente
+     * los datos en memoria. El pull-to-refresh siempre fuerza red.
+     */
+    if (!isRefresh && cacheIsFresh) {
+      setData(cached.data);
+      setError('');
+      setLoading(false);
+      return;
+    }
+
     try {
-      if (isRefresh) setRefreshing(true);
-      else setLoading(true);
+      const perfStartedAt = Date.now();
+      console.log(`[PERF PLAYER FRONT ${playerId}] fetch inicio`);
+
+      if (isRefresh) {
+        setRefreshing(true);
+      } else if (!cached) {
+        setLoading(true);
+      } else {
+        // Si existe una copia antigua, la mantenemos visible
+        // mientras renovamos la ficha en segundo plano.
+        setData(cached.data);
+        setLoading(false);
+      }
 
       setError('');
 
@@ -160,16 +199,35 @@ export default function PlayerDetailScreen() {
       const response = await fetch(
         `${API_BASE}/player/${encodeURIComponent(playerId)}/details${teamQuery}`
       );
-      const json = await response.json();
+      const responseAt = Date.now();
+      console.log(
+        `[PERF PLAYER FRONT ${playerId}] respuesta HTTP: ${responseAt - perfStartedAt} ms`
+      );
+
+      const json: PlayerDetails = await response.json();
+      const jsonAt = Date.now();
+      console.log(
+        `[PERF PLAYER FRONT ${playerId}] JSON: ${jsonAt - responseAt} ms | acumulado ${jsonAt - perfStartedAt} ms`
+      );
 
       if (!response.ok || !json?.ok) {
-        throw new Error(json?.error || `HTTP ${response.status}`);
+        throw new Error((json as any)?.error || `HTTP ${response.status}`);
       }
 
+      playerDetailsCache.set(cacheKey, {
+        data: json,
+        savedAt: Date.now(),
+      });
       setData(json);
+      console.log(
+        `[PERF PLAYER FRONT ${playerId}] setData: ${Date.now() - perfStartedAt} ms`
+      );
     } catch (err) {
       console.error('Error cargando jugador:', err);
-      setError('No se pudo cargar la ficha del jugador.');
+
+      if (!cached) {
+        setError('No se pudo cargar la ficha del jugador.');
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
