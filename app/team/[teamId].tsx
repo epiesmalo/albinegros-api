@@ -11,6 +11,11 @@ import {
   View,
 } from 'react-native';
 
+import {
+  prefetchPlayerDetails,
+  prefetchPlayerDetailsQueue,
+} from '../../utils/playerDetailsCache';
+
 const translatePosition = (position?: string | null) => {
   switch (position) {
     case 'Goalkeeper':
@@ -214,6 +219,19 @@ export default function TeamDetailScreen() {
     return groups;
   }, [data]);
 
+  useEffect(() => {
+    if (section !== 'squad' || !data?.team.id || !data.squad.length) return;
+
+    const playerIds = data.squad
+      .map((player) => player.id)
+      .filter((playerId): playerId is string | number => playerId !== null);
+
+    // Dos peticiones como máximo a la vez. La cola comparte la misma
+    // caché RAM que la ficha individual, así que al pulsar un jugador
+    // ya precargado la entrada es inmediata.
+    void prefetchPlayerDetailsQueue(playerIds, data.team.id, 2);
+  }, [section, data]);
+
   const renderClub = () => {
     if (!data) return null;
 
@@ -329,6 +347,10 @@ export default function TeamDetailScreen() {
               <Pressable
                 key={String(player.id)}
                 disabled={!player.id}
+                onPressIn={() => {
+                  if (!player.id || !data.team.id) return;
+                  void prefetchPlayerDetails(player.id, data.team.id);
+                }}
                 onPress={() => {
                   if (!player.id || !data.team.id) return;
 
