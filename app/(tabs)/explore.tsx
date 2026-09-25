@@ -185,14 +185,26 @@ const loadStandings = async (isRefresh = false) => {
 
     setError('');
 
-    // Sincronizamos primero con el servidor.
+    // Sincronizamos primero con el servidor. La respuesta ya incluye
+    // la clasificación que debe mostrarse: LIVE si hay partidos en juego
+    // u oficial si no los hay. Supabase conserva siempre la oficial.
+    let data: StandingItem[] | null = null;
+
     try {
-      await fetch(
+      const syncResponse = await fetch(
         'https://api.albinegroscastellon.com/api/football/sync-standings',
         {
           method: 'POST',
         }
       );
+
+      if (syncResponse.ok) {
+        const syncData = await syncResponse.json();
+
+        if (Array.isArray(syncData?.standings)) {
+          data = syncData.standings;
+        }
+      }
     } catch (syncError) {
       console.log(
         'No se pudo sincronizar la clasificación:',
@@ -200,27 +212,34 @@ const loadStandings = async (isRefresh = false) => {
       );
     }
 
-    // Después obtenemos los datos actualizados.
-    const response = await fetch(
-      'https://api.albinegroscastellon.com/standings/first-team'
-    );
+    // Fallback: si la sincronización falla, leemos la última
+    // clasificación oficial persistida en Supabase.
+    if (!data) {
+      const response = await fetch(
+        'https://api.albinegroscastellon.com/standings/first-team'
+      );
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const fallbackData = await response.json();
+
+      if (!Array.isArray(fallbackData)) {
+        throw new Error('La respuesta de la clasificación no es válida.');
+      }
+
+      data = fallbackData;
     }
 
-    const data = await response.json();
+    const resolvedData = data ?? [];
 
-    if (!Array.isArray(data)) {
-      throw new Error('La respuesta de la clasificación no es válida.');
-    }
-
-    setStandings(data);
+    setStandings(resolvedData);
     setUsingCachedData(false);
     setCacheSavedAt(null);
     setCurrentTime(Date.now());
 
-    await saveCache(CACHE_KEYS.STANDINGS, data);
+    await saveCache(CACHE_KEYS.STANDINGS, resolvedData);
   } catch (err) {
     console.log('Error cargando clasificación:', err);
 

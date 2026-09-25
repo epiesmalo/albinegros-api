@@ -219,6 +219,7 @@ const getLiveCacheMs = (cachedData) => {
 let liveCache = null;
 let liveCacheSavedAt = 0;
 let liveRefreshPromise = null;
+let standingsSyncPromise = null;
 const PLAYER_CAREER_CACHE_MS =
   30 * 24 * 60 * 60 * 1000;
 
@@ -1451,280 +1452,273 @@ const normalizedStatus =
  */
 router.post('/api/football/sync-standings', async (req, res) => {
   try {
-    const competition =
-      SPORTMONKS_COMPETITIONS.laliga2;
-
-    if (
-      !competition?.leagueId ||
-      !competition?.seasonId
-    ) {
-      throw new Error(
-        'Configuración de LaLiga2 incompleta'
-      );
+    /*
+     * Evita que dos peticiones simultáneas hagan a la vez
+     * DELETE + INSERT sobre la tabla standings.
+     */
+    if (standingsSyncPromise) {
+      const result = await standingsSyncPromise;
+      return res.json({
+        ...result,
+        sharedSync: true,
+      });
     }
 
-    /*
-     * 1. Clasificación oficial completa.
-     *
-     * Esta nos da PJ, G, E, P, GF, GC, DG,
-     * además de posición y puntos.
-     */
-    const normalData = await sportmonksFetch(
-      `/standings/seasons/${competition.seasonId}` +
-        `?include=participant;details.type`
-    );
+    standingsSyncPromise = (async () => {
+      const competition =
+        SPORTMONKS_COMPETITIONS.laliga2;
 
-    let rows = (normalData?.data || [])
-      .map(normalizeSportmonksStanding)
-      .sort(
-        (a, b) =>
-          Number(a.position) -
-          Number(b.position)
-      );
-
-    /*
-     *     /*
-     * 2. Clasificación LIVE calculada por nuestro servidor.
-     *
-     * Partimos de la clasificación oficial y aplicamos
-     * provisionalmente los partidos que estén en juego.
-     */
-    let liveApplied = false;
-    let liveMatchesApplied = 0;
-
-    try {
-      const liveData = await sportmonksFetch(
-        '/livescores/inplay' +
-          '?include=participants;scores;state;league'
-      );
-
-      const liveFixtures = Array.isArray(
-        liveData?.data
-      )
-        ? liveData.data
-        : [];
-
-      const leagueLiveFixtures =
-        liveFixtures.filter(
-          (fixture) =>
-            Number(fixture?.league_id) ===
-            Number(competition.leagueId)
+      if (
+        !competition?.leagueId ||
+        !competition?.seasonId
+      ) {
+        throw new Error(
+          'Configuración de LaLiga2 incompleta'
         );
-
-      const rowsByTeam = new Map(
-        rows.map((row) => [
-          Number(row.teamId),
-          { ...row },
-        ])
-      );
-
-      for (const fixture of leagueLiveFixtures) {
-        const participants = Array.isArray(
-          fixture?.participants
-        )
-          ? fixture.participants
-          : [];
-
-        const scores = Array.isArray(
-          fixture?.scores
-        )
-          ? fixture.scores
-          : [];
-
-        const homeTeam = participants.find(
-          (team) =>
-            team?.meta?.location === 'home'
-        );
-
-        const awayTeam = participants.find(
-          (team) =>
-            team?.meta?.location === 'away'
-        );
-
-        if (!homeTeam?.id || !awayTeam?.id) {
-          continue;
-        }
-
-        const homeRow = rowsByTeam.get(
-          Number(homeTeam.id)
-        );
-
-        const awayRow = rowsByTeam.get(
-          Number(awayTeam.id)
-        );
-
-        if (!homeRow || !awayRow) {
-          continue;
-        }
-
-        const getCurrentScore = (
-          participantId
-        ) => {
-          const currentScore = scores.find(
-            (score) =>
-              Number(
-                score?.participant_id
-              ) ===
-                Number(participantId) &&
-              score?.description ===
-                'CURRENT'
-          );
-
-          return Number(
-            currentScore?.score?.goals ?? 0
-          );
-        };
-
-        const homeGoals =
-          getCurrentScore(homeTeam.id);
-
-        const awayGoals =
-          getCurrentScore(awayTeam.id);
-
-        /*
-         * El partido todavía no forma parte de
-         * la clasificación oficial, así que
-         * añadimos provisionalmente un PJ.
-         */
-        homeRow.playedgames += 1;
-        awayRow.playedgames += 1;
-
-        homeRow.goalsfor += homeGoals;
-        homeRow.goalsagainst += awayGoals;
-
-        awayRow.goalsfor += awayGoals;
-        awayRow.goalsagainst += homeGoals;
-
-        if (homeGoals > awayGoals) {
-          homeRow.won += 1;
-          homeRow.points += 3;
-
-          awayRow.lost += 1;
-        } else if (awayGoals > homeGoals) {
-          awayRow.won += 1;
-          awayRow.points += 3;
-
-          homeRow.lost += 1;
-        } else {
-          homeRow.draw += 1;
-          awayRow.draw += 1;
-
-          homeRow.points += 1;
-          awayRow.points += 1;
-        }
-
-        homeRow.goaldiff =
-          homeRow.goalsfor -
-          homeRow.goalsagainst;
-
-        awayRow.goaldiff =
-          awayRow.goalsfor -
-          awayRow.goalsagainst;
-
-        rowsByTeam.set(
-          Number(homeTeam.id),
-          homeRow
-        );
-
-        rowsByTeam.set(
-          Number(awayTeam.id),
-          awayRow
-        );
-
-        liveMatchesApplied += 1;
       }
 
-      if (liveMatchesApplied > 0) {
-        rows = Array.from(
-          rowsByTeam.values()
-        );
+      /*
+       * 1. Clasificación OFICIAL de Sportmonks.
+       *
+       * Esta es la única clasificación que persistimos
+       * en Supabase. Así nunca guardamos PJ, puntos o
+       * posiciones provisionales como si fueran oficiales.
+       */
+      const normalData = await sportmonksFetch(
+        `/standings/seasons/${competition.seasonId}` +
+          `?include=participant;details.type`
+      );
 
-        /*
-         * Orden provisional:
-         * puntos -> diferencia de goles ->
-         * goles a favor.
-         */
-        rows.sort((a, b) => {
-          if (b.points !== a.points) {
-            return b.points - a.points;
-          }
-
-          if (b.goaldiff !== a.goaldiff) {
-            return (
-              b.goaldiff - a.goaldiff
-            );
-          }
-
-          if (b.goalsfor !== a.goalsfor) {
-            return (
-              b.goalsfor - a.goalsfor
-            );
-          }
-
-          return (
+      const officialRows = (normalData?.data || [])
+        .map(normalizeSportmonksStanding)
+        .sort(
+          (a, b) =>
             Number(a.position) -
             Number(b.position)
-          );
-        });
-
-        rows = rows.map(
-          (row, index) => ({
-            ...row,
-            position: index + 1,
-          })
         );
 
-        liveApplied = true;
+      /*
+       * 2. Clasificación LIVE temporal.
+       *
+       * Se calcula sobre una copia de la oficial y se
+       * devuelve a la app, pero NUNCA se guarda en Supabase.
+       */
+      let liveRows = officialRows.map((row) => ({ ...row }));
+      let liveApplied = false;
+      let liveMatchesApplied = 0;
+
+      try {
+        const liveData = await sportmonksFetch(
+          '/livescores/inplay' +
+            '?include=participants;scores;state;league'
+        );
+
+        const liveFixtures = Array.isArray(
+          liveData?.data
+        )
+          ? liveData.data
+          : [];
+
+        const leagueLiveFixtures =
+          liveFixtures.filter(
+            (fixture) =>
+              Number(fixture?.league_id) ===
+              Number(competition.leagueId)
+          );
+
+        const rowsByTeam = new Map(
+          liveRows.map((row) => [
+            Number(row.teamId),
+            { ...row },
+          ])
+        );
+
+        for (const fixture of leagueLiveFixtures) {
+          const participants = Array.isArray(
+            fixture?.participants
+          )
+            ? fixture.participants
+            : [];
+
+          const scores = Array.isArray(
+            fixture?.scores
+          )
+            ? fixture.scores
+            : [];
+
+          const homeTeam = participants.find(
+            (team) =>
+              team?.meta?.location === 'home'
+          );
+
+          const awayTeam = participants.find(
+            (team) =>
+              team?.meta?.location === 'away'
+          );
+
+          if (!homeTeam?.id || !awayTeam?.id) {
+            continue;
+          }
+
+          const homeRow = rowsByTeam.get(
+            Number(homeTeam.id)
+          );
+
+          const awayRow = rowsByTeam.get(
+            Number(awayTeam.id)
+          );
+
+          if (!homeRow || !awayRow) {
+            continue;
+          }
+
+          const getCurrentScore = (
+            participantId
+          ) => {
+            const currentScore = scores.find(
+              (score) =>
+                Number(score?.participant_id) ===
+                  Number(participantId) &&
+                score?.description === 'CURRENT'
+            );
+
+            return Number(
+              currentScore?.score?.goals ?? 0
+            );
+          };
+
+          const homeGoals =
+            getCurrentScore(homeTeam.id);
+
+          const awayGoals =
+            getCurrentScore(awayTeam.id);
+
+          homeRow.playedgames += 1;
+          awayRow.playedgames += 1;
+
+          homeRow.goalsfor += homeGoals;
+          homeRow.goalsagainst += awayGoals;
+
+          awayRow.goalsfor += awayGoals;
+          awayRow.goalsagainst += homeGoals;
+
+          if (homeGoals > awayGoals) {
+            homeRow.won += 1;
+            homeRow.points += 3;
+            awayRow.lost += 1;
+          } else if (awayGoals > homeGoals) {
+            awayRow.won += 1;
+            awayRow.points += 3;
+            homeRow.lost += 1;
+          } else {
+            homeRow.draw += 1;
+            awayRow.draw += 1;
+            homeRow.points += 1;
+            awayRow.points += 1;
+          }
+
+          homeRow.goaldiff =
+            homeRow.goalsfor -
+            homeRow.goalsagainst;
+
+          awayRow.goaldiff =
+            awayRow.goalsfor -
+            awayRow.goalsagainst;
+
+          rowsByTeam.set(
+            Number(homeTeam.id),
+            homeRow
+          );
+
+          rowsByTeam.set(
+            Number(awayTeam.id),
+            awayRow
+          );
+
+          liveMatchesApplied += 1;
+        }
+
+        if (liveMatchesApplied > 0) {
+          liveRows = Array.from(
+            rowsByTeam.values()
+          );
+
+          liveRows.sort((a, b) => {
+            if (b.points !== a.points) {
+              return b.points - a.points;
+            }
+
+            if (b.goaldiff !== a.goaldiff) {
+              return b.goaldiff - a.goaldiff;
+            }
+
+            if (b.goalsfor !== a.goalsfor) {
+              return b.goalsfor - a.goalsfor;
+            }
+
+            return (
+              Number(a.position) -
+              Number(b.position)
+            );
+          });
+
+          liveRows = liveRows.map(
+            (row, index) => ({
+              ...row,
+              position: index + 1,
+            })
+          );
+
+          liveApplied = true;
+        }
+      } catch (liveError) {
+        console.warn(
+          'No se pudo calcular clasificación LIVE:',
+          liveError.message
+        );
       }
-    } catch (liveError) {
-      console.warn(
-        'No se pudo calcular clasificación LIVE:',
-        liveError.message
-      );
-    }
-    /*
-     * 3. Guardamos el resultado en Supabase
-     * conservando exactamente el contrato
-     * que ya utiliza la app.
-     */
-    const { error: deleteError } =
-      await supabase
-        .from('standings')
-        .delete()
-        .neq('id', 0);
 
-    if (deleteError) {
-      throw deleteError;
-    }
-
-    if (rows.length > 0) {
-      const { error: insertError } =
+      /*
+       * 3. Persistimos EXCLUSIVAMENTE la oficial.
+       */
+      const { error: deleteError } =
         await supabase
           .from('standings')
-          .insert(rows);
+          .delete()
+          .neq('id', 0);
 
-      if (insertError) {
-        throw insertError;
+      if (deleteError) {
+        throw deleteError;
       }
-    }
 
-    return res.json({
-      ok: true,
-      provider: 'sportmonks',
-      inserted: rows.length,
+      if (officialRows.length > 0) {
+        const { error: insertError } =
+          await supabase
+            .from('standings')
+            .insert(officialRows);
 
-      competition:
-        competition.key,
+        if (insertError) {
+          throw insertError;
+        }
+      }
 
-      season:
-        competition.seasonId,
+      return {
+        ok: true,
+        provider: 'sportmonks',
+        inserted: officialRows.length,
+        competition: competition.key,
+        season: competition.seasonId,
+        league: competition.leagueId,
+        liveApplied,
+        liveMatchesApplied,
+        standings: liveApplied
+          ? liveRows
+          : officialRows,
+      };
+    })();
 
-      league:
-        competition.leagueId,
-
-      liveApplied,
-      liveMatchesApplied,
-    });
+    const result = await standingsSyncPromise;
+    return res.json(result);
   } catch (error) {
     console.error(
       'Error sincronizando clasificación:',
@@ -1735,8 +1729,11 @@ router.post('/api/football/sync-standings', async (req, res) => {
       ok: false,
       error: error.message,
     });
+  } finally {
+    standingsSyncPromise = null;
   }
 });
+
 
 /**
  * Sincroniza el calendario completo de LaLiga2
