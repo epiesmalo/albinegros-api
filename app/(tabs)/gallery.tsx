@@ -44,6 +44,7 @@ const galleryCategories = [
 const { width, height } = Dimensions.get('window');
 const CARD_GAP = 12;
 const CARD_WIDTH = (width - 16 * 2 - CARD_GAP) / 2;
+const ITEMS_PER_PAGE = 10;
 
 
 
@@ -95,6 +96,7 @@ export default function GalleryScreen() {
   const [usingCachedData, setUsingCachedData] = useState(false);
   const [cacheSavedAt, setCacheSavedAt] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(Date.now());
+  const [currentPage, setCurrentPage] = useState(1);
 
  useEffect(() => {
   loadGallery();
@@ -188,6 +190,19 @@ const images = useMemo(() => {
   return galleryItems.filter((item) => item.category === selectedCategory);
 }, [galleryItems, selectedCategory]);
 
+const totalPages = Math.max(1, Math.ceil(images.length / ITEMS_PER_PAGE));
+
+const paginatedImages = useMemo(() => {
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  return images.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+}, [images, currentPage]);
+
+useEffect(() => {
+  if (currentPage > totalPages) {
+    setCurrentPage(totalPages);
+  }
+}, [currentPage, totalPages]);
+
 
 
   const selectedImage =
@@ -196,7 +211,8 @@ const images = useMemo(() => {
       : null;
 
   const openImage = (index: number) => {
-    setSelectedImageIndex(index);
+    const absoluteIndex = (currentPage - 1) * ITEMS_PER_PAGE + index;
+    setSelectedImageIndex(absoluteIndex);
   };
 
   const closeImage = () => {
@@ -384,7 +400,7 @@ const images = useMemo(() => {
     <>
       <FlatList
         style={styles.container}
-        data={loading ? [] : images}
+        data={loading ? [] : paginatedImages}
         keyExtractor={(item) => item.id}
         renderItem={renderImage}
         numColumns={2}
@@ -439,6 +455,7 @@ const images = useMemo(() => {
                   onPress={() => {
                     setSelectedCategory(category.id);
                     setSelectedImageIndex(null);
+                    setCurrentPage(1);
                   }}
                 >
                   <Text
@@ -467,6 +484,39 @@ const images = useMemo(() => {
               </>
             )}
           </>
+        }
+        ListFooterComponent={
+          !loading && totalPages > 1 ? (
+            <View style={styles.paginationContainer}>
+              <Pressable
+                style={[
+                  styles.paginationButton,
+                  currentPage === 1 && styles.paginationButtonDisabled,
+                ]}
+                onPress={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                disabled={currentPage === 1}
+              >
+                <Text style={styles.paginationButtonText}>Anterior</Text>
+              </Pressable>
+
+              <Text style={styles.paginationText}>
+                {currentPage} / {totalPages}
+              </Text>
+
+              <Pressable
+                style={[
+                  styles.paginationButton,
+                  currentPage === totalPages && styles.paginationButtonDisabled,
+                ]}
+                onPress={() =>
+                  setCurrentPage((page) => Math.min(totalPages, page + 1))
+                }
+                disabled={currentPage === totalPages}
+              >
+                <Text style={styles.paginationButtonText}>Siguiente</Text>
+              </Pressable>
+            </View>
+          ) : null
         }
       />
 
@@ -954,6 +1004,46 @@ const styles = StyleSheet.create({
   },
 
 
+
+  paginationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    paddingTop: 10,
+    paddingBottom: 6,
+  },
+
+  paginationButton: {
+    minWidth: 96,
+    minHeight: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#111111',
+    borderWidth: 1,
+    borderColor: colors.accent,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+  },
+
+  paginationButtonDisabled: {
+    borderColor: '#2B2B2B',
+    opacity: 0.45,
+  },
+
+  paginationButtonText: {
+    color: colors.accent,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+
+  paginationText: {
+    minWidth: 48,
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
 
   modalOverlay: {
     flex: 1,
