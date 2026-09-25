@@ -11,7 +11,6 @@ const standingsRoutes = require('./routes/standings.routes');
 const adminRoutes = require('./routes/admin.routes');
 const calendarRoutes = require('./routes/calendar.routes');
 const footballRoutes = require('./routes/football.routes');
-const uploadRoutes = require('./routes/upload.routes');
 
 const app = express();
 
@@ -25,7 +24,6 @@ app.use('/', footballRoutes);
 app.use('/', adminRoutes);
 app.use('/', instagramRoutes);
 app.use('/', newsRoutes);
-app.use('/api/upload', uploadRoutes);
 
 const requireAdmin = (req, res, next) => {
   const auth = req.headers.authorization;
@@ -55,39 +53,6 @@ app.get('/admin.html', requireAdmin, (req, res) => {
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
-
-app.get('/test-supabase', async (req, res) => {
-  res.json({
-    hasUrl: !!process.env.SUPABASE_URL,
-    hasKey: !!process.env.SUPABASE_KEY,
-    url: process.env.SUPABASE_URL,
-  });
-});
-
-app.get('/get-token', async (req, res) => {
-  try {
-    const code = req.query.code;
-
-    const response = await fetch('https://api.instagram.com/oauth/access_token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        client_id: process.env.INSTAGRAM_CLIENT_ID,
-        client_secret: process.env.INSTAGRAM_CLIENT_SECRET,
-        grant_type: 'authorization_code',
-        redirect_uri: 'https://localhost/',
-        code,
-      }),
-    });
-
-    const data = await response.json();
-    res.json(data);
-  } catch (error) {
-    res.json({ error: error.message });
-  }
-});
 
 const PORT = process.env.PORT || 3001;
 

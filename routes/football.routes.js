@@ -19,8 +19,6 @@ const API_FOOTBALL_FREE_BASE_URL =
 
 const API_FOOTBALL_FREE_KEY =
   process.env.API_FOOTBALL_FREE_KEY;
-const LEAGUE_ID = process.env.FOOTBALL_LEAGUE_ID;
-const SEASON = process.env.FOOTBALL_SEASON;
 const SPORTMONKS_BASE_URL =
   process.env.SPORTMONKS_BASE_URL ||
   'https://api.sportmonks.com/v3/football';

@@ -480,8 +480,6 @@ router.get('/api/admin/gallery', async (req, res) => {
 });
 
 router.post('/api/admin/gallery', adminAuth, async (req, res) => {
-  console.log("====== GALLERY POST ======");
-console.log(req.body.length);
   
 try {
     const gallery = req.body;
@@ -491,14 +489,12 @@ try {
         error: 'La galería debe ser un array',
       });
     }
-console.log("BORRANDO...");
-console.log("INSERTANDO...");    
 const { error: deleteError } = await supabase
       .from('gallery')
       .delete()
       .neq('id', '');
     
-console.log("BORRADO TERMINADO");
+
     if (deleteError) {
       console.error('ERROR BORRANDO GALERÍA:', deleteError);
 
