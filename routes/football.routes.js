@@ -1517,12 +1517,30 @@ router.post('/api/football/sync-standings', async (req, res) => {
           ? liveData.data
           : [];
 
+        const activeLiveStateShortNames = new Set([
+          '1st',
+          'HT',
+          '2nd',
+          'ET',
+          'BREAK',
+          'PEN_LIVE',
+        ]);
+
         const leagueLiveFixtures =
-          liveFixtures.filter(
-            (fixture) =>
+          liveFixtures.filter((fixture) => {
+            const sameLeague =
               Number(fixture?.league_id) ===
-              Number(competition.leagueId)
-          );
+              Number(competition.leagueId);
+
+            const stateShortName = String(
+              fixture?.state?.short_name || ''
+            ).trim();
+
+            return (
+              sameLeague &&
+              activeLiveStateShortNames.has(stateShortName)
+            );
+          });
 
         const rowsByTeam = new Map(
           liveRows.map((row) => [
