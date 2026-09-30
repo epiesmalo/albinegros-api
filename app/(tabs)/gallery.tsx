@@ -254,7 +254,7 @@ useEffect(() => {
       }
 
       const permission = await MediaLibrary.requestPermissionsAsync(
-        false,
+        true,
         ['photo']
       );
 
@@ -287,25 +287,7 @@ useEffect(() => {
         throw new Error('El archivo descargado no existe.');
       }
 
-      const albumName = 'Albinegros Castellón';
-      const existingAlbum = await MediaLibrary.getAlbumAsync(albumName);
-
-      if (existingAlbum) {
-        await MediaLibrary.createAssetAsync(
-          downloadedFile.uri,
-          existingAlbum
-        );
-      } else {
-        const asset = await MediaLibrary.createAssetAsync(
-          downloadedFile.uri
-        );
-
-        await MediaLibrary.createAlbumAsync(
-          albumName,
-          asset,
-          false
-        );
-      }
+      await MediaLibrary.saveToLibraryAsync(downloadedFile.uri);
 
       Alert.alert(
         'Guardado',
