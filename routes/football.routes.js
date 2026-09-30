@@ -224,6 +224,73 @@ const PLAYER_CAREER_CACHE_MS =
 const TEAM_DETAILS_CACHE_TTL =
   7 * 24 * 60 * 60 * 1000;
 
+const TEAM_DETAILS_WEEKLY_REFRESH_HOUR = 6;
+
+const getLatestTeamDetailsRefreshCutoffMs = (now = new Date()) => {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+
+  const values = Object.fromEntries(
+    parts.map(({ type, value }) => [type, value])
+  );
+
+  const localDateAsUtc = new Date(
+    Date.UTC(
+      Number(values.year),
+      Number(values.month) - 1,
+      Number(values.day)
+    )
+  );
+
+  const daysSinceTuesday =
+    (localDateAsUtc.getUTCDay() - 2 + 7) % 7;
+
+  localDateAsUtc.setUTCDate(
+    localDateAsUtc.getUTCDate() - daysSinceTuesday
+  );
+
+  const buildCutoff = (date) =>
+    new Date(
+      zonedDateTimeToUtcIso(
+        date.getUTCFullYear(),
+        date.getUTCMonth() + 1,
+        date.getUTCDate(),
+        TEAM_DETAILS_WEEKLY_REFRESH_HOUR,
+        0,
+        0,
+        TIMEZONE
+      )
+    ).getTime();
+
+  let cutoff = buildCutoff(localDateAsUtc);
+
+  if (cutoff > now.getTime()) {
+    localDateAsUtc.setUTCDate(
+      localDateAsUtc.getUTCDate() - 7
+    );
+    cutoff = buildCutoff(localDateAsUtc);
+  }
+
+  return cutoff;
+};
+
+const isTeamDetailsCacheFresh = (timestamp) => {
+  const cachedAt = Number(timestamp);
+
+  if (!Number.isFinite(cachedAt)) {
+    return false;
+  }
+
+  return (
+    Date.now() - cachedAt < TEAM_DETAILS_CACHE_TTL &&
+    cachedAt >= getLatestTeamDetailsRefreshCutoffMs()
+  );
+};
+
 const SPORTMONKS_TODAY_FIXTURES_CACHE_MS = 60_000;
 
 let sportmonksTodayFixturesCache = null;
@@ -600,9 +667,7 @@ const getCachedTeamDetails = async (teamId) => {
     data: data.data,
     updatedAt: data.updated_at,
     fresh:
-      Number.isFinite(updatedAt) &&
-      Date.now() - updatedAt <
-        TEAM_DETAILS_CACHE_TTL,
+      isTeamDetailsCacheFresh(updatedAt),
   };
 };
 
@@ -4035,8 +4100,9 @@ router.get(
        */
       if (
         memoryCache &&
-        now - memoryCache.timestamp <
-          TEAM_DETAILS_CACHE_TTL
+        isTeamDetailsCacheFresh(
+          memoryCache.timestamp
+        )
       ) {
         return res.json(
           memoryCache.data
