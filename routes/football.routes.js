@@ -946,7 +946,7 @@ const normalizeSportmonksFixture = (fixture) => {
  * Normaliza una fila de clasificación de Sportmonks
  * al formato utilizado por Albinegros.
  */
-const normalizeSportmonksStanding = (item) => {
+const normalizeSportmonksStanding = (item, resolvedTeam = null) => {
   const details = item.details || [];
 
   const getValue = (code) => {
@@ -962,12 +962,12 @@ const normalizeSportmonksStanding = (item) => {
     position: item.position,
 
     team: String(
-      item.participant?.name || ''
+      resolvedTeam?.name || item.participant?.name || ''
     ).trim().toUpperCase(),
 
     logo: getTeamLogo(
-      item.participant?.name || '',
-      item.participant?.image_path || ''
+      resolvedTeam?.name || item.participant?.name || '',
+      resolvedTeam?.image_path || item.participant?.image_path || ''
     ),
 
     points: Number(item.points ?? 0),
@@ -1129,12 +1129,33 @@ router.get(
         });
       }
 
-      const data = await sportmonksFetch(
-        `/standings/seasons/${competition.seasonId}?include=participant;details.type`
+      // Sportmonks puede devolver un participant.name desactualizado dentro
+      // del recurso de standings aunque participant_id sea correcto. Resolvemos
+      // los equipos oficiales de la temporada en una sola llamada adicional y
+      // cruzamos por ID (evita hacer una petición por cada club).
+      const [data, seasonTeamsData] = await Promise.all([
+        sportmonksFetch(
+          `/standings/seasons/${competition.seasonId}?include=participant;details.type`
+        ),
+        sportmonksFetch(
+          `/teams/seasons/${competition.seasonId}`
+        ),
+      ]);
+
+      const seasonTeamsById = new Map(
+        (seasonTeamsData?.data || []).map((team) => [
+          Number(team.id),
+          team,
+        ])
       );
 
       const standings = (data.data || [])
-        .map(normalizeSportmonksStanding)
+        .map((item) =>
+          normalizeSportmonksStanding(
+            item,
+            seasonTeamsById.get(Number(item.participant_id)) || null
+          )
+        )
         .sort((a, b) => a.position - b.position);
 
       return res.json({
