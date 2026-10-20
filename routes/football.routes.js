@@ -961,9 +961,9 @@ const normalizeSportmonksStanding = (item) => {
     teamId: item.participant_id,
     position: item.position,
 
-    team: getDisplayTeamName(
+    team: String(
       item.participant?.name || ''
-    ),
+    ).trim().toUpperCase(),
 
     logo: getTeamLogo(
       item.participant?.name || '',
@@ -987,6 +987,86 @@ const normalizeSportmonksStanding = (item) => {
  * Comprueba la conexión del servidor con Sportmonks.
  * GET /api/sportmonks/test
  */
+/**
+ * Diagnóstico: obtiene un equipo de Sportmonks por ID.
+ * Ejemplos:
+ * /api/sportmonks/team/594
+ * /api/sportmonks/team/36
+ */
+router.get('/api/sportmonks/team/:teamId', async (req, res) => {
+  try {
+    const teamId = Number(req.params.teamId);
+
+    if (!Number.isInteger(teamId) || teamId <= 0) {
+      return res.status(400).json({
+        ok: false,
+        provider: 'sportmonks',
+        error: 'teamId no válido',
+      });
+    }
+
+    const data = await sportmonksFetch(
+      `/teams/${teamId}?include=venue;activeSeasons`
+    );
+
+    return res.json({
+      ok: true,
+      provider: 'sportmonks',
+      teamId,
+      data: data.data || null,
+    });
+  } catch (error) {
+    console.error('Error obteniendo equipo Sportmonks:', error);
+
+    return res.status(500).json({
+      ok: false,
+      provider: 'sportmonks',
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * Diagnóstico: lista los equipos que Sportmonks asocia a una temporada.
+ * Ejemplo LaLiga 2026/27:
+ * /api/sportmonks/teams/season/27965
+ */
+router.get('/api/sportmonks/teams/season/:seasonId', async (req, res) => {
+  try {
+    const seasonId = Number(req.params.seasonId);
+
+    if (!Number.isInteger(seasonId) || seasonId <= 0) {
+      return res.status(400).json({
+        ok: false,
+        provider: 'sportmonks',
+        error: 'seasonId no válido',
+      });
+    }
+
+    const data = await sportmonksFetch(
+      `/teams/seasons/${seasonId}`
+    );
+
+    const teams = Array.isArray(data.data) ? data.data : [];
+
+    return res.json({
+      ok: true,
+      provider: 'sportmonks',
+      seasonId,
+      count: teams.length,
+      teams,
+    });
+  } catch (error) {
+    console.error('Error obteniendo equipos de temporada Sportmonks:', error);
+
+    return res.status(500).json({
+      ok: false,
+      provider: 'sportmonks',
+      error: error.message,
+    });
+  }
+});
+
 router.get('/api/sportmonks/test', async (req, res) => {
   try {
     const data = await sportmonksFetch(

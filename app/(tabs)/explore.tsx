@@ -13,7 +13,103 @@ import {
 } from 'react-native';
 
 import { colors } from '../../theme/colors';
-import { CACHE_KEYS, getCache, saveCache } from '../../utils/cache';
+import { getCache, saveCache } from '../../utils/cache';
+
+
+type CompetitionKey =
+  | 'laliga'
+  | 'laliga2'
+  | 'primera-rfef-1'
+  | 'primera-rfef-2'
+  | 'segunda-rfef-3';
+
+type CompetitionConfig = {
+  key: CompetitionKey;
+  shortLabel: string;
+  title: string;
+  leagueId: number;
+  highlightTeamId?: number;
+  directPromotion: (position: number) => boolean;
+  playoff: (position: number) => boolean;
+  relegation: (position: number, total: number) => boolean;
+  directLabel: string;
+  playoffLabel: string;
+};
+
+const COMPETITIONS: CompetitionConfig[] = [
+  {
+    key: 'laliga2',
+    shortLabel: '2ª',
+    title: 'SEGUNDA DIVISIÓN',
+    leagueId: 567,
+    highlightTeamId: 5254,
+    directPromotion: (position) => position <= 2,
+    playoff: (position) => position >= 3 && position <= 6,
+    relegation: (position, total) => position >= total - 3,
+    directLabel: 'Ascenso',
+    playoffLabel: 'Playoff',
+  },
+  {
+    key: 'laliga',
+    shortLabel: '1ª',
+    title: 'PRIMERA DIVISIÓN',
+    leagueId: 564,
+    directPromotion: (position) => position >= 2 && position <= 4,
+    playoff: (position) => position === 5,
+    relegation: (position, total) => position >= total - 2,
+    directLabel: 'Champions',
+    playoffLabel: 'Europa League',
+  },
+  {
+    key: 'primera-rfef-1',
+    shortLabel: '1ª RFEF G1',
+    title: 'PRIMERA FEDERACIÓN · GRUPO 1',
+    leagueId: 2333,
+    directPromotion: (position) => position === 1,
+    playoff: (position) => position >= 2 && position <= 5,
+    relegation: (position, total) => position >= total - 4,
+    directLabel: 'Ascenso',
+    playoffLabel: 'Playoff',
+  },
+  {
+    key: 'primera-rfef-2',
+    shortLabel: '1ª RFEF G2',
+    title: 'PRIMERA FEDERACIÓN · GRUPO 2',
+    leagueId: 2334,
+    directPromotion: (position) => position === 1,
+    playoff: (position) => position >= 2 && position <= 5,
+    relegation: (position, total) => position >= total - 4,
+    directLabel: 'Ascenso',
+    playoffLabel: 'Playoff',
+  },
+  {
+    key: 'segunda-rfef-3',
+    shortLabel: '2ª RFEF G3',
+    title: 'SEGUNDA FEDERACIÓN · GRUPO 3',
+    leagueId: 2338,
+    highlightTeamId: 29495,
+    directPromotion: (position) => position === 1,
+    playoff: (position) => position >= 2 && position <= 5,
+    relegation: (position, total) => position >= total - 4,
+    directLabel: 'Ascenso',
+    playoffLabel: 'Playoff',
+  },
+];
+
+const isChampionPosition = (competitionKey: CompetitionKey, position: number) =>
+  competitionKey === 'laliga' && position === 1;
+
+const isConferencePosition = (competitionKey: CompetitionKey, position: number) =>
+  competitionKey === 'laliga' && position === 6;
+
+const isRelegationPlayoutPosition = (
+  competitionKey: CompetitionKey,
+  position: number,
+  total: number
+) => competitionKey === 'segunda-rfef-3' && position === total - 5;
+
+const getStandingsCacheKey = (competitionKey: CompetitionKey) =>
+  `standings_${competitionKey}`;
 
 type StandingItem = {
   teamId: number | null;
@@ -62,6 +158,41 @@ const getLogoUrl = (teamName: string, logo?: string) => {
   return logo;
 };
 
+const isHighlightedTeam = (
+  competitionKey: CompetitionKey,
+  item: StandingItem
+) => {
+  const teamId = Number(item.teamId);
+  const teamName = String(item.team || '')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ');
+
+  if (competitionKey === 'laliga2') {
+    return (
+      teamId === 5254 ||
+      teamName === 'c.d. castellón' ||
+      teamName === 'c.d. castellon' ||
+      teamName === 'cd castellón' ||
+      teamName === 'cd castellon' ||
+      teamName === 'castellón' ||
+      teamName === 'castellon'
+    );
+  }
+
+  if (competitionKey === 'segunda-rfef-3') {
+    return (
+      teamId === 29495 ||
+      teamName === 'c.d. castellón b' ||
+      teamName === 'c.d. castellon b' ||
+      teamName === 'cd castellón b' ||
+      teamName === 'cd castellon b'
+    );
+  }
+
+  return false;
+};
+
 function LiveDot() {
   const opacity = useRef(new Animated.Value(1)).current;
 
@@ -104,187 +235,164 @@ export default function StandingsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState<'summary' | 'full'>('summary');
-  const [usingCachedData, setUsingCachedData] = useState(false);
-  const [cacheSavedAt, setCacheSavedAt] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(Date.now());
-const [liveTeamIds, setLiveTeamIds] = useState<Set<number>>(new Set());
-const loadLiveTeams = async () => {
-  try {
-    const response = await fetch(
-      'https://api.albinegroscastellon.com/api/football/live'
-    );
+  const [liveTeamIds, setLiveTeamIds] = useState<Set<number>>(new Set());
+  const [competitionKey, setCompetitionKey] = useState<CompetitionKey>('laliga2');
+  const standingsRequestIdRef = useRef(0);
+  const competitionKeyRef = useRef<CompetitionKey>('laliga2');
+  competitionKeyRef.current = competitionKey;
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+  const selectedCompetition =
+    COMPETITIONS.find((competition) => competition.key === competitionKey) ??
+    COMPETITIONS[0];
+
+  const loadLiveTeams = useCallback(async () => {
+    // Conservamos el sistema LIVE actual únicamente para Segunda División.
+    // El endpoint /api/football/live ya estaba funcionando con esta competición.
+    if (competitionKey !== 'laliga2') {
+      setLiveTeamIds(new Set());
+      return;
     }
-
-    const data = await response.json();
-
-    const activeStatuses = new Set([
-      '1H',
-      'HT',
-      '2H',
-      'ET',
-      'BT',
-      'P',
-      'LIVE',
-    ]);
-
-    const matches = Array.isArray(data?.matches)
-      ? data.matches
-      : [];
-
-    const ids = new Set<number>();
-
-    matches.forEach((match: any) => {
-      if (Number(match?.league?.id) !== 567) return;
-
-      if (!activeStatuses.has(String(match?.status?.short || ''))) {
-        return;
-      }
-
-      const homeId = Number(match?.home?.id);
-      const awayId = Number(match?.away?.id);
-
-      if (Number.isFinite(homeId)) {
-        ids.add(homeId);
-      }
-
-      if (Number.isFinite(awayId)) {
-        ids.add(awayId);
-      }
-    });
-
-    setLiveTeamIds(ids);
-  } catch (err) {
-    console.log('Error cargando equipos en directo:', err);
-  }
-};
-const loadStandings = async (isRefresh = false) => {
-  try {
-    if (isRefresh) {
-      setRefreshing(true);
-    } else {
-      const cachedStandings = await getCache<StandingItem[]>(
-        CACHE_KEYS.STANDINGS
-      );
-
-      if (
-        Array.isArray(cachedStandings?.data) &&
-        cachedStandings.data.length > 0
-      ) {
-        setStandings(cachedStandings.data);
-        setUsingCachedData(true);
-        setCacheSavedAt(cachedStandings.savedAt);
-        setCurrentTime(Date.now());
-        setLoading(false);
-      } else {
-        setLoading(true);
-      }
-    }
-
-    setError('');
-
-    // Sincronizamos primero con el servidor. La respuesta ya incluye
-    // la clasificación que debe mostrarse: LIVE si hay partidos en juego
-    // u oficial si no los hay. Supabase conserva siempre la oficial.
-    let data: StandingItem[] | null = null;
 
     try {
-      const syncResponse = await fetch(
-        'https://api.albinegroscastellon.com/api/football/sync-standings',
-        {
-          method: 'POST',
-        }
-      );
-
-      if (syncResponse.ok) {
-        const syncData = await syncResponse.json();
-
-        if (Array.isArray(syncData?.standings)) {
-          data = syncData.standings;
-        }
-      }
-    } catch (syncError) {
-      console.log(
-        'No se pudo sincronizar la clasificación:',
-        syncError
-      );
-    }
-
-    // Fallback: si la sincronización falla, leemos la última
-    // clasificación oficial persistida en Supabase.
-    if (!data) {
       const response = await fetch(
-        'https://api.albinegroscastellon.com/standings/first-team'
+        'https://api.albinegroscastellon.com/api/football/live'
       );
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
 
-      const fallbackData = await response.json();
+      const data = await response.json();
+      const activeStatuses = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE']);
+      const matches = Array.isArray(data?.matches) ? data.matches : [];
+      const ids = new Set<number>();
 
-      if (!Array.isArray(fallbackData)) {
-        throw new Error('La respuesta de la clasificación no es válida.');
+      matches.forEach((match: any) => {
+        if (Number(match?.league?.id) !== selectedCompetition.leagueId) return;
+        if (!activeStatuses.has(String(match?.status?.short || ''))) return;
+
+        const homeId = Number(match?.home?.id);
+        const awayId = Number(match?.away?.id);
+        if (Number.isFinite(homeId)) ids.add(homeId);
+        if (Number.isFinite(awayId)) ids.add(awayId);
+      });
+
+      setLiveTeamIds(ids);
+    } catch (err) {
+      console.log('Error cargando equipos en directo:', err);
+    }
+  }, [competitionKey, selectedCompetition.leagueId]);
+
+  const loadStandings = useCallback(async (isRefresh = false) => {
+    const requestedCompetitionKey = competitionKey;
+    const requestId = ++standingsRequestIdRef.current;
+    const cacheKey = getStandingsCacheKey(requestedCompetitionKey);
+    const isCurrentRequest = () =>
+      requestId === standingsRequestIdRef.current &&
+      competitionKeyRef.current === requestedCompetitionKey;
+
+    try {
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        const cachedStandings = await getCache<StandingItem[]>(cacheKey as any);
+
+        if (Array.isArray(cachedStandings?.data) && cachedStandings.data.length > 0) {
+          if (!isCurrentRequest()) return;
+          setStandings(cachedStandings.data);
+          setLoading(false);
+        } else {
+          if (!isCurrentRequest()) return;
+          setStandings([]);
+          setLoading(true);
+        }
       }
 
-      data = fallbackData;
-    }
-
-    const resolvedData = data ?? [];
-
-    setStandings(resolvedData);
-    setUsingCachedData(false);
-    setCacheSavedAt(null);
-    setCurrentTime(Date.now());
-
-    await saveCache(CACHE_KEYS.STANDINGS, resolvedData);
-  } catch (err) {
-    console.log('Error cargando clasificación:', err);
-
-    const cachedStandings = await getCache<StandingItem[]>(
-      CACHE_KEYS.STANDINGS
-    );
-
-    if (
-      Array.isArray(cachedStandings?.data) &&
-      cachedStandings.data.length > 0
-    ) {
-      setStandings(cachedStandings.data);
-      setUsingCachedData(true);
-      setCacheSavedAt(cachedStandings.savedAt);
-      setCurrentTime(Date.now());
       setError('');
-    } else {
-      setError('No se pudo cargar la clasificación.');
-      setStandings([]);
+      let data: StandingItem[] | null = null;
+
+      if (requestedCompetitionKey === 'laliga2') {
+        // Segunda mantiene exactamente el sistema actual: sincronización,
+        // clasificación LIVE temporal y fallback oficial de Supabase.
+        try {
+          const syncResponse = await fetch(
+            'https://api.albinegroscastellon.com/api/football/sync-standings',
+            { method: 'POST' }
+          );
+
+          if (syncResponse.ok) {
+            const syncData = await syncResponse.json();
+            if (Array.isArray(syncData?.standings)) data = syncData.standings;
+          }
+        } catch (syncError) {
+          console.log('No se pudo sincronizar la clasificación:', syncError);
+        }
+
+        if (!data) {
+          const response = await fetch(
+            'https://api.albinegroscastellon.com/standings/first-team'
+          );
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const fallbackData = await response.json();
+          if (!Array.isArray(fallbackData)) {
+            throw new Error('La respuesta de la clasificación no es válida.');
+          }
+          data = fallbackData;
+        }
+      } else {
+        // El resto de competiciones usa el endpoint genérico de SportMonks
+        // que ya existe en el backend.
+        const response = await fetch(
+          `https://api.albinegroscastellon.com/api/sportmonks/standings/${requestedCompetitionKey}`
+        );
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const responseData = await response.json();
+        if (!Array.isArray(responseData?.standings)) {
+          throw new Error('La respuesta de la clasificación no es válida.');
+        }
+        data = responseData.standings;
+      }
+
+      const resolvedData = data ?? [];
+      if (!isCurrentRequest()) return;
+      setStandings(resolvedData);
+      setCurrentTime(Date.now());
+      await saveCache(cacheKey as any, resolvedData);
+    } catch (err) {
+      console.log(`Error cargando clasificación ${requestedCompetitionKey}:`, err);
+      const cachedStandings = await getCache<StandingItem[]>(cacheKey as any);
+
+      if (!isCurrentRequest()) return;
+      if (Array.isArray(cachedStandings?.data) && cachedStandings.data.length > 0) {
+        setStandings(cachedStandings.data);
+        setError('');
+      } else {
+        setError('No se pudo cargar la clasificación.');
+        setStandings([]);
+      }
+    } finally {
+      if (isCurrentRequest()) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
-  } finally {
-    setLoading(false);
-    setRefreshing(false);
-  }
-};
+  }, [competitionKey]);
 
- useFocusEffect(
-  useCallback(() => {
-    loadStandings();
-    loadLiveTeams();
-
-    const standingsInterval = setInterval(() => {
-      loadStandings(true);
-    }, 60_000);
-
-    const liveInterval = setInterval(() => {
+  useFocusEffect(
+    useCallback(() => {
+      loadStandings();
       loadLiveTeams();
-    }, 30_000);
 
-    return () => {
-      clearInterval(standingsInterval);
-      clearInterval(liveInterval);
-    };
-  }, [])
-);
+      const standingsInterval = setInterval(() => loadStandings(true), 60_000);
+      const liveInterval = setInterval(() => loadLiveTeams(), 30_000);
+
+      return () => {
+        clearInterval(standingsInterval);
+        clearInterval(liveInterval);
+      };
+    }, [loadStandings, loadLiveTeams])
+  );
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -311,23 +419,73 @@ const loadStandings = async (isRefresh = false) => {
     >
       <View>
         <View style={styles.heroCard}>
-          <Text style={styles.kicker}>SEGUNDA DIVISIÓN</Text>
+          <Text style={styles.kicker}>{selectedCompetition.title}</Text>
           <Text style={styles.subtitle}>Temporada 2026/27</Text>
         </View>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.competitionSelector}
+        >
+          {COMPETITIONS.map((competition) => {
+            const active = competition.key === competitionKey;
+            return (
+              <Pressable
+                key={competition.key}
+                onPress={() => setCompetitionKey(competition.key)}
+                style={[
+                  styles.competitionButton,
+                  active && styles.competitionButtonActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.competitionButtonText,
+                    active && styles.competitionButtonTextActive,
+                  ]}
+                >
+                  {competition.shortLabel}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
       </View>
 
       <View>
       <View style={styles.legendFiltersRow}>
         <View style={styles.legend}>
+          {competitionKey === 'laliga' && (
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, styles.goldDot]} />
+              <Text style={styles.legendText}>Campeón</Text>
+            </View>
+          )}
+
           <View style={styles.legendItem}>
             <View style={[styles.legendDot, styles.greenDot]} />
-            <Text style={styles.legendText}>Ascenso</Text>
+            <Text style={styles.legendText}>{selectedCompetition.directLabel}</Text>
           </View>
 
           <View style={styles.legendItem}>
             <View style={[styles.legendDot, styles.blueDot]} />
-            <Text style={styles.legendText}>Playoff</Text>
+            <Text style={styles.legendText}>{selectedCompetition.playoffLabel}</Text>
           </View>
+
+          {competitionKey === 'laliga' && (
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, styles.purpleDot]} />
+              <Text style={styles.legendText}>Conference</Text>
+            </View>
+          )}
+
+          {competitionKey === 'segunda-rfef-3' && (
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, styles.orangeDot]} />
+              <Text style={styles.legendText}>Playout descenso</Text>
+            </View>
+          )}
 
           <View style={styles.legendItem}>
             <View style={[styles.legendDot, styles.redDot]} />
@@ -395,13 +553,17 @@ const loadStandings = async (isRefresh = false) => {
               </View>
 
               {standings.map((item, index) => {
-                const isCastellon = item.team.toLowerCase().includes('castell');
+                const isCastellon =
+                  isHighlightedTeam(competitionKey, item);
                 const isLive =
   item.teamId !== null &&
   liveTeamIds.has(Number(item.teamId));
-                const isDirectPromotion = item.position <= 2;
-                const isPlayoff = item.position >= 3 && item.position <= 6;
-                const isRelegation = item.position >= standings.length - 3;
+                const isDirectPromotion = selectedCompetition.directPromotion(item.position);
+                const isPlayoff = selectedCompetition.playoff(item.position);
+                const isRelegation = selectedCompetition.relegation(item.position, standings.length);
+                const isChampion = isChampionPosition(competitionKey, item.position);
+                const isConference = isConferencePosition(competitionKey, item.position);
+                const isRelegationPlayout = isRelegationPlayoutPosition(competitionKey, item.position, standings.length);
                 const goalDiff =
                   item.goaldiff ??
                   ((item.goalsfor ?? 0) - (item.goalsagainst ?? 0));
@@ -420,6 +582,9 @@ const loadStandings = async (isRefresh = false) => {
                     }}
                     style={({ pressed }) => [
   styles.row,
+  isChampion ? styles.championRow : null,
+  isConference ? styles.conferenceRow : null,
+  isRelegationPlayout ? styles.relegationPlayoutRow : null,
   isDirectPromotion ? styles.directPromotionRow : null,
   isPlayoff ? styles.playoffRow : null,
   isRelegation ? styles.relegationRow : null,
@@ -491,13 +656,17 @@ const loadStandings = async (isRefresh = false) => {
                 </View>
 
                 {standings.map((item, index) => {
-                  const isCastellon = item.team.toLowerCase().includes('castell');
+                  const isCastellon =
+                  isHighlightedTeam(competitionKey, item);
                   const isLive =
   item.teamId !== null &&
   liveTeamIds.has(Number(item.teamId));
-                  const isDirectPromotion = item.position <= 2;
-                  const isPlayoff = item.position >= 3 && item.position <= 6;
-                  const isRelegation = item.position >= standings.length - 3;
+                  const isDirectPromotion = selectedCompetition.directPromotion(item.position);
+                  const isPlayoff = selectedCompetition.playoff(item.position);
+                  const isRelegation = selectedCompetition.relegation(item.position, standings.length);
+                const isChampion = isChampionPosition(competitionKey, item.position);
+                const isConference = isConferencePosition(competitionKey, item.position);
+                const isRelegationPlayout = isRelegationPlayoutPosition(competitionKey, item.position, standings.length);
 
                   return (
                     <Pressable
@@ -514,6 +683,9 @@ const loadStandings = async (isRefresh = false) => {
                  style={({ pressed }) => [
   styles.row,
   styles.frozenRow,
+  isChampion ? styles.championRow : null,
+  isConference ? styles.conferenceRow : null,
+  isRelegationPlayout ? styles.relegationPlayoutRow : null,
   isDirectPromotion ? styles.directPromotionRow : null,
   isPlayoff ? styles.playoffRow : null,
   isRelegation ? styles.relegationRow : null,
@@ -582,10 +754,14 @@ const loadStandings = async (isRefresh = false) => {
                   </View>
 
                   {standings.map((item, index) => {
-                    const isCastellon = item.team.toLowerCase().includes('castell');
-                    const isDirectPromotion = item.position <= 2;
-                    const isPlayoff = item.position >= 3 && item.position <= 6;
-                    const isRelegation = item.position >= standings.length - 3;
+                    const isCastellon =
+                  isHighlightedTeam(competitionKey, item);
+                    const isDirectPromotion = selectedCompetition.directPromotion(item.position);
+                    const isPlayoff = selectedCompetition.playoff(item.position);
+                    const isRelegation = selectedCompetition.relegation(item.position, standings.length);
+                const isChampion = isChampionPosition(competitionKey, item.position);
+                const isConference = isConferencePosition(competitionKey, item.position);
+                const isRelegationPlayout = isRelegationPlayoutPosition(competitionKey, item.position, standings.length);
                     const goalsfor = item.goalsfor ?? 0;
                     const goalsagainst = item.goalsagainst ?? 0;
                     const goalDiff =
@@ -597,6 +773,9 @@ const loadStandings = async (isRefresh = false) => {
                         style={[
                           styles.row,
                           styles.statsRow,
+                          isChampion && styles.championStatsRow,
+                          isConference && styles.conferenceStatsRow,
+                          isRelegationPlayout && styles.relegationPlayoutStatsRow,
                           isDirectPromotion && styles.directPromotionStatsRow,
                           isPlayoff && styles.playoffStatsRow,
                           isRelegation && styles.relegationStatsRow,
@@ -689,6 +868,31 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#9f9f9f',
   },
+  competitionSelector: {
+    gap: 7,
+    paddingBottom: 12,
+    paddingRight: 8,
+  },
+  competitionButton: {
+    backgroundColor: '#151515',
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
+    paddingVertical: 8,
+    paddingHorizontal: 13,
+  },
+  competitionButtonActive: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  competitionButtonText: {
+    color: '#A5A5A5',
+    fontSize: 10.5,
+    fontWeight: '900',
+  },
+  competitionButtonTextActive: {
+    color: '#101010',
+  },
   legendFiltersRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -737,11 +941,20 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginRight: 6,
   },
+  goldDot: {
+    backgroundColor: '#f5c542',
+  },
   greenDot: {
     backgroundColor: '#38d46b',
   },
   blueDot: {
     backgroundColor: '#4da3ff',
+  },
+  purpleDot: {
+    backgroundColor: '#b56cff',
+  },
+  orangeDot: {
+    backgroundColor: '#ff9f43',
   },
   redDot: {
     backgroundColor: '#ff5c5c',
@@ -791,6 +1004,18 @@ const styles = StyleSheet.create({
     marginBottom: 5,
     borderWidth: 1,
     borderColor: '#222222',
+  },
+  championRow: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#f5c542',
+  },
+  conferenceRow: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#b56cff',
+  },
+  relegationPlayoutRow: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#ff9f43',
   },
   directPromotionRow: {
     borderLeftWidth: 4,
@@ -959,6 +1184,15 @@ liveDot: {
     borderTopLeftRadius: 0,
     borderBottomLeftRadius: 0,
     borderLeftWidth: 0,
+  },
+  championStatsRow: {
+    borderLeftColor: 'transparent',
+  },
+  conferenceStatsRow: {
+    borderLeftColor: 'transparent',
+  },
+  relegationPlayoutStatsRow: {
+    borderLeftColor: 'transparent',
   },
   directPromotionStatsRow: {
     borderLeftColor: 'transparent',
