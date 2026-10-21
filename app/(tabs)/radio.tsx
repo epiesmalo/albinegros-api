@@ -23,7 +23,7 @@ const SIGNO_PATREON_URL = 'https://www.patreon.com/cw/signoradiocastellon';
 const SIGNO_PODCASTS_URL = 'https://www.patreon.com/cw/signoradiocastellon?utm_source=ig&utm_medium=social&utm_content=link_in_bio&fbclid=PAcGRvZgJleHRuA2FlbQIxMQBzcnRjBmFwcF9pZA85MzY2MTk3NDMzOTI0NTkAAadB_hnN-Ct4RidKIAZiFKOLrvWajB6OklSGHKhUzvxBfqdozoBO7jD0vYBotQ_aem_Nr_YX0NYFph09juqTkj0Vg';
 const LA_GRADA_URL = 'https://www.youtube.com/@TeveQuatre/videos';
 const CONEXION_ORELLUT_URL = 'https://www.youtube.com/playlist?list=PLZkcFc2Lc6OjtYvC4ts5zsuy6jW-UoVWt';
-const LA_TRIBUNA_URL = 'https://proximiatv.com/collection/YVbCiokZu69dpmjM8zng9w';
+const LA_TRIBUNA_URL = 'https://www.youtube.com/@televisiodecastello/featured';
 
 export default function RadioScreen() {
   const [activeSection, setActiveSection] = useState<RadioSection>('directo');
