@@ -181,6 +181,8 @@ const quickLinks = [
   { id: '3', title: 'Media', route: '/(tabs)/media', icon: 'musical-notes' },
   { id: '4', title: 'Galería', route: '/(tabs)/gallery', icon: 'images' },
   { id: '6', title: 'Tienda', route: '/(tabs)/shop', icon: 'bag-handle' },
+  { id: '7', title: 'Radio', route: '/(tabs)/radio', icon: 'radio' },
+  { id: '8', title: 'Noticias', route: '/(tabs)/news', icon: 'newspaper' },
 ] as const;
 
   useEffect(() => {
