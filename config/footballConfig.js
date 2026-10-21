@@ -231,6 +231,18 @@ const teams = [
 
   {
     aliases: [
+      'RCD Mallorca II',
+      'RCD Mallorca B',
+      'Mallorca II',
+      'Mallorca B',
+    ],
+    displayName: 'RCD MALLORCA B',
+    shortName: 'MALLORCA B',
+    stadium: '',
+  },
+
+  {
+    aliases: [
       'RCD Mallorca',
       'Mallorca',
     ],
@@ -355,6 +367,26 @@ const getTeamInfo = (apiName = '') => {
   }
 
   /**
+   * SportMonks utiliza habitualmente "II" para los filiales.
+   * En la app los mostramos como "B" de forma consistente.
+   * Las excepciones configuradas (p. ej. Celta Fortuna o Real Sociedad B)
+   * ya se han resuelto arriba mediante coincidencia exacta.
+   */
+  const rawName = String(apiName || '').trim();
+  const reserveName = rawName.replace(/\s+II(?=\s|$)/i, ' B');
+
+  if (reserveName !== rawName) {
+    return {
+      aliases: [rawName],
+      displayName: reserveName.toUpperCase(),
+      shortName: reserveName.toUpperCase(),
+      stadium: '',
+      logo: '',
+      configured: false,
+    };
+  }
+
+  /**
    * Segunda comprobación para pequeñas variaciones.
    *
    * Ejemplo:
@@ -376,8 +408,7 @@ teams.forEach((team) => {
 
     const matches =
       normalizedName === normalizedAlias ||
-      normalizedName.startsWith(`${normalizedAlias} `) ||
-      normalizedAlias.startsWith(`${normalizedName} `);
+      normalizedName.startsWith(`${normalizedAlias} `);
 
     if (matches) {
       partialMatches.push({

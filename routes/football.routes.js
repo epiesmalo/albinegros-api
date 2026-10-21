@@ -961,9 +961,13 @@ const normalizeSportmonksStanding = (item, resolvedTeam = null) => {
     teamId: item.participant_id,
     position: item.position,
 
-    team: String(
+    // Primero resolvemos el equipo oficial por participant_id y, sobre ese
+    // nombre fiable, aplicamos los displayName de footballConfig.
+    // Así conservamos nombres como CD CASTELLÓN, REAL SPORTING, RCD MALLORCA,
+    // REAL SOCIEDAD B, etc. sin volver a confundir primeros equipos y filiales.
+    team: getDisplayTeamName(
       resolvedTeam?.name || item.participant?.name || ''
-    ).trim().toUpperCase(),
+    ),
 
     logo: getTeamLogo(
       resolvedTeam?.name || item.participant?.name || '',
