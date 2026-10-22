@@ -727,54 +727,140 @@ export default function MatchDetailScreen() {
     );
   };
 
-  const renderLineupTeam = (lineup: Lineup) => (
-    <View key={String(lineup.team.id)} style={styles.lineupCard}>
-      <View style={styles.lineupHeader}>
-        <Image
-  source={{ uri: getTeamLogoUrl(lineup.team.name, lineup.team.logo) }}
-  style={styles.lineupLogo}
-  contentFit="contain"
-/>
-        <View style={styles.lineupHeaderText}>
-          <Text style={styles.lineupTeamName}>{lineup.team.name}</Text>
-          <Text style={styles.formation}>
-            {lineup.formation ? `Sistema ${lineup.formation}` : 'Sistema no disponible'}
+  const getLineupForTeam = (teamId: number | null) =>
+    data?.lineups.find((lineup) => Number(lineup.team.id) === Number(teamId));
+
+  const parseGrid = (grid: string) => {
+    const match = String(grid || '').match(/^(\d+):(\d+)$/);
+    if (!match) return null;
+    return { row: Number(match[1]), column: Number(match[2]) };
+  };
+
+  const getFormationFromGrid = (lineup: Lineup) => {
+    if (lineup.formation) return lineup.formation;
+
+    const rows = new Map<number, number>();
+    lineup.startXI.forEach((player) => {
+      const grid = parseGrid(player.grid);
+      if (!grid || grid.row <= 1) return;
+      rows.set(grid.row, (rows.get(grid.row) || 0) + 1);
+    });
+
+    const formation = [...rows.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([, count]) => count)
+      .filter(Boolean);
+
+    return formation.length ? formation.join('-') : '';
+  };
+
+  const getPlayerIncidents = (player: LineupPlayer) => {
+    if (!data) return [];
+
+    return data.events
+      .filter((event) => Number(event.player.id) === Number(player.id))
+      .map((event) => ({
+        kind: getEventKind(event),
+        minute: formatEventMinute(event),
+      }))
+      .filter((item) =>
+        ['goal', 'yellow', 'red', 'substitution'].includes(item.kind)
+      );
+  };
+
+  const renderPitchPlayer = (
+    player: LineupPlayer,
+    lineup: Lineup,
+    isHome: boolean,
+    index: number
+  ) => {
+    const grid = parseGrid(player.grid);
+    if (!grid) return null;
+
+    const rowValues = lineup.startXI
+      .map((item) => parseGrid(item.grid)?.row)
+      .filter((value): value is number => typeof value === 'number');
+    const maxRow = Math.max(1, ...rowValues);
+
+    const sameRow = lineup.startXI.filter(
+      (item) => parseGrid(item.grid)?.row === grid.row
+    );
+    const maxColumn = Math.max(1, sameRow.length);
+
+    const x = maxColumn === 1 ? 50 : 10 + ((grid.column - 1) / (maxColumn - 1)) * 80;
+    const rowProgress = maxRow === 1 ? 0 : (grid.row - 1) / (maxRow - 1);
+    const halfTop = isHome ? 5 + rowProgress * 35 : 55 + (1 - rowProgress) * 35;
+    const incidents = getPlayerIncidents(player);
+
+    return (
+      <View
+        key={`${lineup.team.id}-${player.id}-${index}`}
+        style={[
+          styles.pitchPlayer,
+          { left: `${x}%`, top: `${halfTop}%` },
+        ]}
+      >
+        <View style={styles.pitchPlayerBadge}>
+          <Text style={styles.pitchPlayerNumber}>{player.number ?? '-'}</Text>
+          {incidents.length > 0 ? (
+            <View style={styles.pitchIncidents}>
+              {incidents.slice(0, 2).map((incident, incidentIndex) => (
+                <View key={`${incident.kind}-${incidentIndex}`} style={styles.pitchIncident}>
+                  {incident.kind === 'yellow' ? (
+                    <View style={styles.pitchYellowCard} />
+                  ) : incident.kind === 'red' ? (
+                    <View style={styles.pitchRedCard} />
+                  ) : (
+                    <Ionicons
+                      name={incident.kind === 'goal' ? 'football' : 'swap-vertical'}
+                      size={10}
+                      color={incident.kind === 'goal' ? '#D4AF37' : '#55B986'}
+                    />
+                  )}
+                </View>
+              ))}
+            </View>
+          ) : null}
+        </View>
+        <View style={styles.pitchPlayerNameBox}>
+          <Text numberOfLines={1} style={styles.pitchPlayerName}>
+            {player.name}
           </Text>
         </View>
       </View>
+    );
+  };
 
-      {lineup.coach.name ? (
-        <View style={styles.coachRow}>
-          <Ionicons name="person-outline" size={15} color="#D4AF37" />
-          <Text style={styles.coachLabel}>Entrenador</Text>
-          <Text style={styles.coachName}>{lineup.coach.name}</Text>
+  const renderBenchPlayer = (player: LineupPlayer, index: number) => {
+    const incidents = getPlayerIncidents(player);
+    const substitution = incidents.find((item) => item.kind === 'substitution');
+
+    return (
+      <View key={`${player.id}-${index}`} style={styles.benchPlayer}>
+        <View style={styles.benchNumberBadge}>
+          <Text style={styles.benchNumber}>{player.number ?? '-'}</Text>
         </View>
-      ) : null}
-
-      <Text style={styles.lineupSectionTitle}>ONCE TITULAR</Text>
-
-      {lineup.startXI.map((player, index) => (
-        <View key={`${player.id}-${index}`} style={styles.playerRow}>
-          <Text style={styles.playerNumber}>{player.number ?? '-'}</Text>
-          <Text style={styles.playerName}>{player.name}</Text>
-          <Text style={styles.playerPosition}>{player.position}</Text>
+        <View style={styles.benchPlayerText}>
+          <Text numberOfLines={1} style={styles.benchPlayerName}>{player.name}</Text>
+          <View style={styles.benchPlayerMetaRow}>
+            <Text style={styles.benchPlayerMeta}>{player.position || '-'}</Text>
+            {substitution?.minute ? (
+              <View style={styles.benchSubstitution}>
+                <Ionicons name="arrow-up" size={9} color="#55B986" />
+                <Text style={styles.benchSubstitutionText}>{substitution.minute}</Text>
+              </View>
+            ) : null}
+          </View>
         </View>
-      ))}
-
-      {lineup.substitutes.length > 0 && (
-        <>
-          <Text style={styles.lineupSectionTitle}>SUPLENTES</Text>
-          {lineup.substitutes.map((player, index) => (
-            <View key={`${player.id}-${index}`} style={styles.playerRow}>
-              <Text style={styles.playerNumber}>{player.number ?? '-'}</Text>
-              <Text style={styles.playerName}>{player.name}</Text>
-              <Text style={styles.playerPosition}>{player.position}</Text>
-            </View>
-          ))}
-        </>
-      )}
-    </View>
-  );
+        {incidents.some((item) => item.kind === 'goal') ? (
+          <Ionicons name="football" size={14} color="#D4AF37" />
+        ) : null}
+        {incidents.some((item) => item.kind === 'yellow') ? (
+          <View style={styles.benchYellowCard} />
+        ) : null}
+      </View>
+    );
+  };
 
   const renderLineups = () => {
     if (!data) return null;
@@ -791,7 +877,126 @@ export default function MatchDetailScreen() {
       );
     }
 
-    return <View>{data.lineups.map(renderLineupTeam)}</View>;
+    const homeLineup = getLineupForTeam(data.home.id) || data.lineups[0];
+    const awayLineup = getLineupForTeam(data.away.id) || data.lineups[1];
+
+    if (!homeLineup || !awayLineup) {
+      return (
+        <View style={styles.emptySection}>
+          <Ionicons name="people-outline" size={30} color="#D4AF37" />
+          <Text style={styles.emptyTitle}>Alineaciones incompletas</Text>
+          <Text style={styles.emptyText}>
+            El proveedor todavía no ha publicado las dos alineaciones completas.
+          </Text>
+        </View>
+      );
+    }
+
+    const hasPitchData = [...homeLineup.startXI, ...awayLineup.startXI].every(
+      (player) => !!parseGrid(player.grid)
+    );
+
+    if (!hasPitchData) {
+      return (
+        <View>
+          {[homeLineup, awayLineup].map((lineup) => (
+            <View key={String(lineup.team.id)} style={styles.lineupCard}>
+              <View style={styles.lineupHeader}>
+                <Image source={{ uri: getTeamLogoUrl(lineup.team.name, lineup.team.logo) }} style={styles.lineupLogo} contentFit="contain" />
+                <View style={styles.lineupHeaderText}>
+                  <Text style={styles.lineupTeamName}>{lineup.team.name}</Text>
+                  <Text style={styles.formation}>
+                    {getFormationFromGrid(lineup) ? `Sistema ${getFormationFromGrid(lineup)}` : 'Once titular'}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.lineupSectionTitle}>ONCE TITULAR</Text>
+              {lineup.startXI.map((player, index) => (
+                <View key={`${player.id}-${index}`} style={styles.playerRow}>
+                  <Text style={styles.playerNumber}>{player.number ?? '-'}</Text>
+                  <Text style={styles.playerName}>{player.name}</Text>
+                  <Text style={styles.playerPosition}>{player.position}</Text>
+                </View>
+              ))}
+            </View>
+          ))}
+        </View>
+      );
+    }
+
+    return (
+      <View>
+        <View style={styles.lineupMatchHeader}>
+          <View style={styles.lineupMatchTeam}>
+            <Image source={{ uri: getTeamLogoUrl(homeLineup.team.name, homeLineup.team.logo) }} style={styles.lineupMatchLogo} contentFit="contain" />
+            <View style={styles.lineupMatchText}>
+              <Text numberOfLines={1} style={styles.lineupMatchName}>{homeLineup.team.name}</Text>
+              <Text style={styles.lineupFormation}>{getFormationFromGrid(homeLineup) || '—'}</Text>
+            </View>
+          </View>
+          <Text style={styles.lineupVersus}>XI</Text>
+          <View style={[styles.lineupMatchTeam, styles.lineupMatchTeamAway]}>
+            <View style={[styles.lineupMatchText, styles.lineupMatchTextAway]}>
+              <Text numberOfLines={1} style={[styles.lineupMatchName, styles.textRight]}>{awayLineup.team.name}</Text>
+              <Text style={[styles.lineupFormation, styles.textRight]}>{getFormationFromGrid(awayLineup) || '—'}</Text>
+            </View>
+            <Image source={{ uri: getTeamLogoUrl(awayLineup.team.name, awayLineup.team.logo) }} style={styles.lineupMatchLogo} contentFit="contain" />
+          </View>
+        </View>
+
+        <View style={styles.pitch}>
+          <View style={styles.pitchHalfwayLine} />
+          <View style={styles.pitchCenterCircle} />
+          <View style={styles.pitchCenterSpot} />
+          <View style={[styles.pitchPenaltyArea, styles.pitchPenaltyAreaTop]} />
+          <View style={[styles.pitchGoalArea, styles.pitchGoalAreaTop]} />
+          <View style={[styles.pitchPenaltyArea, styles.pitchPenaltyAreaBottom]} />
+          <View style={[styles.pitchGoalArea, styles.pitchGoalAreaBottom]} />
+          <View style={[styles.pitchFormationBadge, styles.pitchFormationBadgeTop]}>
+            <Text style={styles.pitchFormationText}>{getFormationFromGrid(homeLineup) || 'LOCAL'}</Text>
+          </View>
+          <View style={[styles.pitchFormationBadge, styles.pitchFormationBadgeBottom]}>
+            <Text style={styles.pitchFormationText}>{getFormationFromGrid(awayLineup) || 'VISITANTE'}</Text>
+          </View>
+
+          {homeLineup.startXI.map((player, index) =>
+            renderPitchPlayer(player, homeLineup, true, index)
+          )}
+          {awayLineup.startXI.map((player, index) =>
+            renderPitchPlayer(player, awayLineup, false, index)
+          )}
+        </View>
+
+        {(homeLineup.coach.name || awayLineup.coach.name) ? (
+          <View style={styles.coachesCard}>
+            <View style={styles.coachColumn}>
+              <Text style={styles.coachEyebrow}>ENTRENADOR · LOCAL</Text>
+              <Text numberOfLines={1} style={styles.coachMainName}>{homeLineup.coach.name || '—'}</Text>
+            </View>
+            <View style={[styles.coachColumn, styles.coachColumnAway]}>
+              <Text style={[styles.coachEyebrow, styles.textRight]}>ENTRENADOR · VISITANTE</Text>
+              <Text numberOfLines={1} style={[styles.coachMainName, styles.textRight]}>{awayLineup.coach.name || '—'}</Text>
+            </View>
+          </View>
+        ) : null}
+
+        <View style={styles.benchCard}>
+          <Text style={styles.benchTitle}>SUPLENTES</Text>
+          <View style={styles.benchTeamsHeader}>
+            <Text numberOfLines={1} style={styles.benchTeamName}>{homeLineup.team.name}</Text>
+            <Text numberOfLines={1} style={[styles.benchTeamName, styles.textRight]}>{awayLineup.team.name}</Text>
+          </View>
+          <View style={styles.benchColumns}>
+            <View style={styles.benchColumn}>
+              {homeLineup.substitutes.map(renderBenchPlayer)}
+            </View>
+            <View style={[styles.benchColumn, styles.benchColumnAway]}>
+              {awayLineup.substitutes.map(renderBenchPlayer)}
+            </View>
+          </View>
+        </View>
+      </View>
+    );
   };
 
   const formatCommentTime = (value: string) => {
@@ -1256,6 +1461,65 @@ const styles = StyleSheet.create({
   playerNumber: { width: 32, color: '#D4AF37', fontSize: 10, fontWeight: '900', textAlign: 'center' },
   playerName: { flex: 1, color: '#E6E6E6', fontSize: 11, fontWeight: '700' },
   playerPosition: { color: '#777', fontSize: 9, fontWeight: '700' },
+  lineupMatchHeader: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#101010', borderRadius: 18, borderWidth: 1, borderColor: '#242424', padding: 12, marginBottom: 8,
+  },
+  lineupMatchTeam: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  lineupMatchTeamAway: { justifyContent: 'flex-end' },
+  lineupMatchLogo: { width: 34, height: 34 },
+  lineupMatchText: { flex: 1, marginLeft: 8 },
+  lineupMatchTextAway: { marginLeft: 0, marginRight: 8 },
+  lineupMatchName: { color: '#F2F2F2', fontSize: 10, fontWeight: '900' },
+  lineupFormation: { color: '#D4AF37', fontSize: 9, fontWeight: '900', marginTop: 2 },
+  lineupVersus: { color: '#555', fontSize: 9, fontWeight: '900', marginHorizontal: 8 },
+  textRight: { textAlign: 'right' },
+  pitch: {
+    height: 650, backgroundColor: '#173E31', borderRadius: 18, borderWidth: 1.5, borderColor: '#4B6C5F', overflow: 'hidden', position: 'relative', marginBottom: 8,
+  },
+  pitchHalfwayLine: { position: 'absolute', left: 0, right: 0, top: '50%', height: 1.5, backgroundColor: 'rgba(255,255,255,0.28)' },
+  pitchCenterCircle: { position: 'absolute', width: 112, height: 112, borderRadius: 56, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.28)', left: '50%', top: '50%', marginLeft: -56, marginTop: -56 },
+  pitchCenterSpot: { position: 'absolute', width: 5, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.45)', left: '50%', top: '50%', marginLeft: -2.5, marginTop: -2.5 },
+  pitchPenaltyArea: { position: 'absolute', width: '56%', height: 82, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.28)', left: '22%' },
+  pitchPenaltyAreaTop: { top: -1 },
+  pitchPenaltyAreaBottom: { bottom: -1 },
+  pitchGoalArea: { position: 'absolute', width: '28%', height: 34, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.28)', left: '36%' },
+  pitchGoalAreaTop: { top: -1 },
+  pitchGoalAreaBottom: { bottom: -1 },
+  pitchFormationBadge: { position: 'absolute', right: 8, backgroundColor: 'rgba(5,5,5,0.62)', borderRadius: 8, paddingHorizontal: 7, paddingVertical: 4, zIndex: 2 },
+  pitchFormationBadgeTop: { top: 8 },
+  pitchFormationBadgeBottom: { bottom: 8 },
+  pitchFormationText: { color: '#D4AF37', fontSize: 8, fontWeight: '900' },
+  pitchPlayer: { position: 'absolute', width: 82, marginLeft: -41, alignItems: 'center', zIndex: 5 },
+  pitchPlayerBadge: { width: 31, height: 31, borderRadius: 16, backgroundColor: '#F3F3F3', borderWidth: 1.5, borderColor: '#D4AF37', alignItems: 'center', justifyContent: 'center' },
+  pitchPlayerNumber: { color: '#111', fontSize: 10, fontWeight: '900' },
+  pitchIncidents: { position: 'absolute', right: -11, top: -3, gap: 2 },
+  pitchIncident: { minWidth: 12, height: 12, borderRadius: 6, backgroundColor: '#0B0B0B', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 },
+  pitchYellowCard: { width: 6, height: 9, borderRadius: 1, backgroundColor: '#F1D33B' },
+  pitchRedCard: { width: 6, height: 9, borderRadius: 1, backgroundColor: '#D94A4A' },
+  pitchPlayerNameBox: { maxWidth: 82, marginTop: 3, backgroundColor: 'rgba(5,5,5,0.84)', borderRadius: 6, paddingHorizontal: 4, paddingVertical: 2 },
+  pitchPlayerName: { color: '#FFF', fontSize: 7.5, fontWeight: '800', textAlign: 'center' },
+  coachesCard: { flexDirection: 'row', backgroundColor: '#101010', borderRadius: 15, borderWidth: 1, borderColor: '#242424', padding: 11, marginBottom: 8 },
+  coachColumn: { flex: 1 },
+  coachColumnAway: { marginLeft: 12 },
+  coachEyebrow: { color: '#6F6F6F', fontSize: 7.5, fontWeight: '900', letterSpacing: 0.5 },
+  coachMainName: { color: '#D4AF37', fontSize: 10, fontWeight: '900', marginTop: 3 },
+  benchCard: { backgroundColor: '#101010', borderRadius: 18, borderWidth: 1, borderColor: '#242424', overflow: 'hidden' },
+  benchTitle: { color: '#FFF', fontSize: 11, fontWeight: '900', paddingHorizontal: 12, paddingTop: 12, paddingBottom: 8 },
+  benchTeamsHeader: { flexDirection: 'row', borderTopWidth: 1, borderBottomWidth: 1, borderColor: '#242424', paddingHorizontal: 10, paddingVertical: 8 },
+  benchTeamName: { flex: 1, color: '#D4AF37', fontSize: 8.5, fontWeight: '900' },
+  benchColumns: { flexDirection: 'row' },
+  benchColumn: { flex: 1, paddingHorizontal: 8, paddingVertical: 4 },
+  benchColumnAway: { borderLeftWidth: 1, borderLeftColor: '#242424' },
+  benchPlayer: { minHeight: 43, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#1D1D1D' },
+  benchNumberBadge: { width: 25, height: 25, borderRadius: 13, backgroundColor: '#171717', alignItems: 'center', justifyContent: 'center', marginRight: 6 },
+  benchNumber: { color: '#D4AF37', fontSize: 8.5, fontWeight: '900' },
+  benchPlayerText: { flex: 1, minWidth: 0 },
+  benchPlayerName: { color: '#EAEAEA', fontSize: 8.5, fontWeight: '800' },
+  benchPlayerMetaRow: { flexDirection: 'row', alignItems: 'center', minHeight: 12, marginTop: 2 },
+  benchPlayerMeta: { color: '#6E6E6E', fontSize: 7.5, fontWeight: '700' },
+  benchSubstitution: { flexDirection: 'row', alignItems: 'center', marginLeft: 5 },
+  benchSubstitutionText: { color: '#55B986', fontSize: 7.5, fontWeight: '900', marginLeft: 1 },
+  benchYellowCard: { width: 6, height: 9, borderRadius: 1, backgroundColor: '#F1D33B', marginLeft: 4 },
   chatWelcomeCard: {
     backgroundColor: '#101010',
     borderRadius: 18,
