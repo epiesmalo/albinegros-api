@@ -412,6 +412,8 @@ export default function MatchDetailScreen() {
     | 'penalty'
     | 'var'
     | 'injury'
+    | 'woodwork'
+    | 'disallowedGoal'
     | 'other';
 
   const getEventText = (event: MatchEvent) =>
@@ -422,6 +424,8 @@ export default function MatchDetailScreen() {
   const getEventKind = (event: MatchEvent): TimelineEventKind => {
     const text = getEventText(event);
 
+    if (text.includes('disallowed goal') || text.includes('gol anulado')) return 'disallowedGoal';
+    if (text.includes('woodwork') || text.includes('remate al palo')) return 'woodwork';
     if (text.includes('substitution') || text.includes('subst')) return 'substitution';
     if (text.includes('yellow') || text === 'foul' || text.endsWith(' foul')) return 'yellow';
     if (text.includes('red')) return 'red';
@@ -440,6 +444,8 @@ export default function MatchDetailScreen() {
     if (kind === 'penalty') return 'alert-circle';
     if (kind === 'var') return 'tv-outline';
     if (kind === 'injury') return 'medkit-outline';
+    if (kind === 'woodwork') return 'radio-button-off-outline';
+    if (kind === 'disallowedGoal') return 'close-circle-outline';
     return 'ellipse';
   };
 
@@ -454,6 +460,8 @@ export default function MatchDetailScreen() {
     const comments = (event.comments || '').trim();
 
     if (kind === 'goal') return comments && !/goal/i.test(comments) ? comments : 'Gol';
+    if (kind === 'woodwork') return 'Remate al palo';
+    if (kind === 'disallowedGoal') return 'Gol anulado';
     if (kind === 'yellow') return 'Tarjeta amarilla';
     if (kind === 'red') return 'Tarjeta roja';
     if (kind === 'substitution') return 'Cambio';
@@ -466,6 +474,12 @@ export default function MatchDetailScreen() {
     }
 
     return event.detail || event.comments || 'Incidencia';
+  };
+
+  const getEventDetailLine = (event: MatchEvent, kind: TimelineEventKind, label: string) => {
+    if (kind === 'disallowedGoal') return event.detail || 'Fuera de juego';
+    if (kind === 'woodwork') return event.detail || label;
+    return label;
   };
 
   const getStat = (teamIndex: number, type: string) => {
@@ -544,6 +558,7 @@ export default function MatchDetailScreen() {
           const isSubstitution = kind === 'substitution';
           const isCard = kind === 'yellow' || kind === 'red';
           const label = getEventLabel(event, kind);
+          const detailLine = getEventDetailLine(event, kind, label);
 
           return (
             <View key={`${event.time.elapsed}-${event.time.extra}-${event.player.id}-${index}`}>
@@ -574,8 +589,8 @@ export default function MatchDetailScreen() {
                         ) : (
                           <Text numberOfLines={2} style={[styles.timelineDetail, kind === 'goal' && styles.goalDetail]}>
                             {kind === 'goal' && event.assist.name
-                              ? `${label} · Asist. ${event.assist.name}`
-                              : label}
+                              ? `${detailLine} · Asist. ${event.assist.name}`
+                              : detailLine}
                           </Text>
                         )}
                       </View>
@@ -638,8 +653,8 @@ export default function MatchDetailScreen() {
                         ) : (
                           <Text numberOfLines={2} style={[styles.timelineDetail, kind === 'goal' && styles.goalDetail]}>
                             {kind === 'goal' && event.assist.name
-                              ? `${label} · Asist. ${event.assist.name}`
-                              : label}
+                              ? `${detailLine} · Asist. ${event.assist.name}`
+                              : detailLine}
                           </Text>
                         )}
                       </View>
@@ -1215,7 +1230,10 @@ const styles = StyleSheet.create({
   statsLogo: { width: 38, height: 38 },
   statsTeamName: { color: '#DDD', fontSize: 10, fontWeight: '800', marginTop: 5 },
   statRow: { minHeight: 47, flexDirection: 'row', alignItems: 'center' },
-  statValue: { width: 65, color: '#FFF', fontSize: 12, fontWeight: '900', textAlign: 'center' },
+  rowDivider: {
+  borderBottomWidth: 1,
+  borderBottomColor: '#242424',
+},statValue: { width: 65, color: '#FFF', fontSize: 12, fontWeight: '900', textAlign: 'center' },
   statLabel: { flex: 1, color: '#8D8D8D', fontSize: 10, textAlign: 'center' },
   lineupCard: {
     backgroundColor: '#101010',

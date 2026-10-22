@@ -2729,7 +2729,7 @@ router.get('/api/football/fixture/:fixtureId/details', async (req, res) => {
 
     const fixtureData = await sportmonksFetch(
       `/fixtures/${encodeURIComponent(fixtureId)}` +
-       `?include=participants;scores;state;periods;league;venue;round;events;lineups;statistics.type`
+       `?include=participants;scores;state;periods;league;venue;round;events.type;events.subType;timeline;comments;lineups;statistics.type`
     );
 
     const match = fixtureData.data;
@@ -2755,6 +2755,14 @@ router.get('/api/football/fixture/:fixtureId/details', async (req, res) => {
 
     const rawEvents = Array.isArray(match.events)
       ? match.events
+      : [];
+
+    const rawTimeline = Array.isArray(match.timeline)
+      ? match.timeline
+      : [];
+
+    const rawComments = Array.isArray(match.comments)
+      ? match.comments
       : [];
 
     const rawLineups = Array.isArray(match.lineups)
@@ -2882,103 +2890,142 @@ router.get('/api/football/fixture/:fixtureId/details', async (req, res) => {
           Number(participantId)
       );
 
-    const normalizeEventType = (event) =>
-      event.type?.name ||
-      event.type?.developer_name ||
-      event.type?.code ||
-      event.type_name ||
-      '';
+    const translateEventDetail = (value = '', eventType = '') => {
+      const text = String(value || '').trim();
+      const key = text.toLowerCase();
 
-    const events = rawEvents
-      .map((event) => {
-        const eventTeam = getParticipant(
-          event.participant_id
+      const translations = {
+        'free kick': 'Gol de falta',
+        'left foot shot': 'Disparo con la izquierda',
+        'right foot shot': 'Disparo con la derecha',
+        'header': eventType === 'Goal' ? 'Gol de cabeza' : 'Remate de cabeza',
+        'penalty': 'Penalti',
+        'foul': 'Falta',
+        'persistent fouling': 'Faltas reiteradas',
+        'off the ball foul': 'Falta sin balón',
+        'argument': 'Protestas',
+      };
+
+      return translations[key] || text;
+    };
+
+    const normalizeRegularEvent = (event) => {
+      const eventTeam = getParticipant(event.participant_id);
+      const eventTeamName = eventTeam?.name || '';
+      const typeName =
+        event.type?.name ||
+        event.type?.developer_name ||
+        event.type?.code ||
+        event.type_name ||
+        '';
+      const subtypeName =
+        event.subtype?.name ||
+        event.subType?.name ||
+        event.info ||
+        '';
+
+      return {
+        time: {
+          elapsed: event.minute ?? event.time?.minute ?? event.time?.elapsed ?? null,
+          extra: event.extra_minute ?? event.time?.extra ?? null,
+        },
+        team: {
+          id: eventTeam?.id ?? event.participant_id ?? null,
+          name: getDisplayTeamName(eventTeamName),
+          logo: getTeamLogo(eventTeamName, eventTeam?.image_path || ''),
+        },
+        player: {
+          id: event.player_id ?? event.player?.id ?? null,
+          name: event.player_name || event.player?.display_name || event.player?.name || '',
+        },
+        assist: {
+          id: event.related_player_id ?? event.assist?.id ?? null,
+          name: event.related_player_name || event.assist?.display_name || event.assist?.name || '',
+        },
+        type: typeName,
+        detail: event.result || translateEventDetail(subtypeName, typeName),
+        comments: translateEventDetail(subtypeName, typeName),
+        sortOrder: event.sort_order ?? 0,
+      };
+    };
+
+    const events = rawEvents.map(normalizeRegularEvent);
+
+    // SportMonks publica los remates a los palos en `timeline`, no en `events`.
+    rawTimeline
+      .filter((item) => Number(item.type_id) === 48995)
+      .forEach((item) => {
+        const eventTeam = getParticipant(item.participant_id);
+        const eventTeamName = eventTeam?.name || '';
+        const comment = rawComments.find(
+          (entry) =>
+            Number(entry.minute) === Number(item.minute) &&
+            /hits? the (post|woodwork|crossbar)/i.test(entry.comment || '')
+        );
+        const shotDetail = /left-foot/i.test(comment?.comment || '')
+          ? 'Disparo con la izquierda'
+          : /right-foot/i.test(comment?.comment || '')
+            ? 'Disparo con la derecha'
+            : 'Remate al palo';
+
+        events.push({
+          time: { elapsed: item.minute ?? null, extra: item.extra_minute ?? null },
+          team: {
+            id: eventTeam?.id ?? item.participant_id ?? null,
+            name: getDisplayTeamName(eventTeamName),
+            logo: getTeamLogo(eventTeamName, eventTeam?.image_path || ''),
+          },
+          player: { id: item.player_id ?? null, name: item.player_name || '' },
+          assist: { id: null, name: '' },
+          type: 'Woodwork',
+          detail: shotDetail,
+          comments: 'Remate al palo',
+          sortOrder: item.sort_order ?? 0,
+        });
+      });
+
+    // Algunos goles anulados no llegan en `events`. SportMonks sí deja la secuencia
+    // fuera de juego + comentario de gol con is_goal=false en el mismo minuto.
+    rawComments
+      .filter(
+        (entry) =>
+          entry.is_goal === false &&
+          entry.is_important === true &&
+          /^goal!/i.test(String(entry.comment || '').trim())
+      )
+      .forEach((entry) => {
+        const minute = Number(entry.minute);
+        const offside = rawTimeline.find(
+          (item) => Number(item.type_id) === 1514 && Number(item.minute) === minute
         );
 
-        const eventTeamName =
-          eventTeam?.name || '';
+        if (!offside) return;
 
-        return {
-          time: {
-            elapsed:
-              event.minute ??
-              event.time?.minute ??
-              event.time?.elapsed ??
-              null,
+        const eventTeam = getParticipant(offside.participant_id);
+        const eventTeamName = eventTeam?.name || '';
 
-            extra:
-              event.extra_minute ??
-              event.time?.extra ??
-              null,
-          },
-
+        events.push({
+          time: { elapsed: entry.minute ?? null, extra: entry.extra_minute ?? null },
           team: {
-            id:
-              eventTeam?.id ??
-              event.participant_id ??
-              null,
-
-            name: getDisplayTeamName(
-              eventTeamName
-            ),
-
-            logo: getTeamLogo(
-              eventTeamName,
-              eventTeam?.image_path || ''
-            ),
+            id: eventTeam?.id ?? offside.participant_id ?? null,
+            name: getDisplayTeamName(eventTeamName),
+            logo: getTeamLogo(eventTeamName, eventTeam?.image_path || ''),
           },
-
-          player: {
-            id:
-              event.player_id ??
-              event.player?.id ??
-              null,
-
-            name:
-              event.player_name ||
-              event.player?.display_name ||
-              event.player?.name ||
-              '',
-          },
-
-          assist: {
-            id:
-              event.related_player_id ??
-              event.assist?.id ??
-              null,
-
-            name:
-              event.related_player_name ||
-              event.assist?.display_name ||
-              event.assist?.name ||
-              '',
-          },
-
-          type: normalizeEventType(event),
-
-          detail:
-            event.type?.name ||
-            event.type?.developer_name ||
-            event.result ||
-            '',
-
-          comments:
-            event.info ||
-            event.addition ||
-            '',
-        };
-      })
-      .sort((a, b) => {
-        const minuteA =
-          Number(a.time.elapsed || 0) * 100 +
-          Number(a.time.extra || 0);
-
-        const minuteB =
-          Number(b.time.elapsed || 0) * 100 +
-          Number(b.time.extra || 0);
-
-        return minuteA - minuteB;
+          player: { id: null, name: '' },
+          assist: { id: null, name: '' },
+          type: 'Disallowed Goal',
+          detail: 'Fuera de juego',
+          comments: 'Gol anulado',
+          sortOrder: Number(entry.order || 0),
+        });
       });
+
+    events.sort((a, b) => {
+      const minuteA = Number(a.time.elapsed || 0) * 100 + Number(a.time.extra || 0);
+      const minuteB = Number(b.time.elapsed || 0) * 100 + Number(b.time.extra || 0);
+      if (minuteA !== minuteB) return minuteA - minuteB;
+      return Number(a.sortOrder || 0) - Number(b.sortOrder || 0);
+    });
 
     const buildPlayer = (entry) => ({
       id:
@@ -3296,6 +3343,7 @@ router.get('/api/football/fixture/:fixtureId/details', async (req, res) => {
       events,
       lineups,
       statistics,
+
     });
   } catch (error) {
     console.error(
