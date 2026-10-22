@@ -404,21 +404,43 @@ export default function MatchDetailScreen() {
     return s.long || s.short;
   }, [data]);
 
-  const eventIcon = (event: MatchEvent) => {
-    const detailText = `${event.type} ${event.detail}`.toLowerCase();
+  type TimelineEventKind =
+    | 'goal'
+    | 'yellow'
+    | 'red'
+    | 'substitution'
+    | 'penalty'
+    | 'var'
+    | 'injury'
+    | 'other';
 
-    if (detailText.includes('goal')) return 'football';
-    if (detailText.includes('yellow')) return 'square';
-    if (detailText.includes('red')) return 'square';
-    if (detailText.includes('subst')) return 'swap-horizontal';
-    return 'ellipse';
+  const getEventText = (event: MatchEvent) =>
+    `${event.type || ''} ${event.detail || ''} ${event.comments || ''}`
+      .trim()
+      .toLowerCase();
+
+  const getEventKind = (event: MatchEvent): TimelineEventKind => {
+    const text = getEventText(event);
+
+    if (text.includes('substitution') || text.includes('subst')) return 'substitution';
+    if (text.includes('yellow') || text === 'foul' || text.endsWith(' foul')) return 'yellow';
+    if (text.includes('red')) return 'red';
+    if (text.includes('var')) return 'var';
+    if (text.includes('injur')) return 'injury';
+    if (text.includes('penalty') && (text.includes('disallowed') || text.includes('missed'))) return 'penalty';
+    if (text.includes('goal') || /(^|\s)\d+\s*[-:]\s*\d+($|\s)/.test(text)) return 'goal';
+    if (text.includes('penalty')) return 'penalty';
+
+    return 'other';
   };
 
-  const eventColor = (event: MatchEvent) => {
-    const detailText = `${event.type} ${event.detail}`.toLowerCase();
-    if (detailText.includes('yellow')) return '#E7C928';
-    if (detailText.includes('red')) return '#D84B4B';
-    return '#D4AF37';
+  const eventIcon = (kind: TimelineEventKind) => {
+    if (kind === 'goal') return 'football';
+    if (kind === 'substitution') return 'swap-vertical';
+    if (kind === 'penalty') return 'alert-circle';
+    if (kind === 'var') return 'tv-outline';
+    if (kind === 'injury') return 'medkit-outline';
+    return 'ellipse';
   };
 
   const formatEventMinute = (event: MatchEvent) => {
@@ -426,6 +448,24 @@ export default function MatchDetailScreen() {
     return event.time.extra
       ? `${event.time.elapsed}+${event.time.extra}'`
       : `${event.time.elapsed}'`;
+  };
+
+  const getEventLabel = (event: MatchEvent, kind: TimelineEventKind) => {
+    const comments = (event.comments || '').trim();
+
+    if (kind === 'goal') return comments && !/goal/i.test(comments) ? comments : 'Gol';
+    if (kind === 'yellow') return 'Tarjeta amarilla';
+    if (kind === 'red') return 'Tarjeta roja';
+    if (kind === 'substitution') return 'Cambio';
+    if (kind === 'var') return 'VAR';
+    if (kind === 'injury') return 'Lesión';
+    if (kind === 'penalty') {
+      if (/disallowed/i.test(comments)) return 'Penalti anulado';
+      if (/missed/i.test(comments)) return 'Penalti fallado';
+      return 'Penalti';
+    }
+
+    return event.detail || event.comments || 'Incidencia';
   };
 
   const getStat = (teamIndex: number, type: string) => {
@@ -454,7 +494,7 @@ export default function MatchDetailScreen() {
     if (!data.events.length) {
       return (
         <View style={styles.emptySection}>
-          <Ionicons name="time-outline" size={30} color="#D4AF37" />
+          <Ionicons name="time-outline" size={30} color="#174F3A" />
           <Text style={styles.emptyTitle}>Sin eventos todavía</Text>
           <Text style={styles.emptyText}>
             Los goles, tarjetas y sustituciones aparecerán aquí.
@@ -463,48 +503,157 @@ export default function MatchDetailScreen() {
       );
     }
 
+    const orderedEvents = [...data.events].sort((a, b) => {
+      const aMinute = (a.time.elapsed ?? 0) * 100 + (a.time.extra ?? 0);
+      const bMinute = (b.time.elapsed ?? 0) * 100 + (b.time.extra ?? 0);
+      return aMinute - bMinute;
+    });
+
+    const firstSecondHalfIndex = orderedEvents.findIndex(
+      (event) => (event.time.elapsed ?? 0) > 45
+    );
+
+    const renderPhase = (label: string, icon: keyof typeof Ionicons.glyphMap) => (
+      <View style={styles.phaseRow}>
+        <View style={styles.phaseLine} />
+        <View style={styles.phaseBadge}>
+          <Ionicons name={icon} size={12} color="#FFFFFF" />
+          <Text style={styles.phaseText}>{label}</Text>
+        </View>
+        <View style={styles.phaseLine} />
+      </View>
+    );
+
     return (
-      <View style={styles.sectionCard}>
-        {data.events.map((event, index) => (
-          <View
-            key={`${event.time.elapsed}-${event.player.id}-${index}`}
-            style={[
-              styles.eventRow,
-              index !== data.events.length - 1 && styles.rowDivider,
-            ]}
-          >
-            <Text style={styles.eventMinute}>{formatEventMinute(event)}</Text>
+      <View style={styles.timelineCard}>
+        <View style={styles.timelineTeams}>
+          <Text numberOfLines={1} style={styles.timelineTeamName}>
+            {data.home.shortName || data.home.name}
+          </Text>
+          <Text style={styles.timelineHeaderLabel}>CRONOLOGÍA</Text>
+          <Text numberOfLines={1} style={[styles.timelineTeamName, styles.timelineTeamNameAway]}>
+            {data.away.shortName || data.away.name}
+          </Text>
+        </View>
 
-            <View style={styles.eventIconWrap}>
-              <Ionicons
-                name={eventIcon(event) as any}
-                size={16}
-                color={eventColor(event)}
-              />
+        {renderPhase('INICIO DEL PARTIDO', 'flag-outline')}
+
+        {orderedEvents.map((event, index) => {
+          const isHome = Number(event.team.id) === Number(data.home.id);
+          const kind = getEventKind(event);
+          const isSubstitution = kind === 'substitution';
+          const isCard = kind === 'yellow' || kind === 'red';
+          const label = getEventLabel(event, kind);
+
+          return (
+            <View key={`${event.time.elapsed}-${event.time.extra}-${event.player.id}-${index}`}>
+              {index === firstSecondHalfIndex && renderPhase('DESCANSO', 'pause')}
+
+              <View style={styles.timelineRow}>
+                <View style={[styles.timelineSide, styles.timelineSideHome]}>
+                  {isHome ? (
+                    <View style={styles.eventContentHome}>
+                      <View style={styles.eventTextHome}>
+                        {kind === 'goal' ? (
+                          <View style={styles.goalHeaderHome}>
+                            <Text style={styles.goalTag}>GOL</Text>
+                            <Text numberOfLines={2} style={[styles.timelinePlayer, styles.timelinePlayerGoal]}>
+                              {event.player.name || 'Gol'}
+                            </Text>
+                          </View>
+                        ) : (
+                          <Text numberOfLines={2} style={styles.timelinePlayer}>
+                            {event.player.name || label}
+                          </Text>
+                        )}
+                        {isSubstitution && event.assist.name ? (
+                          <>
+                            <Text style={styles.subIn}>↑ Entra</Text>
+                            <Text numberOfLines={1} style={styles.subOut}>↓ Sale {event.assist.name}</Text>
+                          </>
+                        ) : (
+                          <Text numberOfLines={2} style={[styles.timelineDetail, kind === 'goal' && styles.goalDetail]}>
+                            {kind === 'goal' && event.assist.name
+                              ? `${label} · Asist. ${event.assist.name}`
+                              : label}
+                          </Text>
+                        )}
+                      </View>
+                      <View style={[styles.eventSymbol, kind === 'goal' && styles.goalSymbol]}>
+                        {isCard ? (
+                          <View style={[styles.cardSymbol, kind === 'red' ? styles.redCard : styles.yellowCard]} />
+                        ) : (
+                          <Ionicons
+                            name={eventIcon(kind) as any}
+                            size={kind === 'goal' ? 21 : 18}
+                            color={kind === 'goal' ? '#0B0B0B' : kind === 'substitution' ? '#2F9B68' : '#FFFFFF'}
+                          />
+                        )}
+                      </View>
+                    </View>
+                  ) : null}
+                </View>
+
+                <View style={styles.timelineCenter}>
+                  <View style={styles.timelineStem} />
+                  <View style={[styles.minuteBadge, kind === 'goal' && styles.minuteBadgeGoal]}>
+                    <Text style={[styles.minuteText, kind === 'goal' && styles.minuteTextGoal]}>
+                      {formatEventMinute(event)}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={[styles.timelineSide, styles.timelineSideAway]}>
+                  {!isHome ? (
+                    <View style={styles.eventContentAway}>
+                      <View style={[styles.eventSymbol, kind === 'goal' && styles.goalSymbol]}>
+                        {isCard ? (
+                          <View style={[styles.cardSymbol, kind === 'red' ? styles.redCard : styles.yellowCard]} />
+                        ) : (
+                          <Ionicons
+                            name={eventIcon(kind) as any}
+                            size={kind === 'goal' ? 21 : 18}
+                            color={kind === 'goal' ? '#0B0B0B' : kind === 'substitution' ? '#2F9B68' : '#FFFFFF'}
+                          />
+                        )}
+                      </View>
+                      <View style={styles.eventTextAway}>
+                        {kind === 'goal' ? (
+                          <View style={styles.goalHeaderAway}>
+                            <Text style={styles.goalTag}>GOL</Text>
+                            <Text numberOfLines={2} style={[styles.timelinePlayer, styles.timelinePlayerGoal]}>
+                              {event.player.name || 'Gol'}
+                            </Text>
+                          </View>
+                        ) : (
+                          <Text numberOfLines={2} style={styles.timelinePlayer}>
+                            {event.player.name || label}
+                          </Text>
+                        )}
+                        {isSubstitution && event.assist.name ? (
+                          <>
+                            <Text style={styles.subIn}>↑ Entra</Text>
+                            <Text numberOfLines={1} style={styles.subOut}>↓ Sale {event.assist.name}</Text>
+                          </>
+                        ) : (
+                          <Text numberOfLines={2} style={[styles.timelineDetail, kind === 'goal' && styles.goalDetail]}>
+                            {kind === 'goal' && event.assist.name
+                              ? `${label} · Asist. ${event.assist.name}`
+                              : label}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
             </View>
+          );
+        })}
 
-            <View style={styles.eventInfo}>
-              <Text style={styles.eventPlayer}>
-                {event.player.name || event.detail}
-              </Text>
-
-              <Text style={styles.eventDetail}>
-                {[event.detail, event.assist.name && `Asist. ${event.assist.name}`]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </Text>
-            </View>
-
-            {event.team.logo ? (
-  <Image
-    source={{ uri: getTeamLogoUrl(event.team.name, event.team.logo) }}
-    style={styles.eventTeamLogo}
-    contentFit="contain"
-    cachePolicy="disk"
-  />
-) : null}
-          </View>
-        ))}
+        {['FT', 'AET', 'PEN'].includes(data.fixture.status.short)
+          ? renderPhase('FINAL DEL PARTIDO', 'checkmark')
+          : null}
       </View>
     );
   };
@@ -983,14 +1132,72 @@ const styles = StyleSheet.create({
     borderColor: '#242424',
     paddingHorizontal: 12,
   },
-  eventRow: { flexDirection: 'row', alignItems: 'center', minHeight: 62, paddingVertical: 9 },
-  rowDivider: { borderBottomWidth: 1, borderBottomColor: '#222' },
-  eventMinute: { width: 38, color: '#D4AF37', fontSize: 11, fontWeight: '900' },
-  eventIconWrap: { width: 28, alignItems: 'center' },
-  eventInfo: { flex: 1, paddingHorizontal: 6 },
-  eventPlayer: { color: '#EEE', fontSize: 12, fontWeight: '800' },
-  eventDetail: { color: '#777', fontSize: 9, marginTop: 3 },
-  eventTeamLogo: { width: 25, height: 25 },
+  timelineCard: {
+    backgroundColor: '#0C0C0C',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#242424',
+    paddingHorizontal: 10,
+    paddingVertical: 12,
+    overflow: 'hidden',
+  },
+  timelineTeams: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4, paddingBottom: 8 },
+  timelineTeamName: { flex: 1, color: '#F3F3F3', fontSize: 10, fontWeight: '900' },
+  timelineTeamNameAway: { textAlign: 'right' },
+  timelineHeaderLabel: { width: 82, color: '#5E5E5E', fontSize: 8, fontWeight: '900', textAlign: 'center', letterSpacing: 0.7 },
+  phaseRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 10 },
+  phaseLine: { flex: 1, height: 1, backgroundColor: '#252525' },
+  phaseBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#174F3A',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginHorizontal: 8,
+    borderWidth: 1,
+    borderColor: '#286A50',
+  },
+  phaseText: { color: '#FFFFFF', fontSize: 8, fontWeight: '900', letterSpacing: 0.4 },
+  timelineRow: { flexDirection: 'row', minHeight: 72, alignItems: 'stretch' },
+  timelineSide: { flex: 1, justifyContent: 'center', paddingVertical: 8 },
+  timelineSideHome: { paddingRight: 7 },
+  timelineSideAway: { paddingLeft: 7 },
+  timelineCenter: { width: 58, alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  timelineStem: { position: 'absolute', top: 0, bottom: 0, width: 2, backgroundColor: '#173E31' },
+  minuteBadge: {
+    minWidth: 43,
+    height: 29,
+    borderRadius: 15,
+    paddingHorizontal: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#174F3A',
+    borderWidth: 1,
+    borderColor: '#286A50',
+  },
+  minuteBadgeGoal: { backgroundColor: '#D4AF37', borderColor: '#E6C85C', borderWidth: 1.5 },
+  minuteText: { color: '#FFFFFF', fontSize: 10, fontWeight: '900' },
+  minuteTextGoal: { color: '#0B0B0B', fontWeight: '900' },
+  eventContentHome: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' },
+  eventContentAway: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start' },
+  eventTextHome: { flex: 1, alignItems: 'flex-end', paddingRight: 7 },
+  eventTextAway: { flex: 1, alignItems: 'flex-start', paddingLeft: 7 },
+  eventSymbol: { width: 25, minHeight: 25, alignItems: 'center', justifyContent: 'center' },
+  goalSymbol: { width: 30, height: 30, borderRadius: 15, backgroundColor: '#D4AF37' },
+  goalHeaderHome: { alignItems: 'flex-end' },
+  goalHeaderAway: { alignItems: 'flex-start' },
+  goalTag: { color: '#D4AF37', fontSize: 9, lineHeight: 12, fontWeight: '900', letterSpacing: 1.2, marginBottom: 2 },
+  timelinePlayer: { color: '#F4F4F4', fontSize: 11, lineHeight: 15, fontWeight: '900' },
+  timelinePlayerGoal: { color: '#FFFFFF', fontSize: 12, lineHeight: 16 },
+  timelineDetail: { color: '#8A8A8A', fontSize: 8.5, lineHeight: 12, marginTop: 3 },
+  goalDetail: { color: '#D4AF37', fontSize: 9.5, fontWeight: '900' },
+  subIn: { color: '#55B986', fontSize: 8.5, fontWeight: '900', marginTop: 3 },
+  subOut: { color: '#B45C5C', fontSize: 8.5, lineHeight: 12, marginTop: 1 },
+  cardSymbol: { width: 11, height: 16, borderRadius: 2, borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)' },
+  yellowCard: { backgroundColor: '#F1D33B' },
+  redCard: { backgroundColor: '#D94A4A' },
   emptySection: {
     minHeight: 190,
     backgroundColor: '#101010',
