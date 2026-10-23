@@ -38,6 +38,17 @@ type CompetitionConfig = {
 
 const COMPETITIONS: CompetitionConfig[] = [
   {
+    key: 'laliga',
+    shortLabel: '1ª',
+    title: 'PRIMERA DIVISIÓN',
+    leagueId: 564,
+    directPromotion: (position) => position >= 2 && position <= 4,
+    playoff: (position) => position === 5,
+    relegation: (position, total) => position >= total - 2,
+    directLabel: 'Champions',
+    playoffLabel: 'Europa League',
+  },
+  {
     key: 'laliga2',
     shortLabel: '2ª',
     title: 'SEGUNDA DIVISIÓN',
@@ -48,17 +59,6 @@ const COMPETITIONS: CompetitionConfig[] = [
     relegation: (position, total) => position >= total - 3,
     directLabel: 'Ascenso',
     playoffLabel: 'Playoff',
-  },
-  {
-    key: 'laliga',
-    shortLabel: '1ª',
-    title: 'PRIMERA DIVISIÓN',
-    leagueId: 564,
-    directPromotion: (position) => position >= 2 && position <= 4,
-    playoff: (position) => position === 5,
-    relegation: (position, total) => position >= total - 2,
-    directLabel: 'Champions',
-    playoffLabel: 'Europa League',
   },
   {
     key: 'primera-rfef-1',
