@@ -44,6 +44,40 @@ type AdItem = {
   image: string;
 };
 
+const formatMatchWeekday = (date?: string) => {
+  if (!date) return '';
+
+  let parsedDate: Date;
+
+  const spanishDateMatch = date.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+
+  if (spanishDateMatch) {
+    const [, day, month, year] = spanishDateMatch;
+    parsedDate = new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      12,
+      0,
+      0
+    );
+  } else {
+    const normalizedDate = date.includes('T') ? date : `${date}T12:00:00`;
+    parsedDate = new Date(normalizedDate);
+  }
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return '';
+  }
+
+  const weekday = new Intl.DateTimeFormat('es-ES', {
+    weekday: 'long',
+    timeZone: 'Europe/Madrid',
+  }).format(parsedDate);
+
+  return weekday.charAt(0).toUpperCase() + weekday.slice(1);
+};
+
 const formatMainDate = (date?: string) => {
   if (!date) return '';
 
@@ -476,6 +510,9 @@ setTickerActive(
                       size={21}
                       color={colors.accent}
                     />
+                    <Text style={styles.infoWeekday}>
+                      {formatMatchWeekday(nextMatch.date)}
+                    </Text>
                     <Text style={styles.infoMain}>
                       {formatMainDate(nextMatch.date)}
                     </Text>
@@ -893,6 +930,17 @@ newsTickerText: {
     justifyContent: 'center',
     paddingHorizontal: 4,
   },
+  infoWeekday: {
+    marginTop: 4,
+    fontSize: 10,
+    lineHeight: 12,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    letterSpacing: 0.45,
+  },
+
   infoMain: {
     marginTop: 4,
     fontSize: 12,
