@@ -22,6 +22,56 @@ type NewsItem = {
   source: string;
 };
 
+type NewsSourceTab = 'albinegros' | 'official';
+
+const OFFICIAL_NEWS_URL =
+  'https://www.cdcastellon.com/wp-json/wp/v2/posts?per_page=30&_embed';
+
+function decodeHtml(value: string) {
+  return (value || '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;|&#160;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#039;|&apos;/gi, "'")
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&#8230;/gi, '…')
+    .replace(/&#8211;/gi, '–')
+    .replace(/&#8212;/gi, '—')
+    .replace(/&#8216;|&#8217;/gi, '’')
+    .replace(/&#8220;|&#8221;/gi, '“')
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function getOfficialImage(post: any) {
+  const media = post?._embedded?.['wp:featuredmedia']?.[0];
+  return (
+    media?.media_details?.sizes?.['post-thumbnail-size']?.source_url ||
+    media?.media_details?.sizes?.['blog-grid']?.source_url ||
+    media?.media_details?.sizes?.medium_large?.source_url ||
+    media?.media_details?.sizes?.large?.source_url ||
+    media?.source_url ||
+    ''
+  );
+}
+
+function normalizeOfficialNews(data: any): NewsItem[] {
+  if (!Array.isArray(data)) return [];
+
+  return data.map((post) => ({
+    id: `official-${post?.id ?? post?.slug ?? Math.random()}`,
+    title: decodeHtml(post?.title?.rendered || ''),
+    description: decodeHtml(post?.excerpt?.rendered || ''),
+    image: getOfficialImage(post),
+    link: post?.link || '',
+    date: post?.date || '',
+    source: 'CD Castellón',
+  }));
+}
+
 const NEWS_PER_PAGE = 5;
 const FALLBACK_NEWS_IMAGE = require('../../assets/images/news_fallback.png');
 
@@ -102,6 +152,11 @@ export default function NewsScreen() {
   const [usingCachedData, setUsingCachedData] = useState(false);
   const [cacheSavedAt, setCacheSavedAt] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(Date.now());
+  const [activeSource, setActiveSource] = useState<NewsSourceTab>('albinegros');
+  const [officialNews, setOfficialNews] = useState<NewsItem[]>([]);
+  const [officialLoading, setOfficialLoading] = useState(false);
+  const [officialError, setOfficialError] = useState('');
+  const [officialLoaded, setOfficialLoaded] = useState(false);
 
   const loadNews = useCallback(async (isRefresh = false) => {
   try {
@@ -173,9 +228,36 @@ export default function NewsScreen() {
   }
 }, []);
 
+  const loadOfficialNews = useCallback(async (isRefresh = false) => {
+    try {
+      setOfficialError('');
+      if (!isRefresh) setOfficialLoading(true);
+
+      const response = await fetch(OFFICIAL_NEWS_URL);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const data = await response.json();
+      setOfficialNews(normalizeOfficialNews(data));
+      setOfficialLoaded(true);
+      setCurrentPage(1);
+      setFailedImages({});
+    } catch (err) {
+      console.error('Error cargando noticias oficiales:', err);
+      setOfficialError('No se pudieron cargar las noticias oficiales.');
+    } finally {
+      setOfficialLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadNews();
   }, [loadNews]);
+
+  useEffect(() => {
+    if (activeSource === 'official' && !officialLoaded && !officialLoading) {
+      loadOfficialNews();
+    }
+  }, [activeSource, loadOfficialNews, officialLoaded, officialLoading]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -185,16 +267,19 @@ export default function NewsScreen() {
     return () => clearInterval(timer);
   }, []);
 
+  const displayedNews = activeSource === 'official' ? officialNews : news;
+  const displayedLoading = activeSource === 'official' ? officialLoading : loading;
+  const displayedError = activeSource === 'official' ? officialError : error;
+
   const totalPages = Math.max(
     1,
-    Math.ceil(news.length / NEWS_PER_PAGE)
+    Math.ceil(displayedNews.length / NEWS_PER_PAGE)
   );
 
   const currentNews = useMemo(() => {
     const startIndex = (currentPage - 1) * NEWS_PER_PAGE;
-
-    return news.slice(startIndex, startIndex + NEWS_PER_PAGE);
-  }, [currentPage, news]);
+    return displayedNews.slice(startIndex, startIndex + NEWS_PER_PAGE);
+  }, [currentPage, displayedNews]);
 
   const featuredNews = currentNews[0];
   const secondaryNews = currentNews.slice(1);
@@ -228,8 +313,11 @@ export default function NewsScreen() {
       showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl
-          refreshing={refreshing}
-          onRefresh={() => loadNews(true)}
+          refreshing={activeSource === 'official' ? officialLoading : refreshing}
+          onRefresh={() => {
+            if (activeSource === 'official') loadOfficialNews(true);
+            else loadNews(true);
+          }}
           tintColor={colors.accent}
           colors={[colors.accent]}
           progressBackgroundColor={colors.card}
@@ -242,13 +330,13 @@ export default function NewsScreen() {
             <Text style={styles.eyebrow}>ACTUALIDAD ALBINEGRA</Text>
             <Text style={styles.screenTitle}>Noticias</Text>
             <Text style={styles.headerDescription}>
-              Últimas noticias del C.D. Castellón.
+              Albinegros y actualidad oficial del C.D. Castellón.
             </Text>
           </View>
 
-          {!loading && !error && news.length > 0 ? (
+          {!displayedLoading && !displayedError && displayedNews.length > 0 ? (
             <View style={styles.counterBadge}>
-              <Text style={styles.counterText}>{news.length}</Text>
+              <Text style={styles.counterText}>{displayedNews.length}</Text>
             </View>
           ) : null}
         </View>
@@ -256,23 +344,51 @@ export default function NewsScreen() {
 
   
 
-      {loading ? <NewsSkeleton /> : null}
+      <View style={styles.sourceTabs}>
+        <Pressable
+          style={[styles.sourceTab, activeSource === 'albinegros' && styles.sourceTabActive]}
+          onPress={() => {
+            setActiveSource('albinegros');
+            setCurrentPage(1);
+            setFailedImages({});
+          }}
+        >
+          <Text style={[styles.sourceTabText, activeSource === 'albinegros' && styles.sourceTabTextActive]}>
+            ALBINEGROS
+          </Text>
+        </Pressable>
 
-      {!loading && error ? (
+        <Pressable
+          style={[styles.sourceTab, activeSource === 'official' && styles.sourceTabActive]}
+          onPress={() => {
+            setActiveSource('official');
+            setCurrentPage(1);
+            setFailedImages({});
+          }}
+        >
+          <Text style={[styles.sourceTabText, activeSource === 'official' && styles.sourceTabTextActive]}>
+            OFICIAL CD CASTELLÓN
+          </Text>
+        </Pressable>
+      </View>
+
+      {displayedLoading ? <NewsSkeleton /> : null}
+
+      {!displayedLoading && displayedError ? (
         <View>
           <View style={styles.messageCard}>
             <Text style={styles.errorTitle}>
               No se pudieron cargar
             </Text>
 
-            <Text style={styles.errorText}>{error}</Text>
+            <Text style={styles.errorText}>{displayedError}</Text>
 
             <Pressable
               style={({ pressed }) => [
                 styles.retryButton,
                 pressed && styles.buttonPressed,
               ]}
-              onPress={() => loadNews()}
+              onPress={() => activeSource === 'official' ? loadOfficialNews() : loadNews()}
             >
               <Text style={styles.retryButtonText}>Reintentar</Text>
             </Pressable>
@@ -280,7 +396,7 @@ export default function NewsScreen() {
         </View>
       ) : null}
 
-      {!loading && !error && news.length === 0 ? (
+      {!displayedLoading && !displayedError && displayedNews.length === 0 ? (
         <View>
           <View style={styles.messageCard}>
             <Text style={styles.emptyTitle}>
@@ -288,13 +404,13 @@ export default function NewsScreen() {
             </Text>
 
             <Text style={styles.emptyText}>
-              Las últimas novedades del C.D. Castellón aparecerán aquí.
+              {activeSource === 'official' ? 'Las noticias oficiales del C.D. Castellón aparecerán aquí.' : 'Las últimas novedades de Albinegros Castellón aparecerán aquí.'}
             </Text>
           </View>
         </View>
       ) : null}
 
-      {!loading && !error && featuredNews ? (
+      {!displayedLoading && !displayedError && featuredNews ? (
         <>
           <View style={styles.animatedFullWidth}>
           <Pressable
@@ -331,7 +447,7 @@ export default function NewsScreen() {
             <View style={styles.featuredTopRow}>
               <View style={styles.featuredBadge}>
                 <Text style={styles.featuredBadgeText}>
-                  DESTACADA
+                  {activeSource === 'official' ? 'OFICIAL' : 'DESTACADA'}
                 </Text>
               </View>
 
@@ -579,6 +695,41 @@ const styles = StyleSheet.create({
     color: colors.accent,
     fontSize: 13,
     fontWeight: '900',
+  },
+
+  sourceTabs: {
+    flexDirection: 'row',
+    padding: 4,
+    marginBottom: 18,
+    borderRadius: 16,
+    backgroundColor: '#101010',
+    borderWidth: 1,
+    borderColor: '#282828',
+  },
+
+  sourceTab: {
+    flex: 1,
+    minHeight: 42,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+  },
+
+  sourceTabActive: {
+    backgroundColor: colors.accent,
+  },
+
+  sourceTabText: {
+    color: '#858585',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.45,
+    textAlign: 'center',
+  },
+
+  sourceTabTextActive: {
+    color: '#090909',
   },
 
   featuredCard: {
