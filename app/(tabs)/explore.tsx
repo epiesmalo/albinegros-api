@@ -247,13 +247,8 @@ export default function StandingsScreen() {
     COMPETITIONS[0];
 
   const loadLiveTeams = useCallback(async () => {
-    // Conservamos el sistema LIVE actual únicamente para Segunda División.
-    // El endpoint /api/football/live ya estaba funcionando con esta competición.
-    if (competitionKey !== 'laliga2') {
-      setLiveTeamIds(new Set());
-      return;
-    }
-
+    // El endpoint LIVE devuelve los partidos de las cinco competiciones.
+    // Aquí filtramos por la competición seleccionada para marcar sus equipos en directo.
     try {
       const response = await fetch(
         'https://api.albinegroscastellon.com/api/football/live'

@@ -297,6 +297,13 @@ let sportmonksTodayFixturesCache = null;
 let sportmonksTodayFixturesCacheDate = null;
 let sportmonksTodayFixturesSavedAt = 0;
 
+// Caché compartida del endpoint LIVE de Sportmonks.
+// Evita que clasificación, calendario y directo lancen la misma petición
+// simultáneamente cuando hay varios usuarios usando la app.
+let sportmonksInplayCache = null;
+let sportmonksInplaySavedAt = 0;
+let sportmonksInplayPromise = null;
+
 
 
 /**
@@ -865,6 +872,185 @@ const sportmonksFetch = async (endpoint) => {
   return data;
 };
 
+const getSportmonksInplayFixtures = async () => {
+  const now = Date.now();
+
+  if (
+    Array.isArray(sportmonksInplayCache) &&
+    now - sportmonksInplaySavedAt < LIVE_CACHE_MS
+  ) {
+    return sportmonksInplayCache;
+  }
+
+  if (sportmonksInplayPromise) {
+    return sportmonksInplayPromise;
+  }
+
+  sportmonksInplayPromise = (async () => {
+    const data = await sportmonksFetch(
+      '/livescores/inplay?include=participants;scores;state;periods;league'
+    );
+
+    const fixtures = Array.isArray(data?.data)
+      ? data.data
+      : [];
+
+    sportmonksInplayCache = fixtures;
+    sportmonksInplaySavedAt = Date.now();
+
+    return fixtures;
+  })();
+
+  try {
+    return await sportmonksInplayPromise;
+  } finally {
+    sportmonksInplayPromise = null;
+  }
+};
+
+const applyLiveFixturesToStandings = (
+  officialRows,
+  competition,
+  liveFixtures
+) => {
+  let liveRows = officialRows.map((row) => ({ ...row }));
+  let liveMatchesApplied = 0;
+
+  const activeLiveStateShortNames = new Set([
+    '1st',
+    'HT',
+    '2nd',
+    'ET',
+    'BREAK',
+    'PEN_LIVE',
+  ]);
+
+  const leagueLiveFixtures = (Array.isArray(liveFixtures)
+    ? liveFixtures
+    : []
+  ).filter((fixture) => {
+    const fixtureLeagueId = Number(
+      fixture?.league_id ?? fixture?.league?.id
+    );
+
+    const stateShortName = String(
+      fixture?.state?.short_name || ''
+    ).trim();
+
+    return (
+      fixtureLeagueId === Number(competition.leagueId) &&
+      activeLiveStateShortNames.has(stateShortName)
+    );
+  });
+
+  const rowsByTeam = new Map(
+    liveRows.map((row) => [
+      Number(row.teamId),
+      { ...row },
+    ])
+  );
+
+  for (const fixture of leagueLiveFixtures) {
+    const participants = Array.isArray(fixture?.participants)
+      ? fixture.participants
+      : [];
+
+    const scores = Array.isArray(fixture?.scores)
+      ? fixture.scores
+      : [];
+
+    const homeTeam = participants.find(
+      (team) => team?.meta?.location === 'home'
+    );
+
+    const awayTeam = participants.find(
+      (team) => team?.meta?.location === 'away'
+    );
+
+    if (!homeTeam?.id || !awayTeam?.id) {
+      continue;
+    }
+
+    const homeRow = rowsByTeam.get(Number(homeTeam.id));
+    const awayRow = rowsByTeam.get(Number(awayTeam.id));
+
+    if (!homeRow || !awayRow) {
+      continue;
+    }
+
+    const getCurrentScore = (participantId) => {
+      const currentScore = scores.find(
+        (score) =>
+          Number(score?.participant_id) === Number(participantId) &&
+          score?.description === 'CURRENT'
+      );
+
+      return Number(currentScore?.score?.goals ?? 0);
+    };
+
+    const homeGoals = getCurrentScore(homeTeam.id);
+    const awayGoals = getCurrentScore(awayTeam.id);
+
+    homeRow.playedgames += 1;
+    awayRow.playedgames += 1;
+
+    homeRow.goalsfor += homeGoals;
+    homeRow.goalsagainst += awayGoals;
+    awayRow.goalsfor += awayGoals;
+    awayRow.goalsagainst += homeGoals;
+
+    if (homeGoals > awayGoals) {
+      homeRow.won += 1;
+      homeRow.points += 3;
+      awayRow.lost += 1;
+    } else if (awayGoals > homeGoals) {
+      awayRow.won += 1;
+      awayRow.points += 3;
+      homeRow.lost += 1;
+    } else {
+      homeRow.draw += 1;
+      awayRow.draw += 1;
+      homeRow.points += 1;
+      awayRow.points += 1;
+    }
+
+    homeRow.goaldiff = homeRow.goalsfor - homeRow.goalsagainst;
+    awayRow.goaldiff = awayRow.goalsfor - awayRow.goalsagainst;
+
+    rowsByTeam.set(Number(homeTeam.id), homeRow);
+    rowsByTeam.set(Number(awayTeam.id), awayRow);
+    liveMatchesApplied += 1;
+  }
+
+  if (liveMatchesApplied === 0) {
+    return {
+      standings: officialRows,
+      liveApplied: false,
+      liveMatchesApplied: 0,
+    };
+  }
+
+  liveRows = Array.from(rowsByTeam.values());
+
+  liveRows.sort((a, b) => {
+    if (b.points !== a.points) return b.points - a.points;
+    if (b.goaldiff !== a.goaldiff) return b.goaldiff - a.goaldiff;
+    if (b.goalsfor !== a.goalsfor) return b.goalsfor - a.goalsfor;
+    return Number(a.position) - Number(b.position);
+  });
+
+  liveRows = liveRows.map((row, index) => ({
+    ...row,
+    position: index + 1,
+  }));
+
+  return {
+    standings: liveRows,
+    liveApplied: true,
+    liveMatchesApplied,
+  };
+};
+
 const normalizeSportmonksFixture = (fixture) => {
   const participants = fixture.participants || [];
   const scores = fixture.scores || [];
@@ -1153,7 +1339,7 @@ router.get(
         ])
       );
 
-      const standings = (data.data || [])
+      const officialStandings = (data.data || [])
         .map((item) =>
           normalizeSportmonksStanding(
             item,
@@ -1161,6 +1347,26 @@ router.get(
           )
         )
         .sort((a, b) => a.position - b.position);
+
+      let liveResult = {
+        standings: officialStandings,
+        liveApplied: false,
+        liveMatchesApplied: 0,
+      };
+
+      try {
+        const liveFixtures = await getSportmonksInplayFixtures();
+        liveResult = applyLiveFixturesToStandings(
+          officialStandings,
+          competition,
+          liveFixtures
+        );
+      } catch (liveError) {
+        console.warn(
+          `No se pudo calcular clasificación LIVE de ${competition.key}:`,
+          liveError.message
+        );
+      }
 
       return res.json({
         ok: true,
@@ -1171,8 +1377,10 @@ router.get(
           leagueId: competition.leagueId,
           seasonId: competition.seasonId,
         },
-        count: standings.length,
-        standings,
+        count: liveResult.standings.length,
+        liveApplied: liveResult.liveApplied,
+        liveMatchesApplied: liveResult.liveMatchesApplied,
+        standings: liveResult.standings,
       });
     } catch (error) {
       console.error(
@@ -1370,11 +1578,9 @@ router.get(
  */
 router.get('/api/sportmonks/live', async (req, res) => {
   try {
-    const data = await sportmonksFetch(
-      '/livescores/inplay?include=participants;scores;state;periods;league'
-    );
+    const liveFixtures = await getSportmonksInplayFixtures();
 
-    const matches = (data.data || []).map((fixture) => {
+    const matches = liveFixtures.map((fixture) => {
       const participants = fixture.participants || [];
       const scores = fixture.scores || [];
       const periods = fixture.periods || [];
@@ -1676,16 +1882,8 @@ router.post('/api/football/sync-standings', async (req, res) => {
       let liveMatchesApplied = 0;
 
       try {
-        const liveData = await sportmonksFetch(
-          '/livescores/inplay' +
-            '?include=participants;scores;state;league'
-        );
-
-        const liveFixtures = Array.isArray(
-          liveData?.data
-        )
-          ? liveData.data
-          : [];
+        const liveFixtures =
+          await getSportmonksInplayFixtures();
 
         const activeLiveStateShortNames = new Set([
           '1st',
@@ -2357,13 +2555,7 @@ if (todayFixturesCacheIsValid) {
    * del partido en este endpoint: marcador, estado,
    * minuto, periodos, etc.
    */
-  const liveData = await sportmonksFetch(
-    '/livescores/inplay?include=participants;scores;state;periods;league'
-  );
-
-  const liveFixtures = Array.isArray(liveData.data)
-    ? liveData.data
-    : [];
+  const liveFixtures = await getSportmonksInplayFixtures();
 
   /*
    * 3. Nos quedamos solo con las competiciones
