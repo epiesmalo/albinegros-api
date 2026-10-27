@@ -11,6 +11,7 @@ const standingsRoutes = require('./routes/standings.routes');
 const adminRoutes = require('./routes/admin.routes');
 const calendarRoutes = require('./routes/calendar.routes');
 const footballRoutes = require('./routes/football.routes');
+const notificationsRoutes = require('./routes/notifications.routes');
 
 const app = express();
 
@@ -24,6 +25,7 @@ app.use('/', footballRoutes);
 app.use('/', adminRoutes);
 app.use('/', instagramRoutes);
 app.use('/', newsRoutes);
+app.use('/', notificationsRoutes);
 
 const requireAdmin = (req, res, next) => {
   const auth = req.headers.authorization;
