@@ -13,6 +13,11 @@ router.post('/api/notifications/register', async (req, res) => {
       platform = 'android',
       castellonEnabled = true,
       castellonBEnabled = true,
+      matchReminderEnabled = true,
+      matchStartEnabled = true,
+      goalsEnabled = true,
+      halftimeEnabled = true,
+      fulltimeEnabled = true,
     } = req.body || {};
 
     if (
@@ -39,6 +44,11 @@ router.post('/api/notifications/register', async (req, res) => {
         p_platform: platform,
         p_castellon_enabled: Boolean(castellonEnabled),
         p_castellon_b_enabled: Boolean(castellonBEnabled),
+        p_match_reminder_enabled: Boolean(matchReminderEnabled),
+        p_match_start_enabled: Boolean(matchStartEnabled),
+        p_goals_enabled: Boolean(goalsEnabled),
+        p_halftime_enabled: Boolean(halftimeEnabled),
+        p_fulltime_enabled: Boolean(fulltimeEnabled),
       }
     );
 
