@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "135680623268",
+    "project_id": "albis-castellon",
+    "storage_bucket": "albis-castellon.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:135680623268:android:300e0fd8ad763973929c31",
+        "android_client_info": {
+          "package_name": "com.albinegroscastellon.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCsTduzjmAS3XQxuCjgJ67h0lcL-IV3_Ig"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:135680623268:android:278eadc4c1449eab929c31",
+        "android_client_info": {
+          "package_name": "com.albinegroscastellon.app.dev"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCsTduzjmAS3XQxuCjgJ67h0lcL-IV3_Ig"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

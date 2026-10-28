@@ -4,6 +4,10 @@ const router = express.Router();
 const supabase = require('../config/supabase');
 
 const {
+  processLiveMatchNotifications,
+} = require('../services/matchNotifications.service');
+
+const {
   getDisplayTeamName,
   getShortTeamName,
   getTeamLogo,
@@ -888,7 +892,7 @@ const getSportmonksInplayFixtures = async () => {
 
   sportmonksInplayPromise = (async () => {
     const data = await sportmonksFetch(
-      '/livescores/inplay?include=participants;scores;state;periods;league'
+      '/livescores/inplay?include=participants;scores;state;periods;league;events.type;events.subType'
     );
 
     const fixtures = Array.isArray(data?.data)
@@ -897,6 +901,15 @@ const getSportmonksInplayFixtures = async () => {
 
     sportmonksInplayCache = fixtures;
     sportmonksInplaySavedAt = Date.now();
+
+    // Procesamos las notificaciones sobre la misma respuesta LIVE.
+    // No bloqueamos el endpoint si Expo/Supabase falla.
+    processLiveMatchNotifications(fixtures).catch((error) => {
+      console.error(
+        'Error procesando notificaciones LIVE:',
+        error
+      );
+    });
 
     return fixtures;
   })();
@@ -5723,5 +5736,8 @@ router.get('/api/football/team-logo/:teamId', async (req, res) => {
     });
   }
 });
+
+router.getSportmonksInplayFixtures = getSportmonksInplayFixtures;
+router.sportmonksFetch = sportmonksFetch;
 
 module.exports = router;

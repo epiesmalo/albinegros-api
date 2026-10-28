@@ -217,6 +217,7 @@ const quickLinks = [
   { id: '6', title: 'Tienda', route: '/(tabs)/shop', icon: 'bag-handle' },
   { id: '7', title: 'Radio', route: '/(tabs)/radio', icon: 'radio' },
   { id: '8', title: 'Noticias', route: '/(tabs)/news', icon: 'newspaper' },
+  { id: '9', title: 'Notificaciones', route: '/notifications', icon: 'notifications' },
 ] as const;
 
   useEffect(() => {

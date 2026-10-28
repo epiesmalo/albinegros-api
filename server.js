@@ -1,4 +1,4 @@
-require('dotenv').config();
+﻿require('dotenv').config();
 
 const path = require('path');
 const express = require('express');
@@ -12,6 +12,7 @@ const adminRoutes = require('./routes/admin.routes');
 const calendarRoutes = require('./routes/calendar.routes');
 const footballRoutes = require('./routes/football.routes');
 const notificationsRoutes = require('./routes/notifications.routes');
+const { startMatchNotificationsPoller } = require('./services/matchNotificationsPoller.service');
 
 const app = express();
 
@@ -60,4 +61,5 @@ const PORT = process.env.PORT || 3001;
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Servidor funcionando en puerto ${PORT}`);
+  startMatchNotificationsPoller();
 });
