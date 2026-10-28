@@ -1,6 +1,9 @@
-const { withAndroidManifest } = require('expo/config-plugins');
+﻿const {
+  withAndroidManifest,
+  withBaseMod,
+} = require('expo/config-plugins');
 
-module.exports = function withRemoveRecordAudio(config) {
+function withRecordAudioCleanup(config) {
   return withAndroidManifest(config, (config) => {
     const manifest = config.modResults.manifest;
 
@@ -29,7 +32,9 @@ module.exports = function withRemoveRecordAudio(config) {
     const application = manifest.application[0];
     application.service = application.service || [];
 
-    const recordingServiceName = 'expo.modules.audio.service.AudioRecordingService';
+    const recordingServiceName =
+      'expo.modules.audio.service.AudioRecordingService';
+
     const existingRecordingService = application.service.find(
       (item) => item?.$?.['android:name'] === recordingServiceName
     );
@@ -47,4 +52,34 @@ module.exports = function withRemoveRecordAudio(config) {
 
     return config;
   });
+}
+
+function withFinalManifestCleanup(config) {
+  return withBaseMod(config, {
+    platform: 'android',
+    mod: 'manifest',
+    isProvider: false,
+    async action({ modRequest: { nextMod, ...modRequest }, ...config }) {
+      const results = await nextMod({
+        ...config,
+        modRequest,
+      });
+
+      const manifest = results.modResults.manifest;
+
+      if (manifest?.application?.[0]?.$) {
+        delete manifest.application[0].$[
+          'android:requestLegacyExternalStorage'
+        ];
+      }
+
+      return results;
+    },
+  });
+}
+
+module.exports = function withRemoveRecordAudio(config) {
+  config = withRecordAudioCleanup(config);
+  config = withFinalManifestCleanup(config);
+  return config;
 };
