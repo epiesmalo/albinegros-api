@@ -249,32 +249,7 @@
   <h3>Publicidad actual</h3>
   <div id="adsList"></div>
 </div>
-<div class="card">
-  <h2>Clasificación</h2>
 
-  <textarea id="standingsJson" rows="14"></textarea>
-
-  <button onclick="saveStandings()">Guardar clasificación</button>
-  <div id="standingsMsg" class="success"></div>
-</div>
-
-<div class="card">
-  <h2>Calendario</h2>
-
-  <textarea id="calendarJson" rows="14"></textarea>
-
-  <button onclick="saveCalendar()">Guardar calendario</button>
-  <div id="calendarMsg" class="success"></div>
-</div>
-
-<div class="card">
-  <h2>Noticias</h2>
-
-  <textarea id="newsJson" rows="14"></textarea>
-
-  <button onclick="saveNews()">Guardar noticias</button>
-  <div id="newsMsg" class="success"></div>
-</div>
 
 <div class="card">
   <h2>Galería</h2>
@@ -327,12 +302,8 @@ function logout() {
 }
   async function loadData() {
     try {
-const calendarRes = await fetch('/api/admin/calendar');
-const calendar = await calendarRes.json();
-document.getElementById('calendarJson').value = JSON.stringify(calendar, null, 2);
-const standingsRes = await fetch('/api/admin/standings');
-const standings = await standingsRes.json();
-document.getElementById('standingsJson').value = JSON.stringify(standings, null, 2);      
+
+      
 const nextMatchRes = await fetch('/api/admin/next-match');
 const nextMatch = await nextMatchRes.json();
 
@@ -443,52 +414,6 @@ renderGalleryList();
       alert('Error cargando datos del panel. Mira la consola del navegador.');
     }
   }
-async function saveCalendar() {
-  try {
-    const calendar = JSON.parse(document.getElementById('calendarJson').value);
-
-    await fetch('/api/admin/calendar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(calendar)
-    });
-
-    document.getElementById('calendarMsg').innerText = 'Calendario guardado';
-  } catch (error) {
-    alert('El JSON del calendario no es válido. Revisa comas, llaves y comillas.');
-  }
-}
-async function saveStandings() {
-  try {
-    const standings = JSON.parse(document.getElementById('standingsJson').value);
-
-    await fetch('/api/admin/standings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(standings)
-    });
-
-    document.getElementById('standingsMsg').innerText = 'Clasificación guardada';
-  } catch (error) {
-    alert('El JSON de clasificación no es válido. Revisa comas, llaves y comillas.');
-  }
-}
-
-async function saveNews() {
-  try {
-    const news = JSON.parse(document.getElementById('newsJson').value);
-
-    await fetch('/api/admin/news', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(news)
-    });
-
-    document.getElementById('newsMsg').innerText = 'Noticias guardadas';
-  } catch (error) {
-    alert('El JSON de noticias no es válido.');
-  }
-}
 function renderGalleryList() {
   const container = document.getElementById('galleryList');
 
