@@ -2358,37 +2358,131 @@ router.post('/api/football/sync-calendar', async (req, res) => {
 });
 
 /**
- * Busca el próximo partido del Castellón
- * dentro del calendario sincronizado.
+ * Busca el próximo partido del C.D. Castellón directamente en Sportmonks.
+ *
+ * No se limita a LaLiga2: devuelve el siguiente encuentro disponible del
+ * primer equipo independientemente de la competición (Liga, Copa del Rey,
+ * amistosos, etc.), siempre que Sportmonks tenga el partido registrado.
  */
 router.post('/api/football/sync-next-match', async (req, res) => {
   try {
-    const now = new Date().toISOString();
+    const now = new Date();
 
-    const { data: matches, error } = await supabase
-      .from('calendar')
-      .select('*')
-      .gte('date', now)
-      .or(
-        'homeTeam.ilike.%Castell%,awayTeam.ilike.%Castell%'
-      )
-      .order('date', { ascending: true })
-      .limit(1);
+    const getMadridDate = (date) => {
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: TIMEZONE,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).formatToParts(date);
 
-    if (error) {
-      throw error;
-    }
+      const values = Object.fromEntries(
+        parts.map(({ type, value }) => [type, value])
+      );
 
-    if (!matches || matches.length === 0) {
+      return `${values.year}-${values.month}-${values.day}`;
+    };
+
+    const from = getMadridDate(now);
+
+    const searchUntil = new Date(now);
+    searchUntil.setUTCFullYear(searchUntil.getUTCFullYear() + 1);
+    const to = getMadridDate(searchUntil);
+
+    const data = await sportmonksFetch(
+      `/fixtures/between/${from}/${to}/${SPORTMONKS_CASTELLON_TEAM_ID}` +
+        `?include=participants;scores;state;league;round;venue`
+    );
+
+    const fixtures = Array.isArray(data?.data)
+      ? data.data
+      : [];
+
+    const finishedStates = new Set([
+      'FT',
+      'AET',
+      'FT_PEN',
+      'CANCL',
+      'CANCELLED',
+      'POSTP',
+      'ABAN',
+      'DELAYED',
+      'WO',
+    ]);
+
+    const upcomingFixtures = fixtures
+      .filter((fixture) => {
+        if (!fixture?.starting_at) {
+          return false;
+        }
+
+        const participants = Array.isArray(fixture.participants)
+          ? fixture.participants
+          : [];
+
+        const hasCastellon = participants.some(
+          (team) => Number(team?.id) === SPORTMONKS_CASTELLON_TEAM_ID
+        );
+
+        if (!hasCastellon) {
+          return false;
+        }
+
+        const state = String(
+          fixture?.state?.short_name || ''
+        ).trim();
+
+        if (finishedStates.has(state)) {
+          return false;
+        }
+
+        const fixtureDate = new Date(
+          `${fixture.starting_at.replace(' ', 'T')}Z`
+        );
+
+        return (
+          Number.isFinite(fixtureDate.getTime()) &&
+          fixtureDate.getTime() >= now.getTime() - 3 * 60 * 60 * 1000
+        );
+      })
+      .sort(
+        (a, b) =>
+          new Date(`${a.starting_at.replace(' ', 'T')}Z`) -
+          new Date(`${b.starting_at.replace(' ', 'T')}Z`)
+      );
+
+    if (upcomingFixtures.length === 0) {
       return res.status(404).json({
         ok: false,
+        provider: 'sportmonks',
         message:
-          'No se ha encontrado próximo partido del Castellón',
+          'No se ha encontrado próximo partido del Castellón en Sportmonks',
       });
     }
 
-    const match = matches[0];
-    const matchDate = new Date(match.date);
+    const fixture = upcomingFixtures[0];
+
+    const participants = Array.isArray(fixture.participants)
+      ? fixture.participants
+      : [];
+
+    const homeTeam = participants.find(
+      (team) => team?.meta?.location === 'home'
+    );
+
+    const awayTeam = participants.find(
+      (team) => team?.meta?.location === 'away'
+    );
+
+    if (!homeTeam || !awayTeam) {
+      throw new Error(
+        'Sportmonks no ha devuelto los participantes del próximo partido'
+      );
+    }
+
+    const matchDate = new Date(
+      `${fixture.starting_at.replace(' ', 'T')}Z`
+    );
 
     const formattedDate =
       matchDate.toLocaleDateString('es-ES', {
@@ -2406,29 +2500,51 @@ router.post('/api/football/sync-next-match', async (req, res) => {
         hour12: false,
       });
 
-  const castellonIsHome = isCastellon(match.homeTeam);
+    const homeApiName = homeTeam?.name || '';
+    const awayApiName = awayTeam?.name || '';
 
-const nextMatch = {
-  id: '1',
+    const nextMatch = {
+      id: '1',
 
-  teamName: match.homeTeam,
-  teamShortName: getShortTeamName(match.homeTeam),
+      teamName: getDisplayTeamName(homeApiName),
+      teamShortName: getShortTeamName(homeApiName),
 
-  opponent: match.awayTeam,
-  opponentShortName: getShortTeamName(match.awayTeam),
+      opponent: getDisplayTeamName(awayApiName),
+      opponentShortName: getShortTeamName(awayApiName),
 
-  isHome: castellonIsHome,
+      isHome:
+        Number(homeTeam?.id) === SPORTMONKS_CASTELLON_TEAM_ID,
 
-  date: formattedDate,
-  time: formattedTime,
-  stadium: match.venue || '',
-  competition: match.league || '',
+      date: formattedDate,
+      time: formattedTime,
 
-  teamLogo: match.homeLogo,
-  opponentLogo: match.awayLogo,
+      stadium:
+        getCorrectVenue(
+          homeApiName,
+          fixture?.venue?.name || ''
+        ),
 
-  updated_at: new Date().toISOString(),
-};
+      competition:
+        getCompetitionName(
+          fixture?.league?.name || ''
+        ) ||
+        fixture?.league?.name ||
+        '',
+
+      teamLogo:
+        getTeamLogo(
+          homeApiName,
+          homeTeam?.image_path || ''
+        ),
+
+      opponentLogo:
+        getTeamLogo(
+          awayApiName,
+          awayTeam?.image_path || ''
+        ),
+
+      updated_at: new Date().toISOString(),
+    };
 
     const { error: upsertError } = await supabase
       .from('next_match')
@@ -2440,8 +2556,11 @@ const nextMatch = {
       throw upsertError;
     }
 
-    res.json({
+    return res.json({
       ok: true,
+      provider: 'sportmonks',
+      fixtureId: fixture.id,
+      leagueId: fixture?.league?.id ?? null,
       next_match: nextMatch,
     });
   } catch (error) {
@@ -2450,7 +2569,7 @@ const nextMatch = {
       error
     );
 
-    res.status(500).json({
+    return res.status(500).json({
       ok: false,
       error: error.message,
     });
