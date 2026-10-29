@@ -177,31 +177,53 @@ router.post('/api/admin/standings', adminAuth, async (req, res) => {
   }
 });
 
+// ==================== PRÓXIMO PARTIDO: AUTOMÁTICO + MANUAL ====================
+//
+// next_match.id = 1 -> partido automático (SportMonks)
+// next_match.id = 2 -> partido manual
+//
+// Si existe la fila 2, el modo manual está activo y tiene prioridad.
+// Si no existe, la app recibe la fila 1 automática.
+
 router.get('/api/admin/next-match', async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('next_match')
       .select('*')
-      .eq('id', '1')
-      .single();
+      .in('id', ['1', '2']);
 
     if (error) {
       return res.status(500).json({ error: error.message });
     }
 
+    const rows = data || [];
+    const automaticMatch = rows.find((item) => String(item.id) === '1');
+    const manualMatch = rows.find((item) => String(item.id) === '2');
+
+    const manualMode = Boolean(manualMatch);
+    const activeMatch = manualMatch || automaticMatch;
+
+    if (!activeMatch) {
+      return res.status(404).json({
+        error: 'No hay ningún próximo partido configurado',
+      });
+    }
+
     res.json({
-      teamName: data.teamName,
-      teamShortName: data.teamShortName,
-      opponent: data.opponent,
-      opponentShortName: data.opponentShortName,
-      isHome: data.isHome,
-      date: data.date,
-      time: data.time,
-      stadium: data.stadium,
-      competition: data.competition,
-      teamLogo: data.teamLogo || data.teamlogo,
-      opponentLogo: data.opponentLogo,
-      updatedAt: data.updated_at,
+      teamName: activeMatch.teamName,
+      teamShortName: activeMatch.teamShortName,
+      opponent: activeMatch.opponent,
+      opponentShortName: activeMatch.opponentShortName,
+      isHome: activeMatch.isHome,
+      date: activeMatch.date,
+      time: activeMatch.time,
+      stadium: activeMatch.stadium,
+      competition: activeMatch.competition,
+      teamLogo: activeMatch.teamLogo || activeMatch.teamlogo,
+      opponentLogo: activeMatch.opponentLogo,
+      updatedAt: activeMatch.updated_at,
+      manualMode,
+      source: manualMode ? 'manual' : 'sportmonks',
     });
   } catch (error) {
     res.status(500).json({
@@ -210,31 +232,120 @@ router.get('/api/admin/next-match', async (req, res) => {
     });
   }
 });
+
 router.post('/api/admin/next-match', adminAuth, async (req, res) => {
   try {
+    // El formulario del panel SOLO escribe la fila manual.
+    // Nunca vuelve a sobrescribir el partido automático de SportMonks.
+    const teamName = String(req.body.teamName || '').trim();
+    const opponent = String(req.body.opponent || '').trim();
+
     const payload = {
-  id: '1',
-  teamName: req.body.teamName,
-  opponent: req.body.opponent,
-  date: req.body.date,
-  time: req.body.time,
-  stadium: req.body.stadium,
-  competition: req.body.competition,
-  teamLogo: req.body.teamLogo,
-  opponentLogo: req.body.opponentLogo,
-  updated_at: new Date().toISOString(),
-};
+      id: '2',
+      teamName,
+      teamShortName: teamName,
+      opponent,
+      opponentShortName: opponent,
+      isHome: /castell[oó]n/i.test(teamName),
+      date: String(req.body.date || '').trim(),
+      time: String(req.body.time || '').trim(),
+      stadium: String(req.body.stadium || '').trim(),
+      competition: String(req.body.competition || '').trim(),
+      teamLogo: String(req.body.teamLogo || '').trim(),
+      opponentLogo: String(req.body.opponentLogo || '').trim(),
+      updated_at: new Date().toISOString(),
+    };
 
     const { error } = await supabase
       .from('next_match')
-      .upsert(payload);
+      .upsert(payload, {
+        onConflict: 'id',
+      });
 
     if (error) return res.status(500).json({ error: error.message });
 
-    res.json({ success: true });
+    res.json({
+      success: true,
+      manualMode: true,
+      next_match: payload,
+    });
   } catch (error) {
     res.status(500).json({
-      error: 'No se pudo guardar el próximo partido',
+      error: 'No se pudo guardar el próximo partido manual',
+      details: error.message,
+    });
+  }
+});
+
+router.post('/api/admin/next-match-mode', adminAuth, async (req, res) => {
+  try {
+    const active = Boolean(req.body.active);
+
+    if (active) {
+      // Al activar manual por primera vez copiamos el automático como base.
+      // Así el usuario puede editar solo lo que necesite.
+      const { data: existingManual, error: manualError } = await supabase
+        .from('next_match')
+        .select('*')
+        .eq('id', '2')
+        .maybeSingle();
+
+      if (manualError) {
+        return res.status(500).json({ error: manualError.message });
+      }
+
+      if (!existingManual) {
+        const { data: automaticMatch, error: automaticError } = await supabase
+          .from('next_match')
+          .select('*')
+          .eq('id', '1')
+          .single();
+
+        if (automaticError) {
+          return res.status(500).json({ error: automaticError.message });
+        }
+
+        const manualCopy = {
+          ...automaticMatch,
+          id: '2',
+          updated_at: new Date().toISOString(),
+        };
+
+        const { error: insertError } = await supabase
+          .from('next_match')
+          .upsert(manualCopy, {
+            onConflict: 'id',
+          });
+
+        if (insertError) {
+          return res.status(500).json({ error: insertError.message });
+        }
+      }
+
+      return res.json({
+        success: true,
+        manualMode: true,
+      });
+    }
+
+    // Desactivar manual = borrar únicamente la fila 2.
+    // La fila 1 automática queda intacta y vuelve a servirse inmediatamente.
+    const { error: deleteError } = await supabase
+      .from('next_match')
+      .delete()
+      .eq('id', '2');
+
+    if (deleteError) {
+      return res.status(500).json({ error: deleteError.message });
+    }
+
+    res.json({
+      success: true,
+      manualMode: false,
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: 'No se pudo cambiar el modo del próximo partido',
       details: error.message,
     });
   }

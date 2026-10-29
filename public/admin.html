@@ -70,6 +70,23 @@
   <div class="card">
     <h2>Próximo partido</h2>
 
+    <div style="padding:14px; margin-bottom:18px; border:1px solid #ddd; border-radius:12px; background:#fafafa;">
+      <label style="display:flex; align-items:center; gap:10px; margin:0;">
+        <input
+          id="manualMatchMode"
+          type="checkbox"
+          onchange="setManualMatchMode()"
+          style="width:auto;"
+        />
+        Modo manual
+      </label>
+      <div id="manualMatchModeStatus" style="margin-top:8px; font-weight:bold;"></div>
+      <small>
+        Desactivado: se usa el próximo partido automático de SportMonks.<br/>
+        Activado: la app usa exclusivamente los datos guardados en este formulario.
+      </small>
+    </div>
+
     <label>Logo equipo (URL)</label>
     <input id="teamLogo" />
 
@@ -316,6 +333,10 @@ const nextMatch = await nextMatchRes.json();
       document.getElementById('teamLogo').value = nextMatch.teamLogo || '';
       document.getElementById('opponentLogo').value = nextMatch.opponentLogo || '';
 
+      document.getElementById('manualMatchMode').checked =
+        Boolean(nextMatch.manualMode);
+      updateManualMatchModeStatus(Boolean(nextMatch.manualMode));
+
 const aboutRes = await fetch('/api/admin/about');
 const about = await aboutRes.json();
 
@@ -502,26 +523,102 @@ async function saveGallery() {
     alert('No se pudo guardar la galería.');
   }
 }
-  async function saveNextMatch() {
-    const payload = {
-      teamName: document.getElementById('teamName').value,
-      opponent: document.getElementById('opponent').value,
-      date: document.getElementById('date').value,
-      time: document.getElementById('time').value,
-      stadium: document.getElementById('stadium').value,
-      competition: document.getElementById('competition').value,
-      teamLogo: document.getElementById('teamLogo').value,
-      opponentLogo: document.getElementById('opponentLogo').value
-    };
+  function updateManualMatchModeStatus(active) {
+  const status = document.getElementById('manualMatchModeStatus');
 
-    await fetch('/api/admin/next-match', {
+  if (active) {
+    status.innerText = 'MANUAL ACTIVADO';
+    status.style.color = '#ef6c00';
+  } else {
+    status.innerText = 'AUTOMÁTICO - SPORTMONKS';
+    status.style.color = '#2e7d32';
+  }
+}
+
+async function setManualMatchMode() {
+  const checkbox = document.getElementById('manualMatchMode');
+  const active = checkbox.checked;
+
+  try {
+    const response = await fetch('/api/admin/next-match-mode', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      checkbox.checked = !active;
+      updateManualMatchModeStatus(!active);
+      alert('No se pudo cambiar el modo: ' + (result.error || 'Error desconocido'));
+      return;
+    }
+
+    updateManualMatchModeStatus(active);
+
+    const nextMatchRes = await fetch('/api/admin/next-match');
+    const nextMatch = await nextMatchRes.json();
+
+    document.getElementById('teamName').value = nextMatch.teamName || '';
+    document.getElementById('opponent').value = nextMatch.opponent || '';
+    document.getElementById('date').value = nextMatch.date || '';
+    document.getElementById('time').value = nextMatch.time || '';
+    document.getElementById('stadium').value = nextMatch.stadium || '';
+    document.getElementById('competition').value = nextMatch.competition || '';
+    document.getElementById('teamLogo').value = nextMatch.teamLogo || '';
+    document.getElementById('opponentLogo').value = nextMatch.opponentLogo || '';
+
+    document.getElementById('nextMatchMsg').innerText =
+      active
+        ? 'Modo manual activado'
+        : 'Modo automático activado';
+  } catch (error) {
+    checkbox.checked = !active;
+    updateManualMatchModeStatus(!active);
+    alert('No se pudo cambiar el modo del próximo partido.');
+  }
+}
+
+async function saveNextMatch() {
+  const manualMode = document.getElementById('manualMatchMode').checked;
+
+  if (!manualMode) {
+    alert('Activa primero el modo manual para guardar un partido manual.');
+    return;
+  }
+
+  const payload = {
+    teamName: document.getElementById('teamName').value,
+    opponent: document.getElementById('opponent').value,
+    date: document.getElementById('date').value,
+    time: document.getElementById('time').value,
+    stadium: document.getElementById('stadium').value,
+    competition: document.getElementById('competition').value,
+    teamLogo: document.getElementById('teamLogo').value,
+    opponentLogo: document.getElementById('opponentLogo').value
+  };
+
+  try {
+    const response = await fetch('/api/admin/next-match', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
 
-    document.getElementById('nextMatchMsg').innerText = 'Próximo partido guardado';
+    const result = await response.json();
+
+    if (!response.ok) {
+      alert('No se pudo guardar el partido manual: ' + (result.error || 'Error desconocido'));
+      return;
+    }
+
+    document.getElementById('nextMatchMsg').innerText =
+      'Partido manual guardado correctamente';
+  } catch (error) {
+    alert('No se pudo guardar el partido manual.');
   }
+}
 
 async function saveAbout() {
   const payload = {
