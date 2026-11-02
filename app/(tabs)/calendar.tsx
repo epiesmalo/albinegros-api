@@ -443,43 +443,76 @@ useEffect(() => {
     setSelectedRound(defaultRound || 1);
   }, [fixtures, rounds, selectedRound]);
 
-  useEffect(() => {
-    const fixtureIds = fixtures
-      .map((item) => item.fixtureId)
-      .filter((id): id is number => typeof id === 'number' && id > 0);
+  const loadCommentCounts = useCallback(async () => {
+  const fixtureIds = fixturesRef.current
+    .map((item) => item.fixtureId)
+    .filter((id): id is number => typeof id === 'number' && id > 0);
 
-    if (fixtureIds.length === 0) {
-      setCommentCounts({});
-      return;
+  if (fixtureIds.length === 0) {
+    setCommentCounts({});
+    return;
+  }
+
+  try {
+    // El calendario contiene cientos de partidos. Enviar todos los fixtureIds
+    // en una sola URL puede hacer que la consulta sea demasiado larga.
+    // Los pedimos por bloques y unimos los contadores recibidos.
+    const BATCH_SIZE = 50;
+    const freshCounts: Record<string, number> = {};
+
+    for (let i = 0; i < fixtureIds.length; i += BATCH_SIZE) {
+      const batch = fixtureIds.slice(i, i + BATCH_SIZE);
+
+      const response = await fetch(
+        `https://api.albinegroscastellon.com/api/football/comments/counts?fixtureIds=${batch.join(',')}`,
+        {
+          headers: {
+            Accept: 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Error al cargar contadores: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data?.ok && data.counts) {
+        for (const [fixtureId, count] of Object.entries(data.counts)) {
+          freshCounts[String(fixtureId)] = Number(count) || 0;
+        }
+      }
     }
 
-    let cancelled = false;
+    setCommentCounts(freshCounts);
+  } catch (countError) {
+    console.log('No se pudieron cargar los contadores de comentarios:', countError);
+  }
+}, []);
 
-    const loadCommentCounts = async () => {
-      try {
-        const response = await fetch(
-          `https://api.albinegroscastellon.com/api/football/comments/counts?fixtureIds=${fixtureIds.join(',')}`
-        );
+  // Al entrar o volver a la pestaña Partidos refrescamos inmediatamente
+  // los comentarios. Así, si el usuario acaba de escribir uno dentro del
+  // partido, el contador exterior se actualiza sin esperar al intervalo.
+  useFocusEffect(
+    useCallback(() => {
+      void loadCommentCounts();
 
-        const data = await response.json();
+      const interval = setInterval(() => {
+        void loadCommentCounts();
+      }, 15_000);
 
-        if (!cancelled && response.ok && data?.ok) {
-          setCommentCounts(data.counts || {});
-        }
-      } catch (countError) {
-        console.log('No se pudieron cargar los contadores de comentarios:', countError);
-      }
-    };
+      return () => clearInterval(interval);
+    }, [loadCommentCounts])
+  );
 
-   loadCommentCounts();
-
-const interval = setInterval(loadCommentCounts, 15000);
-
-return () => {
-  cancelled = true;
-  clearInterval(interval);
-};
-  }, [fixtures]);
+  // La primera carga del calendario puede terminar después de que la pestaña
+  // haya recibido el foco. Refrescamos también cuando cambia la lista.
+  useEffect(() => {
+    if (fixtures.length > 0) {
+      void loadCommentCounts();
+    }
+  }, [fixtures, loadCommentCounts]);
 
   const selectedRoundMatches = useMemo(() => {
     return fixtures
