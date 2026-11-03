@@ -535,28 +535,64 @@ router.post('/api/admin/ads', adminAuth, async (req, res) => {
       return res.status(400).json({ error: 'Los sponsors deben ser un array' });
     }
 
-    const { error: deleteError } = await supabase
-      .from('ads')
-      .delete()
-      .neq('id', '');
+    const now = new Date().toISOString();
 
-    if (deleteError) {
-      return res.status(500).json({ error: deleteError.message });
+    const cleanAds = ads.map((ad, index) => ({
+      id: String(ad.id || `${Date.now()}-${index}`),
+      image: String(ad.image || '').trim(),
+      title: String(ad.title || '').trim(),
+      text: String(ad.text || '').trim(),
+      link: String(ad.link || '').trim(),
+      created_at: ad.created_at || now,
+    }));
+
+    const invalidAd = cleanAds.find((ad) => !ad.image || !ad.title);
+
+    if (invalidAd) {
+      return res.status(400).json({
+        error: 'Cada sponsor debe tener al menos imagen y título',
+      });
     }
 
-    if (ads.length > 0) {
-      const { error: insertError } = await supabase
-        .from('ads')
-        .insert(ads);
+    const { data: currentAds, error: currentError } = await supabase
+      .from('ads')
+      .select('id');
 
-      if (insertError) {
-        return res.status(500).json({ error: insertError.message });
+    if (currentError) {
+      return res.status(500).json({ error: currentError.message });
+    }
+
+    // Primero guardamos/actualizamos. Si falla, no borramos ningún sponsor existente.
+    if (cleanAds.length > 0) {
+      const { error: upsertError } = await supabase
+        .from('ads')
+        .upsert(cleanAds, { onConflict: 'id' });
+
+      if (upsertError) {
+        return res.status(500).json({ error: upsertError.message });
+      }
+    }
+
+    const wantedIds = new Set(cleanAds.map((ad) => String(ad.id)));
+    const removedIds = (currentAds || [])
+      .map((ad) => String(ad.id))
+      .filter((id) => !wantedIds.has(id));
+
+    // Solo eliminamos después de que el guardado anterior haya terminado correctamente.
+    if (removedIds.length > 0) {
+      const { error: deleteError } = await supabase
+        .from('ads')
+        .delete()
+        .in('id', removedIds);
+
+      if (deleteError) {
+        return res.status(500).json({ error: deleteError.message });
       }
     }
 
     res.json({
       success: true,
-      total: ads.length,
+      total: cleanAds.length,
     });
   } catch (error) {
     res.status(500).json({
@@ -565,6 +601,7 @@ router.post('/api/admin/ads', adminAuth, async (req, res) => {
     });
   }
 });
+
 
 // ==================== GALLERY ====================
 

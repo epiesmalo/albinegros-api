@@ -253,11 +253,11 @@
   <label>Título</label>
   <input id="adTitle" placeholder="Título del anuncio" />
 
-  <label>Texto</label>
-  <input id="adText" placeholder="Descripción del anuncio" />
+  <label for="adText">Texto</label>
+  <textarea id="adText" rows="3" placeholder="Descripción del anuncio"></textarea>
 
-  <label>Link</label>
-  <input id="adLink" placeholder="https://..." />
+  <label for="adLink">Link</label>
+  <input id="adLink" type="url" inputmode="url" autocomplete="url" placeholder="https://..." />
 
   <button onclick="addAd()">Añadir publicidad</button>
 
@@ -713,6 +713,7 @@ function renderAdsList() {
       <div style="flex:1;">
         <strong>${item.title || 'Sin título'}</strong><br/>
         <small>${item.text || ''}</small>
+        ${item.link ? `<br/><small style="word-break:break-all;">${item.link}</small>` : ''}
       </div>
 
       <button
@@ -726,45 +727,62 @@ function renderAdsList() {
   `).join('');
 }
 
-function addAd() {
+async function addAd() {
   const image = document.getElementById('adImage').value.trim();
   const title = document.getElementById('adTitle').value.trim();
   const text = document.getElementById('adText').value.trim();
   const link = document.getElementById('adLink').value.trim();
 
-  if (!image && !title && !text && !link) {
-    alert('Rellena al menos un campo del anuncio.');
+  if (!image || !title) {
+    alert('Rellena al menos la URL de imagen y el título.');
     return;
   }
 
-  adsItems.push({
+  if (link && !/^https?:\/\//i.test(link)) {
+    alert('El link debe empezar por http:// o https://');
+    return;
+  }
+
+  const newAd = {
     id: String(Date.now()),
     image,
     title,
     text,
-    link
-  });
+    link,
+    created_at: new Date().toISOString()
+  };
+
+  adsItems.push(newAd);
+  renderAdsList();
+
+  const saved = await saveAds();
+
+  if (!saved) {
+    adsItems = adsItems.filter((item) => item.id !== newAd.id);
+    renderAdsList();
+    return;
+  }
 
   document.getElementById('adImage').value = '';
   document.getElementById('adTitle').value = '';
   document.getElementById('adText').value = '';
   document.getElementById('adLink').value = '';
-
-  renderAdsList();
-  saveAds();
 }
 
-function deleteAd(index) {
+async function deleteAd(index) {
   const confirmed = confirm('¿Quieres eliminar esta publicidad?');
+  if (!confirmed) return;
 
-  if (!confirmed) {
-    return;
-  }
-
+  const previousAds = [...adsItems];
   adsItems.splice(index, 1);
-
   renderAdsList();
-  saveAds();
+
+  const saved = await saveAds();
+
+  if (!saved) {
+    adsItems = previousAds;
+    renderAdsList();
+  }
 }
 
 async function saveAds() {
@@ -776,22 +794,20 @@ async function saveAds() {
     });
 
     const result = await response.json();
-
     console.log('ADS GUARDADOS:', result);
 
     if (!response.ok) {
-      alert(
-        'Error guardando publicidad: ' +
-        (result.error || 'Error desconocido')
-      );
-      return;
+      alert('Error guardando publicidad: ' + (result.error || 'Error desconocido'));
+      return false;
     }
 
     document.getElementById('adsMsg').innerText =
       'Publicidad guardada correctamente';
+    return true;
   } catch (error) {
     console.error('ERROR SAVE ADS:', error);
     alert('No se pudo guardar la publicidad.');
+    return false;
   }
 }
 
