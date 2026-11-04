@@ -1507,83 +1507,92 @@ router.get(
 );
 
 /**
- * Calendario completo por competición.
- *
- * Ejemplos:
- * /api/sportmonks/calendar/competition/laliga
- * /api/sportmonks/calendar/competition/laliga2
- * /api/sportmonks/calendar/competition/primera-rfef-1
- * /api/sportmonks/calendar/competition/primera-rfef-2
- * /api/sportmonks/calendar/competition/segunda-rfef-3
+ * Calendario completo por competición, con caché compartida y paginación.
+ * La ruta /calendar/first-team no se modifica.
  */
-router.get(
-  '/api/sportmonks/calendar/competition/:competition',
-  async (req, res) => {
-    try {
-      const competitionKey = String(
-        req.params.competition || ''
-      ).trim();
+const competitionCalendarCache = new Map();
+const competitionCalendarPending = new Map();
+const COMPETITION_CALENDAR_TTL_MS = 15 * 60_000;
+const COMPETITION_CALENDAR_MAX_PAGES = 60;
 
-      const competition =
-        SPORTMONKS_COMPETITIONS[competitionKey];
-
-      if (!competition) {
-        return res.status(404).json({
-          ok: false,
-          error: 'Competición no válida',
-          available: Object.keys(
-            SPORTMONKS_COMPETITIONS
-          ),
-        });
-      }
-
-      const startDate =
-        req.query.from || '2026-08-01';
-
-      const endDate =
-        req.query.to || '2027-06-30';
-
-      const data = await sportmonksFetch(
-        `/fixtures/between/${startDate}/${endDate}?include=participants;scores;state;league&filters=fixtureLeagues:${competition.leagueId}`
-      );
-
-      const fixtures = (data.data || [])
-        .map(normalizeSportmonksFixture)
-        .sort(
-          (a, b) =>
-            new Date(a.date) - new Date(b.date)
-        );
-
-      return res.json({
-        ok: true,
-        provider: 'sportmonks',
-
-        competition: {
-          key: competition.key,
-          name: competition.name,
-          leagueId: competition.leagueId,
-          seasonId: competition.seasonId,
-        },
-
-        from: startDate,
-        to: endDate,
-        count: fixtures.length,
-        fixtures,
-      });
-    } catch (error) {
-      console.error(
-        'Error obteniendo calendario de competición Sportmonks:',
-        error
-      );
-
-      return res.status(500).json({
-        ok: false,
-        provider: 'sportmonks',
-        error: error.message,
-      });
-    }
+router.get('/api/sportmonks/calendar/competition/:competition', async (req, res) => {
+  const competitionKey = String(req.params.competition || '').trim();
+  const competition = SPORTMONKS_COMPETITIONS[competitionKey];
+  if (!competition) {
+    return res.status(404).json({ ok: false, error: 'Competición no válida', available: Object.keys(SPORTMONKS_COMPETITIONS) });
   }
-);
+  if (!Number.isInteger(competition.leagueId) || competition.leagueId <= 0 ||
+      !Number.isInteger(competition.seasonId) || competition.seasonId <= 0) {
+    return res.status(503).json({ ok: false, error: 'Configuración de competición incompleta' });
+  }
+
+  const from = String(req.query.from || '2026-08-01');
+  const to = String(req.query.to || '2027-06-30');
+  const validDate = /^\d{4}-\d{2}-\d{2}$/;
+  if (!validDate.test(from) || !validDate.test(to) || from > to ||
+      !Number.isFinite(Date.parse(from)) || !Number.isFinite(Date.parse(to))) {
+    return res.status(400).json({ ok: false, error: 'Intervalo de fechas no válido' });
+  }
+
+  const cacheKey = `${competitionKey}:${from}:${to}`;
+  const cached = competitionCalendarCache.get(cacheKey);
+  if (cached && Date.now() - cached.savedAt < COMPETITION_CALENDAR_TTL_MS) {
+    return res.json({ ...cached.payload, cached: true });
+  }
+
+  try {
+    let pending = competitionCalendarPending.get(cacheKey);
+    if (!pending) {
+      pending = (async () => {
+        const all = [];
+        let page = 1;
+        let hasMore = true;
+        while (hasMore && page <= COMPETITION_CALENDAR_MAX_PAGES) {
+          const data = await sportmonksFetch(
+            `/fixtures/between/${from}/${to}` +
+            `?include=participants;scores;state;league;round;venue` +
+            `&filters=fixtureLeagues:${competition.leagueId}` +
+            `&per_page=50&page=${page}`
+          );
+          if (!Array.isArray(data?.data)) throw new Error('Respuesta de SportMonks no válida');
+          all.push(...data.data);
+          hasMore = data.pagination?.has_more === true;
+          page += 1;
+        }
+        if (hasMore) throw new Error('Se alcanzó el límite de páginas; calendario incompleto');
+
+        const unique = Array.from(new Map(all.map(item => [String(item.id), item])).values());
+        const fixtures = unique
+          .filter(item => Number(item.season_id) === competition.seasonId)
+          .map(item => ({
+            ...normalizeSportmonksFixture(item),
+            round: item.round?.name || (item.round?.id ? String(item.round.id) : ''),
+            venue: item.venue?.name || '',
+          }))
+          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+        const payload = {
+          ok: true,
+          provider: 'sportmonks',
+          competition: { key: competition.key, name: competition.name, leagueId: competition.leagueId, seasonId: competition.seasonId },
+          from, to, count: fixtures.length, fixtures,
+        };
+        competitionCalendarCache.set(cacheKey, { savedAt: Date.now(), payload });
+        return payload;
+      })();
+      competitionCalendarPending.set(cacheKey, pending);
+    }
+    return res.json(await pending);
+  } catch (error) {
+    console.error('Error obteniendo calendario de competición Sportmonks:', error);
+    if (cached) return res.json({ ...cached.payload, cached: true, stale: true });
+    return res.status(502).json({ ok: false, provider: 'sportmonks', error: error.message });
+  } finally {
+    // Solo el solicitante que inició la promesa debe limpiarla; si ya terminó,
+    // no se necesita conservarla para nuevas solicitudes.
+    competitionCalendarPending.delete(cacheKey);
+  }
+});
 
 /**
  * LIVE Sportmonks - endpoint de prueba.
