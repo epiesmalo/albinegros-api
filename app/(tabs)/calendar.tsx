@@ -38,6 +38,51 @@ type FixtureItem = {
   extra?: number | null;
 };
 
+type CompetitionKey = 'laliga' | 'laliga2' | 'primera-rfef-1' | 'primera-rfef-2' | 'segunda-rfef-3';
+const COMPETITIONS: { key: CompetitionKey; label: string }[] = [
+  { key: 'laliga', label: 'PRIMERA DIVISIÓN' },
+  { key: 'laliga2', label: 'SEGUNDA DIVISIÓN' },
+  { key: 'primera-rfef-1', label: 'PRIMERA RFEF · GRUPO 1' },
+  { key: 'primera-rfef-2', label: 'PRIMERA RFEF · GRUPO 2' },
+  { key: 'segunda-rfef-3', label: 'SEGUNDA RFEF · GRUPO 3' },
+];
+const API_BASE = 'https://api.albinegroscastellon.com';
+const calendarCacheKey = (competition: CompetitionKey) =>
+  competition === 'laliga2' ? CACHE_KEYS.CALENDAR : `${CACHE_KEYS.CALENDAR}_${competition}`;
+const normalizeStatus = (value?: string | null) => {
+  const status = (value || '').toUpperCase();
+  const mapping: Record<string, string> = {
+    '1ST': '1H', '2ND': '2H', 'POSTP': 'PST', 'POST': 'PST', 'POSTPONED': 'PST',
+    'CANC': 'CANC', 'CANCELLED': 'CANC', 'ABAN': 'ABD', 'ABANDONED': 'ABD',
+    'FINISHED': 'FT', 'NOT_STARTED': 'NS', 'SCHEDULED': 'NS',
+  };
+  return mapping[status] || status;
+};
+const normalizeCompetitionFixture = (item: any): FixtureItem => {
+  const fixtureId = Number(item.fixtureId ?? item.id);
+  const statusShort = normalizeStatus(item.status?.shortName || item.status?.short || item.status?.state || item.status?.name);
+  const scoreAllowed = !['NS', 'TBA', 'PST', 'CANC', 'ABD'].includes(statusShort);
+  return {
+    id: fixtureId, fixtureId,
+    homeTeamId: item.home?.teamId ?? null,
+    awayTeamId: item.away?.teamId ?? null,
+    date: item.date || '', round: String(item.round || ''),
+    homeTeam: item.home?.name || 'Local', awayTeam: item.away?.name || 'Visitante',
+    homeLogo: item.home?.logo || '', awayLogo: item.away?.logo || '',
+    homeGoals: scoreAllowed ? item.home?.score ?? null : null,
+    awayGoals: scoreAllowed ? item.away?.score ?? null : null,
+    venue: item.venue || '', statusShort,
+    statusLong: item.status?.name || '', elapsed: null, extra: null,
+  };
+};
+const isFirstTeam = (item: FixtureItem) =>
+  item.homeTeamId === 5254 || item.awayTeamId === 5254 ||
+  [item.homeTeam, item.awayTeam].some(name =>
+    /^(?:c\.?d\.?\s*)?castell[oó]n$/i.test(name.trim()));
+const isReserveTeam = (item: FixtureItem) =>
+  item.homeTeamId === 29495 || item.awayTeamId === 29495 ||
+  [item.homeTeam, item.awayTeam].some(name => /castell[oó]n\s*b\b/i.test(name));
+
 const getLogoUrl = (teamName: string, logo?: string) => {
   const team = teamName
     .toLowerCase()
@@ -118,7 +163,11 @@ export default function CalendarScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [selectedRound, setSelectedRound] = useState<number | null>(null);
-  const [filter, setFilter] = useState<'Todos' | 'Castellón'>('Todos');
+  const [filter, setFilter] = useState<'Todos' | 'Castellón' | 'Castellón B'>('Todos');
+  const [competition, setCompetition] = useState<CompetitionKey>('laliga2');
+  const [competitionDropdownOpen, setCompetitionDropdownOpen] = useState(false);
+  const requestGeneration = useRef(0);
+  const competitionRef = useRef<CompetitionKey>('laliga2');
   const [roundDropdownOpen, setRoundDropdownOpen] = useState(false);
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
   const [usingCachedData, setUsingCachedData] = useState(false);
@@ -151,156 +200,88 @@ export default function CalendarScreen() {
   fixturesRef.current = fixtures;
 }, [fixtures]);
 
-  const loadCalendar = async (isRefresh = false) => {
-  try {
-    if (isRefresh) {
-      setRefreshing(true);
-    } else {
-      const cachedCalendar = await getCache<FixtureItem[]>(
-        CACHE_KEYS.CALENDAR
-      );
-
-      if (
-        Array.isArray(cachedCalendar?.data) &&
-        cachedCalendar.data.length > 0
-      ) {
-        setFixtures(cachedCalendar.data);
+  const loadCalendar = async (isRefresh = false, league: CompetitionKey = competition) => {
+    const generation = ++requestGeneration.current;
+    const cacheKey = calendarCacheKey(league);
+    try {
+      if (isRefresh) setRefreshing(true);
+      else {
+        const cached = await getCache<FixtureItem[]>(cacheKey);
+        if (generation !== requestGeneration.current) return;
+        if (Array.isArray(cached?.data) && cached.data.length) {
+          fixturesRef.current = cached.data;
+          setFixtures(cached.data);
+          setUsingCachedData(true);
+          setCacheSavedAt(cached.savedAt);
+          setLoading(false);
+        } else setLoading(true);
+      }
+      setError('');
+      const url = league === 'laliga2'
+        ? `${API_BASE}/calendar/first-team`
+        : `${API_BASE}/api/sportmonks/calendar/competition/${league}`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const payload = await response.json();
+      const data: FixtureItem[] = league === 'laliga2'
+        ? payload
+        : payload?.ok && Array.isArray(payload.fixtures)
+          ? payload.fixtures.map(normalizeCompetitionFixture)
+          : null;
+      if (!Array.isArray(data)) throw new Error('Respuesta de calendario no válida');
+      const updatedData = await refreshTodayFixtures(data, league);
+      if (generation !== requestGeneration.current) return;
+      const previousById = new Map<string, FixtureItem>(fixturesRef.current.map(item => [String(item.fixtureId), item]));
+      const mergedData = updatedData.map(item => {
+        const previous = previousById.get(String(item.fixtureId));
+        if (!previous) return item;
+        const matchDate = new Date(item.date);
+        const now = new Date();
+        const isToday = matchDate.toDateString() === now.toDateString();
+        const blocked = ['PST', 'CANC', 'ABD', 'NS', 'TBA'].includes(normalizeStatus(item.statusShort));
+        return {
+          ...item,
+          homeGoals: blocked ? null : item.homeGoals ?? previous.homeGoals ?? null,
+          awayGoals: blocked ? null : item.awayGoals ?? previous.awayGoals ?? null,
+          statusShort: item.statusShort || (isToday ? previous.statusShort : null),
+          statusLong: item.statusLong || (isToday ? previous.statusLong : null),
+          elapsed: item.elapsed ?? (isToday ? previous.elapsed : null),
+          extra: item.extra ?? (isToday ? previous.extra : null),
+        };
+      });
+      fixturesRef.current = mergedData;
+      setFixtures(mergedData);
+      setUsingCachedData(false);
+      setCacheSavedAt(null);
+      setCurrentTime(Date.now());
+      await saveCache(cacheKey, mergedData);
+    } catch (err) {
+      console.log('Error cargando calendario:', err);
+      if (generation !== requestGeneration.current) return;
+      const cached = await getCache<FixtureItem[]>(cacheKey);
+      if (generation !== requestGeneration.current) return;
+      if (Array.isArray(cached?.data) && cached.data.length) {
+        fixturesRef.current = cached.data;
+        setFixtures(cached.data);
         setUsingCachedData(true);
-        setCacheSavedAt(cachedCalendar.savedAt);
-        setCurrentTime(Date.now());
-        setLoading(false);
+        setCacheSavedAt(cached.savedAt);
+        setError('');
       } else {
-        setLoading(true);
+        fixturesRef.current = [];
+        setFixtures([]);
+        setError('No se pudo cargar el calendario.');
+      }
+    } finally {
+      if (generation === requestGeneration.current) {
+        setLoading(false);
+        setRefreshing(false);
       }
     }
-
-    setError('');
-
-    const response = await fetch(
-      'https://api.albinegroscastellon.com/calendar/first-team'
-    );
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    if (!Array.isArray(data)) {
-      throw new Error('La respuesta del calendario no es válida.');
-    }
-
-const updatedData = await refreshTodayFixtures(data);
-
-const previousFixtures = fixturesRef.current;
-
-const mergedData = updatedData.map((item) => {
-  const previousItem = previousFixtures.find(
-    (previous) =>
-      String(previous.fixtureId) === String(item.fixtureId)
-  );
-
-  if (!previousItem) {
-    return item;
-  }
-
-  const matchDate = new Date(item.date);
-  const now = new Date();
-
-  const isToday =
-    matchDate.getFullYear() === now.getFullYear() &&
-    matchDate.getMonth() === now.getMonth() &&
-    matchDate.getDate() === now.getDate();
-
-  // Solo permitimos conservar estados LIVE anteriores
-  // mientras el partido pertenezca al día de hoy.
-  const canKeepPreviousLiveState = isToday;
-
-  return {
-    ...item,
-
-    homeGoals:
-      item.homeGoals ?? previousItem.homeGoals ?? null,
-
-    awayGoals:
-      item.awayGoals ?? previousItem.awayGoals ?? null,
-
-    statusShort:
-      item.statusShort ??
-      (canKeepPreviousLiveState
-        ? previousItem.statusShort
-        : null),
-
-    statusLong:
-      item.statusLong ??
-      (canKeepPreviousLiveState
-        ? previousItem.statusLong
-        : null),
-
-    elapsed:
-      item.elapsed ??
-      (canKeepPreviousLiveState
-        ? previousItem.elapsed
-        : null),
-
-    extra:
-      item.extra ??
-      (canKeepPreviousLiveState
-        ? previousItem.extra
-        : null),
   };
-});
-
-fixturesRef.current = mergedData;
-const liveMatchDebug = mergedData.find(
-  (item) => item.statusShort === '1H' || item.statusShort === '2H'
-);
-
-if (liveMatchDebug) {
-  console.log(
-    '🟢 LIVE UPDATE:',
-    liveMatchDebug.elapsed,
-    liveMatchDebug.homeGoals,
-    liveMatchDebug.awayGoals
-  );
-}
-setFixtures(mergedData);
-setUsingCachedData(false);
-setCacheSavedAt(null);
-setCurrentTime(Date.now());
-
-await saveCache(CACHE_KEYS.CALENDAR, mergedData);
-  } catch (err) {
-  console.log('🔴 ERROR CALENDARIO - ENTRANDO EN CATCH:', err);
-
-    const cachedCalendar = await getCache<FixtureItem[]>(
-      CACHE_KEYS.CALENDAR
-    );
-
-    if (
-      Array.isArray(cachedCalendar?.data) &&
-      cachedCalendar.data.length > 0
-    ) {
-  fixturesRef.current = cachedCalendar.data;
-setFixtures(cachedCalendar.data);
-setUsingCachedData(true);
-setUsingCachedData(true);
-      setCacheSavedAt(cachedCalendar.savedAt);
-      setCurrentTime(Date.now());
-      setError('');
-    } else {
-      setError('No se pudo cargar el calendario.');
-      setFixtures([]);
-    }
-  } finally {
-    setLoading(false);
-    setRefreshing(false);
-  }
-};
- const refreshTodayFixtures = async (calendarData: FixtureItem[]) => {
+ const refreshTodayFixtures = async (calendarData: FixtureItem[], league: CompetitionKey) => {
   try {
     const response = await fetch(
-      'https://api.albinegroscastellon.com/api/football/live'
+      league === 'laliga2' ? `${API_BASE}/api/football/live` : `${API_BASE}/api/sportmonks/live`
     );
 
     if (!response.ok) {
@@ -356,7 +337,9 @@ const refreshLiveFixtures = async () => {
     return;
   }
 
-  const updatedFixtures = await refreshTodayFixtures(currentFixtures);
+  const league = competitionRef.current;
+  const updatedFixtures = await refreshTodayFixtures(currentFixtures, league);
+  if (competitionRef.current !== league) return;
 
   fixturesRef.current = updatedFixtures;
   setFixtures(updatedFixtures);
@@ -364,7 +347,8 @@ const refreshLiveFixtures = async () => {
 
 useFocusEffect(
   useCallback(() => {
-    loadCalendar();
+    competitionRef.current = competition;
+    void loadCalendar(false, competition);
 
     const interval = setInterval(() => {
       refreshLiveFixtures();
@@ -372,8 +356,9 @@ useFocusEffect(
 
     return () => {
       clearInterval(interval);
+      requestGeneration.current += 1;
     };
-  }, [])
+  }, [competition])
 );
 
 useEffect(() => {
@@ -444,6 +429,7 @@ useEffect(() => {
   }, [fixtures, rounds, selectedRound]);
 
   const loadCommentCounts = useCallback(async () => {
+  const league = competitionRef.current;
   const fixtureIds = fixturesRef.current
     .map((item) => item.fixtureId)
     .filter((id): id is number => typeof id === 'number' && id > 0);
@@ -485,7 +471,7 @@ useEffect(() => {
       }
     }
 
-    setCommentCounts(freshCounts);
+    if (league === competitionRef.current) setCommentCounts(freshCounts);
   } catch (countError) {
     console.log('No se pudieron cargar los contadores de comentarios:', countError);
   }
@@ -512,14 +498,14 @@ useEffect(() => {
     if (fixtures.length > 0) {
       void loadCommentCounts();
     }
-  }, [fixtures, loadCommentCounts]);
+  }, [competition, fixtures.length, loadCommentCounts]);
 
   const selectedRoundMatches = useMemo(() => {
     return fixtures
       .filter((item) => extractRoundNumber(item.round) === selectedRound)
       .filter((item) => {
         if (filter === 'Todos') return true;
-        return isCastellonTeam(item.homeTeam) || isCastellonTeam(item.awayTeam);
+        return filter === 'Castellón B' ? isReserveTeam(item) : isFirstTeam(item);
       })
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [fixtures, selectedRound, filter]);
@@ -567,7 +553,7 @@ useEffect(() => {
     );
   };
 const renderLiveStatus = (item: FixtureItem) => {
-  const short = item.statusShort || '';
+  const short = normalizeStatus(item.statusShort);
 
   const liveStatuses = ['1H', '2H', 'ET', 'P', 'LIVE'];
   const pausedStatuses = ['HT', 'BT'];
@@ -607,11 +593,9 @@ const minute =
 };
 
   const renderMatch = (item: FixtureItem) => {
-  const isCastellon =
-    isCastellonTeam(item.homeTeam) ||
-    isCastellonTeam(item.awayTeam);
+  const isCastellon = isFirstTeam(item) || isReserveTeam(item);
 
-  const short = item.statusShort || '';
+  const short = normalizeStatus(item.statusShort);
 
   const liveStatuses = ['1H', '2H', 'ET', 'P', 'LIVE'];
   const pausedStatuses = ['HT', 'BT'];
@@ -636,8 +620,8 @@ const hasFinalScore =
   item.homeGoals !== null &&
   item.awayGoals !== null;
 
-const forceFinished =
-  isPastDay && hasFinalScore;
+const isPostponed = ['PST', 'CANC', 'ABD'].includes(short);
+const forceFinished = !isPostponed && isPastDay && hasFinalScore;
 
 const isLive =
   !forceFinished && liveStatuses.includes(short);
@@ -645,8 +629,7 @@ const isLive =
 const isPaused =
   !forceFinished && pausedStatuses.includes(short);
 
-const isFinished =
-  forceFinished || finishedStatuses.includes(short);
+const isFinished = !isPostponed && (forceFinished || finishedStatuses.includes(short));
 
   const minute =
     item.elapsed !== null && item.elapsed !== undefined
@@ -682,7 +665,9 @@ const isFinished =
       >
         <View style={styles.directMatchHeader}>
           <Text style={styles.directStatusText}>
-            {isLive
+            {isPostponed
+              ? short === 'PST' ? 'APLAZADO' : short === 'CANC' ? 'CANCELADO' : 'SUSPENDIDO'
+              : isLive
               ? 'EN JUEGO'
               : isPaused
                 ? 'DESCANSO'
@@ -729,7 +714,7 @@ const isFinished =
           </View>
 
           <Text style={styles.directScore}>
-            {item.homeGoals ?? '-'}
+            {isPostponed ? '-' : item.homeGoals ?? '-'}
           </Text>
         </View>
 
@@ -772,7 +757,7 @@ const isFinished =
           </View>
 
           <Text style={styles.directScore}>
-            {item.awayGoals ?? '-'}
+            {isPostponed ? '-' : item.awayGoals ?? '-'}
           </Text>
         </View>
 
@@ -808,6 +793,12 @@ const isFinished =
             <View style={styles.directBreakBadge}>
               <Text style={styles.directBreakText}>
                 DESCANSO
+              </Text>
+            </View>
+          ) : isPostponed ? (
+            <View style={styles.postponedBadge}>
+              <Text style={styles.postponedBadgeText}>
+                {short === 'PST' ? 'APLAZADO' : short === 'CANC' ? 'CANCELADO' : 'SUSPENDIDO'}
               </Text>
             </View>
           ) : isFinished ? (
@@ -865,13 +856,13 @@ const isFinished =
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
-        scrollEnabled={!roundDropdownOpen && !filterDropdownOpen}
+        scrollEnabled={!roundDropdownOpen && !filterDropdownOpen && !competitionDropdownOpen}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => loadCalendar(true)}
-            enabled={!roundDropdownOpen && !filterDropdownOpen}
+            enabled={!roundDropdownOpen && !filterDropdownOpen && !competitionDropdownOpen}
             tintColor={colors.accent}
             colors={[colors.accent]}
             progressBackgroundColor="#101010"
@@ -880,7 +871,10 @@ const isFinished =
       >
         <View>
   <View style={styles.heroCard}>
-    <Text style={styles.kicker}>SEGUNDA DIVISIÓN</Text>
+    <TouchableOpacity onPress={() => setCompetitionDropdownOpen(true)} style={styles.competitionSelect}>
+      <Text style={styles.kicker}>{COMPETITIONS.find(item => item.key === competition)?.label}</Text>
+      <Text style={styles.compactChevron}>▼</Text>
+    </TouchableOpacity>
     <Text style={styles.subtitle}>Temporada 2026/27</Text>
   </View>
 </View>
@@ -967,6 +961,32 @@ const isFinished =
         )}
       </ScrollView>
 
+      <Modal transparent visible={competitionDropdownOpen} animationType="fade">
+        <Pressable style={styles.modalBackdrop} onPress={() => setCompetitionDropdownOpen(false)}>
+          <Pressable style={styles.roundDropdownBox}>
+            {COMPETITIONS.map(item => (
+              <Pressable key={item.key} style={styles.dropdownItem} onPress={() => {
+                if (item.key !== competition) {
+                  requestGeneration.current += 1;
+                  competitionRef.current = item.key;
+                  fixturesRef.current = [];
+                  setFixtures([]);
+                  setSelectedRound(null);
+                  setCommentCounts({});
+                  setFilter('Todos');
+                  setLoading(true);
+                  setCompetition(item.key);
+                }
+                setCompetitionDropdownOpen(false);
+              }}>
+                <Text style={[styles.dropdownItemText, competition === item.key && styles.dropdownItemTextActive]}>{item.label}</Text>
+                {competition === item.key && <Text style={styles.checkText}>✓</Text>}
+              </Pressable>
+            ))}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <Modal transparent visible={roundDropdownOpen} animationType="fade">
         <Pressable style={styles.modalBackdrop} onPress={() => setRoundDropdownOpen(false)}>
           <Pressable style={styles.roundDropdownBox}>
@@ -999,7 +1019,7 @@ const isFinished =
       <Modal transparent visible={filterDropdownOpen} animationType="fade">
         <Pressable style={styles.modalBackdrop} onPress={() => setFilterDropdownOpen(false)}>
           <Pressable style={styles.filterDropdownBox}>
-            {(['Todos', 'Castellón'] as const).map((item) => {
+            {(competition === 'laliga2' ? ['Todos', 'Castellón'] : competition === 'segunda-rfef-3' ? ['Todos', 'Castellón B'] : ['Todos']).map((item) => {
               const isActive = item === filter;
 
               return (
@@ -1007,7 +1027,7 @@ const isFinished =
                   key={item}
                   style={styles.dropdownItem}
                   onPress={() => {
-                    setFilter(item);
+                    setFilter(item as typeof filter);
                     setFilterDropdownOpen(false);
                   }}
                 >
@@ -1071,6 +1091,7 @@ const styles = StyleSheet.create({
     padding: 14,
     paddingBottom: 40,
   },
+  competitionSelect: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   heroCard: {
     backgroundColor: '#111111',
     borderRadius: 18,
@@ -1561,6 +1582,16 @@ directBreakText: {
   fontWeight: '900',
 },
 
+  postponedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 13,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#C62828',
+  },
+  postponedBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '900', letterSpacing: 0.4 },
+  postponedHeaderText: { color: '#FF6B6B' },
 directFinishedBadge: {
   flexDirection: 'row',
   alignItems: 'center',

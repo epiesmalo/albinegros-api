@@ -390,8 +390,19 @@ export default function MatchDetailScreen() {
     );
   }, []);
 
+  const exceptionalStatus = useMemo(() => {
+    const status = data?.fixture.status;
+    const short = String(status?.short || '').toUpperCase();
+    const long = String(status?.long || '').toUpperCase();
+    if (['PST', 'POST', 'POSTP', 'POSTPONED'].includes(short) || long.includes('POSTPON')) return 'APLAZADO';
+    if (['CANC', 'CANCELLED'].includes(short) || long.includes('CANCEL')) return 'CANCELADO';
+    if (['ABD', 'ABAN', 'ABANDONED'].includes(short) || long.includes('ABANDON')) return 'SUSPENDIDO';
+    return null;
+  }, [data]);
+
   const statusText = useMemo(() => {
     if (!data) return '';
+    if (exceptionalStatus) return exceptionalStatus;
     const s = data.fixture.status;
 
     if (s.short === 'HT') return 'DESCANSO';
@@ -402,7 +413,7 @@ export default function MatchDetailScreen() {
       return s.extra ? `${s.elapsed}+${s.extra}'` : `${s.elapsed}'`;
     }
     return s.long || s.short;
-  }, [data]);
+  }, [data, exceptionalStatus]);
 
   type TimelineEventKind =
     | 'goal'
@@ -1169,9 +1180,9 @@ export default function MatchDetailScreen() {
                 <Text style={styles.round}>{data.league.round}</Text>
               </View>
 
-              <View style={styles.statusBadge}>
-                <View style={styles.statusDot} />
-                <Text style={styles.statusText}>{statusText}</Text>
+              <View style={[styles.statusBadge, exceptionalStatus && styles.exceptionalStatusBadge]}>
+                {!exceptionalStatus && <View style={styles.statusDot} />}
+                <Text style={[styles.statusText, exceptionalStatus && styles.exceptionalStatusText]}>{statusText}</Text>
               </View>
 
               <View style={styles.scoreTeams}>
@@ -1201,9 +1212,9 @@ export default function MatchDetailScreen() {
 
                 <View style={styles.scoreCenter}>
                   <Text style={styles.mainScore}>
-                    {data.goals.home ?? '-'} <Text style={styles.scoreDash}>—</Text> {data.goals.away ?? '-'}
+                    {exceptionalStatus ? '-' : data.goals.home ?? '-'} <Text style={styles.scoreDash}>—</Text> {exceptionalStatus ? '-' : data.goals.away ?? '-'}
                   </Text>
-                  {data.score.halftime.home !== null && (
+                  {!exceptionalStatus && data.score.halftime.home !== null && (
                     <Text style={styles.halftime}>
                       Descanso {data.score.halftime.home}-{data.score.halftime.away}
                     </Text>
@@ -1318,6 +1329,8 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     marginTop: 14,
   },
+  exceptionalStatusBadge: { backgroundColor: '#C62828', borderColor: '#C62828', paddingHorizontal: 15, paddingVertical: 7 },
+  exceptionalStatusText: { color: '#FFFFFF', fontSize: 11, letterSpacing: 0.5 },
   statusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#D4AF37', marginRight: 6 },
   statusText: { color: '#D4AF37', fontSize: 10, fontWeight: '900' },
   scoreTeams: { flexDirection: 'row', alignItems: 'center', marginTop: 15 },
