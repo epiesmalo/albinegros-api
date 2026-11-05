@@ -1514,6 +1514,25 @@ const competitionCalendarCache = new Map();
 const competitionCalendarPending = new Map();
 const COMPETITION_CALENDAR_TTL_MS = 15 * 60_000;
 const COMPETITION_CALENDAR_MAX_PAGES = 60;
+// SportMonks limita /fixtures/between a 100 días por petición.
+// Usamos ventanas de 99 días de diferencia (100 días naturales inclusivos).
+const COMPETITION_CALENDAR_WINDOW_DAYS = 99;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const splitCompetitionCalendarRange = (from, to) => {
+  const windows = [];
+  const end = Date.parse(`${to}T00:00:00Z`);
+  let cursor = Date.parse(`${from}T00:00:00Z`);
+  while (cursor <= end) {
+    const windowEnd = Math.min(cursor + COMPETITION_CALENDAR_WINDOW_DAYS * DAY_MS, end);
+    windows.push({
+      from: new Date(cursor).toISOString().slice(0, 10),
+      to: new Date(windowEnd).toISOString().slice(0, 10),
+    });
+    cursor = windowEnd + DAY_MS;
+  }
+  return windows;
+};
 
 router.get('/api/sportmonks/calendar/competition/:competition', async (req, res) => {
   const competitionKey = String(req.params.competition || '').trim();
@@ -1545,21 +1564,23 @@ router.get('/api/sportmonks/calendar/competition/:competition', async (req, res)
     if (!pending) {
       pending = (async () => {
         const all = [];
-        let page = 1;
-        let hasMore = true;
-        while (hasMore && page <= COMPETITION_CALENDAR_MAX_PAGES) {
-          const data = await sportmonksFetch(
-            `/fixtures/between/${from}/${to}` +
-            `?include=participants;scores;state;league;round;venue` +
-            `&filters=fixtureLeagues:${competition.leagueId}` +
-            `&per_page=50&page=${page}`
-          );
-          if (!Array.isArray(data?.data)) throw new Error('Respuesta de SportMonks no válida');
-          all.push(...data.data);
-          hasMore = data.pagination?.has_more === true;
-          page += 1;
+        for (const window of splitCompetitionCalendarRange(from, to)) {
+          let page = 1;
+          let hasMore = true;
+          while (hasMore && page <= COMPETITION_CALENDAR_MAX_PAGES) {
+            const data = await sportmonksFetch(
+              `/fixtures/between/${window.from}/${window.to}` +
+              `?include=participants;scores;state;league;round;venue` +
+              `&filters=fixtureLeagues:${competition.leagueId}` +
+              `&per_page=50&page=${page}`
+            );
+            if (!Array.isArray(data?.data)) throw new Error('Respuesta de SportMonks no válida');
+            all.push(...data.data);
+            hasMore = data.pagination?.has_more === true;
+            page += 1;
+          }
+          if (hasMore) throw new Error(`Calendario incompleto: límite de páginas en ${window.from} - ${window.to}`);
         }
-        if (hasMore) throw new Error('Se alcanzó el límite de páginas; calendario incompleto');
 
         const unique = Array.from(new Map(all.map(item => [String(item.id), item])).values());
         const fixtures = unique
@@ -1581,16 +1602,17 @@ router.get('/api/sportmonks/calendar/competition/:competition', async (req, res)
         return payload;
       })();
       competitionCalendarPending.set(cacheKey, pending);
+      pending.finally(() => {
+        if (competitionCalendarPending.get(cacheKey) === pending) {
+          competitionCalendarPending.delete(cacheKey);
+        }
+      }).catch(() => {});
     }
     return res.json(await pending);
   } catch (error) {
     console.error('Error obteniendo calendario de competición Sportmonks:', error);
     if (cached) return res.json({ ...cached.payload, cached: true, stale: true });
     return res.status(502).json({ ok: false, provider: 'sportmonks', error: error.message });
-  } finally {
-    // Solo el solicitante que inició la promesa debe limpiarla; si ya terminó,
-    // no se necesita conservarla para nuevas solicitudes.
-    competitionCalendarPending.delete(cacheKey);
   }
 });
 
