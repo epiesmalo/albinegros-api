@@ -1,7 +1,22 @@
 const supabase = require('../config/supabase');
 
 async function getInstagramPosts() {
-  const token = process.env.INSTAGRAM_ACCESS_TOKEN?.trim();
+  const { data, error } = await supabase
+    .from('instagram_tokens')
+    .select('access_token')
+    .eq('id', 'albinegros')
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Error leyendo token de Instagram: ${error.message}`);
+  }
+
+  const token =
+    data?.access_token || process.env.INSTAGRAM_ACCESS_TOKEN?.trim();
+
+  if (!token) {
+    throw new Error('No hay token de Instagram configurado');
+  }
 
   const response = await fetch(
     `https://graph.instagram.com/me/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp&access_token=${token}`
