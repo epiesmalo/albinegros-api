@@ -18,12 +18,14 @@ const ALBINEGROS_LOGO = require('../../assets/radio/albinegros-logo.png');
 const LA_GRADA_LOGO = require('../../assets/radio/la-grada-albinegra.jpg');
 const CONEXION_ORELLUT_LOGO = require('../../assets/radio/conexion-orellut.jpg');
 const LA_TRIBUNA_LOGO = require('../../assets/radio/la-tribuna-castello.jpg');
+const LA_BARBERIA_LOGO = require('../../assets/radio/la-barberia-albinegra.jpg');
 const SIGNO_STREAM_URL = 'https://stream.zeno.fm/ckalyapuggxuv';
 const SIGNO_PATREON_URL = 'https://www.patreon.com/cw/signoradiocastellon';
 const SIGNO_PODCASTS_URL = 'https://www.patreon.com/cw/signoradiocastellon?utm_source=ig&utm_medium=social&utm_content=link_in_bio&fbclid=PAcGRvZgJleHRuA2FlbQIxMQBzcnRjBmFwcF9pZA85MzY2MTk3NDMzOTI0NTkAAadB_hnN-Ct4RidKIAZiFKOLrvWajB6OklSGHKhUzvxBfqdozoBO7jD0vYBotQ_aem_Nr_YX0NYFph09juqTkj0Vg';
 const LA_GRADA_URL = 'https://www.youtube.com/@TeveQuatre/videos';
 const CONEXION_ORELLUT_URL = 'https://www.youtube.com/playlist?list=PLZkcFc2Lc6OjtYvC4ts5zsuy6jW-UoVWt';
 const LA_TRIBUNA_URL = 'https://www.youtube.com/@televisiodecastello/featured';
+const LA_BARBERIA_URL = 'https://www.youtube.com/@televisiodecastello/search?query=barberia';
 
 export default function RadioScreen() {
   const [activeSection, setActiveSection] = useState<RadioSection>('directo');
@@ -308,6 +310,31 @@ const openUrl = async (url: string) => {
   Programa de actualidad dedicado al C.D. Castellón, con análisis,
   opinión y seguimiento de la actualidad albinegra.
 </Text>
+              <Text style={styles.mediaAction}>VER PROGRAMAS →</Text>
+            </View>
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.mediaCard,
+              pressed ? styles.buttonPressed : null,
+            ]}
+            onPress={() => openUrl(LA_BARBERIA_URL)}
+          >
+            <Image
+              source={LA_BARBERIA_LOGO}
+              style={styles.mediaLogo}
+              resizeMode="cover"
+            />
+            <View style={styles.mediaTextWrap}>
+              <Text style={styles.mediaTitle}>LA BARBERÍA ALBINEGRA</Text>
+              <Text style={styles.mediaMeta}>Dirigido por David Reina</Text>
+              <Text style={styles.mediaMeta}>
+                Televisión de Castellón · Jueves a las 21:30 h
+              </Text>
+              <Text style={styles.mediaDescription}>
+                Programa de televisión diferente centrado en la actualidad albinegra.
+              </Text>
               <Text style={styles.mediaAction}>VER PROGRAMAS →</Text>
             </View>
           </Pressable>
