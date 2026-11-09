@@ -218,6 +218,7 @@ const quickLinks = [
   { id: '7', title: 'Radio', route: '/(tabs)/radio', icon: 'radio' },
   { id: '8', title: 'Noticias', route: '/(tabs)/news', icon: 'newspaper' },
   { id: '9', title: 'Notificaciones', route: '/notifications', icon: 'notifications' },
+  { id: '10', title: 'Juegos', route: '/juegos', icon: 'game-controller' },
 ] as const;
 
   useEffect(() => {
