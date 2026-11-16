@@ -5890,4 +5890,6 @@ router.get('/api/football/team-logo/:teamId', async (req, res) => {
 router.getSportmonksInplayFixtures = getSportmonksInplayFixtures;
 router.sportmonksFetch = sportmonksFetch;
 
+router.use('/api/chapas', require('./chapas.routes'));
+
 module.exports = router;

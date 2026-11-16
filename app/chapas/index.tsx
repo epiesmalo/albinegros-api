@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAudioPlayer } from 'expo-audio';
 import { Stack } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Image, PanResponder, Platform, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Animated, Easing, Image, PanResponder, Platform, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type Team = 'home' | 'away';
@@ -45,6 +45,14 @@ const LOCAL_RIVALS: Rival[] = [
 ];
 
 const CAREER_KEY = '@albinegros_chapas/career_v2';
+const HALL_KEY = '@albinegros_chapas/hall_v1';
+const HALL_DEVICE_KEY = '@albinegros_chapas/hall_device_v1';
+const HALL_API = 'https://albinegros-api.onrender.com/api/chapas';
+type CareerStats = { wins: number; losses: number; goalsFor: number; goalsAgainst: number; eligible: boolean };
+const emptyStats = (): CareerStats => ({ wins: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, eligible: true });
+type HallEntry = { nickname: string; wins: number; losses: number; goals_for: number; goals_against: number; finished_at: string };
+const hallCompare = (a: HallEntry, b: HallEntry) => a.losses - b.losses || (a.wins + a.losses) - (b.wins + b.losses) || ((b.goals_for - b.goals_against) - (a.goals_for - a.goals_against)) || b.goals_for - a.goals_for || a.finished_at.localeCompare(b.finished_at);
+
 const LEGACY_CAREER_KEY = '@albinegros_chapas/career_v1';
 const TARGET_GOALS = 3;
 type Body = { id: string; team?: Team; x: number; y: number; vx: number; vy: number; r: number; mass: number };
@@ -256,7 +264,7 @@ function step(bodies: Body[], w: number, h: number, onImpact?: (x: number, y: nu
   return null;
 }
 
-function Pitch({ mode, onExit, rival, onCareerWin, onSoundModeChange, initialSoundMode = 0, promotionActive }: { mode: Exclude<Mode, null>; onExit: () => void; rival?: Rival; onCareerWin?: (soundMode: 0 | 1 | 2) => void; onSoundModeChange?: (value: 0 | 1 | 2) => void; initialSoundMode?: 0 | 1 | 2; promotionActive?: boolean }) {
+function Pitch({ mode, onExit, rival, onCareerWin, onCareerLoss, onSoundModeChange, initialSoundMode = 0, promotionActive }: { mode: Exclude<Mode, null>; onExit: () => void; rival?: Rival; onCareerWin?: (soundMode: 0 | 1 | 2, goalsFor: number, goalsAgainst: number) => void; onCareerLoss?: (goalsFor: number, goalsAgainst: number) => void; onSoundModeChange?: (value: 0 | 1 | 2) => void; initialSoundMode?: 0 | 1 | 2; promotionActive?: boolean }) {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const w = Math.min(width - 22, 430);
@@ -347,8 +355,12 @@ function Pitch({ mode, onExit, rival, onCareerWin, onSoundModeChange, initialSou
   const [score, setScore] = useState({ home: 0, away: 0 });
   const scoreRef = useRef({ home: 0, away: 0 });
   const [winner, setWinner] = useState<Team | null>(null);
+  const matchStarted = useRef(false);
+  const matchRecorded = useRef(false);
   const winnerRef = useRef<Team | null>(null);
   const onCareerWinRef = useRef(onCareerWin);
+  const onCareerLossRef = useRef(onCareerLoss);
+  onCareerLossRef.current = onCareerLoss;
   onCareerWinRef.current = onCareerWin;
   const movingRef = useRef(false);
   const [moving, setMoving] = useState(false);
@@ -359,6 +371,12 @@ function Pitch({ mode, onExit, rival, onCareerWin, onSoundModeChange, initialSou
   const modeRef = useRef(mode);
   modeRef.current = mode;
 
+  const recordAbandon = () => {
+    if (mode === 'ai' && matchStarted.current && !matchRecorded.current) {
+      matchRecorded.current = true;
+      onCareerLossRef.current?.(scoreRef.current.home, scoreRef.current.away);
+    }
+  };
   const reset = useCallback((keepScore = false, kickoffTeam: Team = 'home', whistleDelay = 350) => {
     bodiesRef.current = createBodies(w, h);
     setBodies(bodiesRef.current.map(b => ({ ...b })));
@@ -372,7 +390,7 @@ function Pitch({ mode, onExit, rival, onCareerWin, onSoundModeChange, initialSou
       whistleTimer.current = null;
       if (alive.current && !winnerRef.current) playEffect(whistleSound);
     }, whistleDelay);
-    if (!keepScore) { setGoalBanner(null); scoreRef.current = { home: 0, away: 0 }; setScore({ home: 0, away: 0 }); winnerRef.current = null; setWinner(null); }
+    if (!keepScore) { matchStarted.current = false; matchRecorded.current = false; setGoalBanner(null); scoreRef.current = { home: 0, away: 0 }; setScore({ home: 0, away: 0 }); winnerRef.current = null; setWinner(null); }
   }, [w, h, playEffect, whistleSound]);
   useEffect(() => { reset(); }, [reset]);
   useEffect(() => () => {
@@ -400,6 +418,7 @@ function Pitch({ mode, onExit, rival, onCareerWin, onSoundModeChange, initialSou
     b.vx = -dragX / magnitude * strength;
     b.vy = -dragY / magnitude * strength;
     playEffect(kickSound);
+    matchStarted.current = true;
     movingRef.current = true; setMoving(true);
     aimRef.current = null; setAim(null);
     lastFrame.current = null; accumulator.current = 0;
@@ -468,8 +487,10 @@ function Pitch({ mode, onExit, rival, onCareerWin, onSoundModeChange, initialSou
         setScore(nextScore);
         if (mode !== 'local' && nextScore[scored] >= TARGET_GOALS) {
           winnerRef.current = scored; setWinner(scored);
+           matchRecorded.current = true;
           movingRef.current = false; setMoving(false);
-          if (scored === 'home' && mode === 'ai') onCareerWinRef.current?.(soundMode);
+          if (scored === 'home' && mode === 'ai') onCareerWinRef.current?.(soundMode, nextScore.home, nextScore.away);
+           if (scored === 'away' && mode === 'ai') onCareerLossRef.current?.(nextScore.home, nextScore.away);
           return;
         }
         // Tras un gol, el saque corresponde al equipo que lo ha encajado.
@@ -573,8 +594,8 @@ function Pitch({ mode, onExit, rival, onCareerWin, onSoundModeChange, initialSou
         <Pressable onPress={() => setSoundMode(v => ((v + 1) % 3) as 0 | 1 | 2)} accessibilityRole="button" accessibilityLabel={soundMode === 0 ? 'Sonido completo; pulsar para solo efectos' : soundMode === 1 ? 'Solo efectos; pulsar para silencio' : 'Silencio; pulsar para sonido completo'} style={styles.soundButton}>
           <Text style={styles.soundButtonText} numberOfLines={1}>{soundMode === 0 ? '🔊 COMPLETO' : soundMode === 1 ? '🔉 SOLO FX' : '🔇 SILENCIO'}</Text>
         </Pressable>
-        <Pressable onPress={() => reset()} style={styles.gameTopAction}><Text style={styles.gameTopActionText}>↻ REINICIAR</Text></Pressable>
-        <Pressable onPress={onExit} style={styles.gameTopAction}><Text style={styles.gameTopActionText}>‹ MENÚ</Text></Pressable>
+        <Pressable onPress={() => { recordAbandon(); reset(); }} style={styles.gameTopAction}><Text style={styles.gameTopActionText}>↻ REINICIAR</Text></Pressable>
+        <Pressable onPress={() => { recordAbandon(); onExit(); }} style={styles.gameTopAction}><Text style={styles.gameTopActionText}>‹ MENÚ</Text></Pressable>
       </View>
       <View style={styles.scoreRow}>
         <Text style={styles.scoreTeam}>CASTELLÓN</Text>
@@ -648,7 +669,7 @@ function Pitch({ mode, onExit, rival, onCareerWin, onSoundModeChange, initialSou
 
 
       </View>
-        {winner && <View style={[styles.resultPanel, styles.resultOverlay]}><Text style={styles.resultTitle}>{winner === 'home' ? '🏆 ¡VICTORIA!' : 'FIN DEL PARTIDO'}</Text><Text style={styles.resultText}>{winner === 'home' ? '¡Rival superado! Se ha desbloqueado el siguiente nivel.' : 'Puedes volver a intentarlo.'}</Text><Pressable onPress={() => reset()} style={styles.primaryButton}><Text style={styles.buttonText}>REPETIR PARTIDO</Text></Pressable><Pressable onPress={onExit} style={styles.actionButton}><Text style={styles.actionText}>{mode === 'quick' ? 'VOLVER AL MENÚ' : 'VOLVER A LA CARRERA'}</Text></Pressable></View>}
+        {winner && <View style={[styles.resultPanel, styles.resultOverlay]}><Text style={styles.resultTitle}>{winner === 'home' ? '🏆 ¡VICTORIA!' : 'FIN DEL PARTIDO'}</Text><Text style={styles.resultText}>{winner === 'home' ? '¡Rival superado! Se ha desbloqueado el siguiente nivel.' : 'Puedes volver a intentarlo.'}</Text><Pressable onPress={() => { recordAbandon(); reset(); }} style={styles.primaryButton}><Text style={styles.buttonText}>REPETIR PARTIDO</Text></Pressable><Pressable onPress={() => { recordAbandon(); onExit(); }} style={styles.actionButton}><Text style={styles.actionText}>{mode === 'quick' ? 'VOLVER AL MENÚ' : 'VOLVER A LA CARRERA'}</Text></Pressable></View>}
       </View>
       {mode !== 'local' && <Text style={styles.matchRule}>PRIMERO EN MARCAR {TARGET_GOALS} GOLES</Text>}
 
@@ -779,6 +800,57 @@ export default function ChapasScreen() {
   const [unlocked, setUnlocked] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [champion, setChampion] = useState(false);
+  const [stats, setStats] = useState<CareerStats>(emptyStats);
+  const statsRef = useRef<CareerStats>(emptyStats());
+  const [hallOpen, setHallOpen] = useState(false);
+  const [hallPeriod, setHallPeriod] = useState<'all' | 'month'>('all');
+  const [hallRows, setHallRows] = useState<HallEntry[]>([]);
+  const [hallLoading, setHallLoading] = useState(false);
+  const [hallError, setHallError] = useState('');
+  const [nickname, setNickname] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [hallMessage, setHallMessage] = useState('');
+  const [deviceId, setDeviceId] = useState('');
+  const [hallEligible, setHallEligible] = useState(false);
+  const [completedStats, setCompletedStats] = useState<CareerStats | null>(null);
+  const recordStats = useCallback((result: 'win' | 'loss', gf: number, ga: number) => {
+    const old = statsRef.current;
+    const next = { ...old, wins: old.wins + (result === 'win' ? 1 : 0), losses: old.losses + (result === 'loss' ? 1 : 0), goalsFor: old.goalsFor + gf, goalsAgainst: old.goalsAgainst + ga };
+    statsRef.current = next; setStats(next);
+    AsyncStorage.setItem(HALL_KEY, JSON.stringify(next)).catch(console.warn);
+    return next;
+  }, []);
+  const loadHall = useCallback(async (period: 'all' | 'month') => {
+    setHallLoading(true); setHallError('');
+    try {
+      const response = await fetch(`${HALL_API}/leaderboard?period=${period}`);
+      if (!response.ok) throw new Error('No se ha podido conectar con la clasificación');
+      const data = await response.json();
+      setHallRows((Array.isArray(data.entries) ? data.entries : []).sort(hallCompare));
+    } catch (error) { setHallError('Clasificación no disponible. Comprueba tu conexión.'); }
+    finally { setHallLoading(false); }
+  }, []);
+  useEffect(() => { if (hallOpen) loadHall(hallPeriod); }, [hallOpen, hallPeriod, loadHall]);
+  const submitHall = useCallback(async () => {
+    if (!hallEligible || !completedStats || submitting || !deviceId) return;
+    const name = nickname.trim().replace(/\s+/g, ' ');
+    if (name.length < 3 || name.length > 15) { setHallMessage('El apodo debe tener entre 3 y 15 caracteres.'); return; }
+    setSubmitting(true); setHallMessage('');
+    try {
+      const response = await fetch(`${HALL_API}/leaderboard`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deviceId, nickname: name, ...completedStats }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'No se pudo registrar');
+      setHallMessage(data.improved ? '¡Marca registrada en el Salón de la Fama!' : 'Tu mejor marca anterior sigue siendo superior.');
+      setHallOpen(true);
+    } catch (error) { setHallMessage(error instanceof Error ? error.message : 'Error de conexión'); }
+    finally { setSubmitting(false); }
+  }, [hallEligible, completedStats, submitting, deviceId, nickname]);
+  const restartCareer = useCallback(async () => {
+    const fresh = emptyStats(); statsRef.current = fresh; setStats(fresh); setCompletedStats(null); setHallEligible(false);
+    unlockRef.current = 0; setUnlocked(0); setChampion(false); setRivalIndex(0);
+    await Promise.all([AsyncStorage.setItem(CAREER_KEY, '0'), AsyncStorage.removeItem(`${CAREER_KEY}_champion`), AsyncStorage.setItem(HALL_KEY, JSON.stringify(fresh))]);
+  }, []);
+
 
   const promotionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (promotionTimer.current) clearTimeout(promotionTimer.current); }, []);
@@ -789,7 +861,17 @@ export default function ChapasScreen() {
       AsyncStorage.getItem(CAREER_KEY),
       AsyncStorage.getItem(LEGACY_CAREER_KEY),
       AsyncStorage.getItem(`${CAREER_KEY}_champion`),
-    ]).then(([current, legacy, champ]) => {
+      AsyncStorage.getItem(HALL_KEY),
+      AsyncStorage.getItem(HALL_DEVICE_KEY),
+    ]).then(([current, legacy, champ, savedStats, savedDevice]) => {
+      let id = savedDevice;
+      if (!id) { id = `chapas-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`; AsyncStorage.setItem(HALL_DEVICE_KEY, id).catch(console.warn); }
+      if (active) setDeviceId(id);
+      let parsedStats: CareerStats = emptyStats();
+      try { if (savedStats) parsedStats = { ...emptyStats(), ...JSON.parse(savedStats) }; else if (Number(current ?? legacy ?? '0') > 0 || champ === 'yes') parsedStats.eligible = false; } catch { parsedStats.eligible = false; }
+      if (active) { statsRef.current = parsedStats; setStats(parsedStats); }
+      if (champ === 'yes' && parsedStats.eligible && parsedStats.wins === RIVALS.length) { if (active) { setCompletedStats(parsedStats); setHallEligible(true); } }
+
       // Migración: conserva la cantidad de rivales desbloqueados de la fase 6.
       // No se borra la clave antigua y los progresos nuevos usan career_v2.
       const parsed = Number(current ?? legacy ?? '0');
@@ -799,7 +881,14 @@ export default function ChapasScreen() {
     }).catch(() => { if (active) setLoaded(true); });
     return () => { active = false; };
   }, []);
-  const winCareer = useCallback((soundMode: 0 | 1 | 2) => {
+  const winCareer = useCallback((soundMode: 0 | 1 | 2, gf: number, ga: number) => {
+    // Las victorias repetidas contra rivales ya superados no cuentan para el ranking.
+    if (rivalIndex === unlockRef.current && !champion) {
+      const nextStats = recordStats('win', gf, ga);
+      if (rivalIndex === RIVALS.length - 1 && nextStats.eligible && nextStats.wins === RIVALS.length) {
+        setCompletedStats(nextStats); setHallEligible(true);
+      }
+    }
     if (rivalIndex === RIVALS.length - 1) {
       setChampion(true);
       AsyncStorage.setItem(`${CAREER_KEY}_champion`, "yes").catch(error => console.warn("[chapas] No se pudo guardar el título", error));
@@ -820,7 +909,8 @@ export default function ChapasScreen() {
       setUnlocked(next);
       AsyncStorage.setItem(CAREER_KEY, String(next)).catch(error => console.warn('[chapas] No se pudo guardar el progreso', error));
     }
-  }, [rivalIndex]);
+  }, [rivalIndex, champion, recordStats]);
+  const loseCareer = useCallback((gf: number, ga: number) => { if (!champion && rivalIndex === unlockRef.current) recordStats('loss', gf, ga); }, [champion, rivalIndex, recordStats]);
   const goBack = () => { setMode(null); setCareerOpen(mode === 'ai'); };
   return (
     <SafeAreaView style={[styles.screen, { paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight ?? 0 : 0 }]}>
@@ -828,13 +918,37 @@ export default function ChapasScreen() {
       <StatusBar barStyle="light-content" backgroundColor="#101010" />
       {mode ? (
         <ScrollView scrollEnabled={true} contentContainerStyle={{ flexGrow: 1, paddingBottom: 18 }} showsVerticalScrollIndicator={false}>
-          <Pitch key={`${mode}-${mode === 'quick' ? quickIndex : rivalIndex}`} mode={mode} rival={mode === 'quick' ? RIVALS[quickIndex] : mode === 'ai' ? RIVALS[rivalIndex] : LOCAL_RIVALS[localIndex]} onCareerWin={mode === 'ai' ? winCareer : undefined} onExit={goBack} onSoundModeChange={setMenuSoundMode} initialSoundMode={menuSoundMode} promotionActive={!!promotion} />
+          <Pitch key={`${mode}-${mode === 'quick' ? quickIndex : rivalIndex}`} mode={mode} rival={mode === 'quick' ? RIVALS[quickIndex] : mode === 'ai' ? RIVALS[rivalIndex] : LOCAL_RIVALS[localIndex]} onCareerWin={mode === 'ai' ? winCareer : undefined} onCareerLoss={mode === 'ai' ? loseCareer : undefined} onExit={goBack} onSoundModeChange={setMenuSoundMode} initialSoundMode={menuSoundMode} promotionActive={!!promotion} />
+        </ScrollView>
+      ) : hallOpen ? (
+        <ScrollView contentContainerStyle={styles.careerContent}>
+          <Pressable onPress={() => setHallOpen(false)} style={styles.backButton}><Text style={styles.backText}>‹ MENÚ PRINCIPAL</Text></Pressable>
+          <Text style={styles.careerTitle}>🏆 SALÓN DE LA FAMA</Text>
+          <Text style={styles.careerSubtitle}>LOS MEJORES JUGADORES DE ALBINEGROS CHAPAS</Text>
+          <View style={{ flexDirection: 'row', gap: 10, justifyContent: 'center', marginBottom: 18 }}>
+            {(['all', 'month'] as const).map(period => <Pressable key={period} onPress={() => setHallPeriod(period)} style={[styles.primaryButton, { flex: 1, opacity: hallPeriod === period ? 1 : .55 }]}><Text style={styles.buttonText}>{period === 'all' ? 'HISTÓRICO' : 'MENSUAL'}</Text></Pressable>)}
+          </View>
+          {hallLoading && <Text style={styles.careerProgress}>CARGANDO CLASIFICACIÓN…</Text>}
+          {!!hallError && <Text style={styles.careerProgress}>{hallError}</Text>}
+          {!hallLoading && !hallError && hallRows.length === 0 && <Text style={styles.careerProgress}>¡Sé el primero en entrar en el Salón de la Fama!</Text>}
+          {hallRows.map((entry, i) => <View key={`${entry.nickname}-${i}`} style={[styles.rivalCard, { justifyContent: 'space-between', padding: 13 }]}>
+            <View style={{ flex: 1 }}><Text style={styles.rivalName}>{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`} {entry.nickname}</Text><Text style={styles.rivalLevel}>24 VICTORIAS · {entry.losses} DERROTAS</Text></View>
+            <Text style={styles.rivalState}>DG {entry.goals_for - entry.goals_against > 0 ? '+' : ''}{entry.goals_for - entry.goals_against}</Text>
+          </View>)}
+          {hallEligible && completedStats && <View style={{ marginTop: 22, gap: 10 }}>
+            <Text style={styles.careerSubtitle}>¡HAS COMPLETADO LA CARRERA! INSCRIBE TU MARCA</Text>
+            <TextInput value={nickname} onChangeText={setNickname} maxLength={15} autoCapitalize="characters" placeholder="TU APODO (3–15 CARACTERES)" placeholderTextColor="#999" style={{ backgroundColor: '#242424', color: '#FFF', padding: 14, borderRadius: 10 }} />
+            <Text style={styles.careerProgress}>24 VICTORIAS · {completedStats.losses} DERROTAS · DG {completedStats.goalsFor - completedStats.goalsAgainst}</Text>
+            <Pressable disabled={submitting} onPress={submitHall} style={styles.primaryButton}><Text style={styles.buttonText}>{submitting ? 'REGISTRANDO…' : 'INSCRIBIR MI MARCA'}</Text></Pressable>
+            {!!hallMessage && <Text style={styles.careerProgress}>{hallMessage}</Text>}
+          </View>}
         </ScrollView>
       ) : careerOpen ? (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.careerContent}>
           <Pressable onPress={() => setCareerOpen(false)} style={styles.backButton}><Text style={styles.backText}>‹ MENÚ PRINCIPAL</Text></Pressable>
           <Text style={styles.careerTitle}>CAMINO A LA GLORIA</Text>
           <Text style={styles.careerSubtitle}>24 RIVALES · 6 DIVISIONES · UN SOLO CAMPEÓN</Text>
+          <Text style={styles.careerProgress}>ESTADÍSTICAS: {stats.wins} V · {stats.losses} D · DG {stats.goalsFor - stats.goalsAgainst}</Text>
           <Text style={styles.careerProgress}>{champion ? '🏆 ¡CAMPEÓN ALBINEGRO!' : `RIVALES DESBLOQUEADOS: ${unlocked + 1} / ${RIVALS.length}`}</Text>
           {[6, 5, 4, 3, 2, 1].map(division => {
             const startIndex = (6 - division) * 4;
@@ -860,6 +974,9 @@ export default function ChapasScreen() {
               })}
             </View>;
           })}
+          {champion && <Pressable onPress={() => { setCareerOpen(false); setHallOpen(true); }} style={styles.primaryButton}><Text style={styles.buttonText}>🏆 SALÓN DE LA FAMA</Text></Pressable>}
+          {(champion || !stats.eligible) && <Pressable onPress={restartCareer} style={[styles.secondaryButton, { marginTop: 12 }]}><Text style={styles.buttonText}>↻ NUEVA CARRERA (REINICIA PROGRESO)</Text></Pressable>}
+          {!stats.eligible && <Text style={styles.careerFootnote}>Carrera anterior a la actualización: para competir online debes completar una nueva carrera con estadísticas verificables desde el inicio.</Text>}
           <Text style={styles.careerFootnote}>El primero en marcar 3 goles gana. Supera cuatro rivales para ascender de división. Tu progreso se guarda en este dispositivo.</Text>
         </ScrollView>
       ) : (
@@ -879,6 +996,7 @@ export default function ChapasScreen() {
             <View style={styles.menuActions}>
               <Pressable style={styles.primaryButton} onPress={startQuickMatch}><Text style={styles.buttonText}>PARTIDA RÁPIDA</Text></Pressable>
               <Pressable style={styles.primaryButton} onPress={() => setCareerOpen(true)}><Text style={styles.buttonText}>MODO CARRERA</Text></Pressable>
+              <Pressable style={styles.primaryButton} onPress={() => { setHallOpen(true); setCareerOpen(false); }}><Text style={styles.buttonText}>🏆 SALÓN DE LA FAMA</Text></Pressable>
               <Pressable style={styles.secondaryButton} onPress={() => setLocalSelectOpen(value => !value)}><Text style={styles.buttonText}>DOS JUGADORES</Text></Pressable>
               {localSelectOpen && <View style={styles.localPicker}>
                 <Text style={styles.localPickerTitle}>ELIGE EL EQUIPO RIVAL</Text>
