@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAudioPlayer } from 'expo-audio';
 import { Stack } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Image, PanResponder, Platform, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { Alert, Animated, Easing, Image, PanResponder, Platform, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type Team = 'home' | 'away';
@@ -975,9 +975,18 @@ export default function ChapasScreen() {
             </View>;
           })}
           {champion && <Pressable onPress={() => { setCareerOpen(false); setHallOpen(true); }} style={styles.primaryButton}><Text style={styles.buttonText}>🏆 SALÓN DE LA FAMA</Text></Pressable>}
-          {(champion || !stats.eligible) && <Pressable onPress={restartCareer} style={[styles.secondaryButton, { marginTop: 12 }]}><Text style={styles.buttonText}>↻ NUEVA CARRERA (REINICIA PROGRESO)</Text></Pressable>}
-          {!stats.eligible && <Text style={styles.careerFootnote}>Carrera anterior a la actualización: para competir online debes completar una nueva carrera con estadísticas verificables desde el inicio.</Text>}
-          <Text style={styles.careerFootnote}>El primero en marcar 3 goles gana. Supera cuatro rivales para ascender de división. Tu progreso se guarda en este dispositivo.</Text>
+          <View style={styles.careerResetArea}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Reiniciar modo carrera"
+              onPress={() => Alert.alert('¿Empezar una nueva carrera?', 'Volverás al primer rival y las estadísticas de esta carrera se pondrán a cero. Esta acción no se puede deshacer.', [{ text: 'CANCELAR', style: 'cancel' }, { text: 'REINICIAR CARRERA', style: 'destructive', onPress: () => { void restartCareer().catch(error => console.warn('[chapas] No se pudo reiniciar la carrera', error)); } }])}
+              style={styles.careerResetButton}>
+              <Text style={styles.careerResetButtonText}>↻  REINICIAR MODO CARRERA</Text>
+            </Pressable>
+            <Text style={styles.careerResetDescription}>Vuelve a 6.ª división con las estadísticas a cero.</Text>
+            {!stats.eligible && <Text style={styles.careerResetNotice}>Tu carrera actual es anterior al ranking online. Reiníciala para competir oficialmente.</Text>}
+            <Text style={styles.careerResetHint}>Se pedirá confirmación antes de borrar el progreso.</Text>
+          </View>
         </ScrollView>
       ) : (
         <ScrollView style={styles.menuScroll} contentContainerStyle={styles.menuScrollContent} showsVerticalScrollIndicator={false}>
@@ -996,7 +1005,7 @@ export default function ChapasScreen() {
             <View style={styles.menuActions}>
               <Pressable style={styles.primaryButton} onPress={startQuickMatch}><Text style={styles.buttonText}>PARTIDA RÁPIDA</Text></Pressable>
               <Pressable style={styles.primaryButton} onPress={() => setCareerOpen(true)}><Text style={styles.buttonText}>MODO CARRERA</Text></Pressable>
-              <Pressable style={styles.primaryButton} onPress={() => { setHallOpen(true); setCareerOpen(false); }}><Text style={styles.buttonText}>🏆 SALÓN DE LA FAMA</Text></Pressable>
+              <Pressable style={styles.primaryButton} onPress={() => { setHallOpen(true); setCareerOpen(false); }}><Text style={[styles.buttonText, { fontSize: 13 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>🏆 SALÓN DE LA FAMA</Text></Pressable>
               <Pressable style={styles.secondaryButton} onPress={() => setLocalSelectOpen(value => !value)}><Text style={styles.buttonText}>DOS JUGADORES</Text></Pressable>
               {localSelectOpen && <View style={styles.localPicker}>
                 <Text style={styles.localPickerTitle}>ELIGE EL EQUIPO RIVAL</Text>
@@ -1039,11 +1048,11 @@ const styles = StyleSheet.create({
   promotionContinue: { backgroundColor: GOLD, borderRadius: 12, paddingHorizontal: 28, paddingVertical: 17, marginTop: 34, minWidth: 240, alignItems: 'center' },
   promotionContinueText: { color: '#111111', fontSize: 14, fontWeight: '900', letterSpacing: .7 },
   promotionWaiting: { color: '#888888', fontSize: 11, letterSpacing: 1.2, marginTop: 40 },
-  divisionSection: { marginBottom: 17 },
+  divisionSection: { marginBottom: 8 },
   divisionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, marginTop: 10 },
   divisionTitle: { color: GOLD, fontSize: 15, fontWeight: '900' },
   divisionSubtitle: { color: '#AFAFAF', fontSize: 9, fontWeight: '700', flexShrink: 1, textAlign: 'right' },
-  careerContent: { paddingHorizontal: 20, paddingTop: 15, paddingBottom: 36 },
+  careerContent: { paddingHorizontal: 20, paddingTop: 15, paddingBottom: 52 },
   careerTitle: { color: '#FFFFFF', fontSize: 24, fontWeight: '900', textAlign: 'center', marginTop: 12 },
   careerSubtitle: { color: GOLD, fontSize: 11, letterSpacing: 1.1, textAlign: 'center', marginTop: 8, marginBottom: 17 },
   careerProgress: { color: '#BBBBBB', fontSize: 11, fontWeight: '800', marginBottom: 12 },
@@ -1055,6 +1064,12 @@ const styles = StyleSheet.create({
   rivalLevel: { color: '#B6B6B6', fontSize: 10, marginTop: 5, letterSpacing: 1 },
   rivalState: { color: GOLD, fontSize: 11, fontWeight: '900' },
   careerFootnote: { color: '#A6A6A6', fontSize: 12, lineHeight: 19, textAlign: 'center', marginTop: 10 },
+  careerResetArea: { marginTop: 4, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#333333', alignItems: 'center' },
+  careerResetButton: { width: '100%', backgroundColor: '#252525', borderWidth: 1, borderColor: '#555555', borderRadius: 12, paddingVertical: 15, paddingHorizontal: 12, alignItems: 'center' },
+  careerResetButtonText: { color: '#FFFFFF', fontSize: 13, fontWeight: '900', textAlign: 'center' },
+  careerResetDescription: { color: '#B5B5B5', fontSize: 12, lineHeight: 18, textAlign: 'center', marginTop: 10 },
+  careerResetNotice: { color: GOLD, fontSize: 11, lineHeight: 17, textAlign: 'center', marginTop: 10 },
+  careerResetHint: { color: '#888888', fontSize: 11, lineHeight: 17, textAlign: 'center', marginTop: 8 },
   matchRule: { color: GOLD, fontSize: 10, fontWeight: '800', marginTop: 7, letterSpacing: 1 },
   resultPanel: { width: '90%', backgroundColor: '#252525', borderRadius: 14, borderColor: '#FFFFFF', borderWidth: 1, alignItems: 'center', padding: 12, marginTop: 10 },
   resultOverlay: { position: 'absolute', bottom: 24, alignSelf: 'center', zIndex: 20, elevation: 15, backgroundColor: 'rgba(20,20,20,0.97)' },
