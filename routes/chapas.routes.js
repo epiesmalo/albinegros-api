@@ -49,4 +49,47 @@ router.post('/leaderboard', express.json({ limit: '4kb' }), async (req, res) => 
     return res.status(503).json({ ok: false, error: 'No se pudo guardar la marca' });
   }
 });
+// Clasificación pública de carreras en curso: mayor progreso, menos derrotas y mejor DG.
+const aspirantBetter = (a, b) => b.wins - a.wins || a.losses - b.losses || (b.goals_for - b.goals_against) - (a.goals_for - a.goals_against) || b.goals_for - a.goals_for || String(a.updated_at).localeCompare(String(b.updated_at));
+router.get('/aspirants', async (req, res) => {
+  const period = req.query.period === 'month' ? 'month' : 'all';
+  try {
+    let query = supabase.from('chapas_aspirants').select('nickname,wins,losses,goals_for,goals_against,updated_at').order('wins', { ascending: false }).limit(5000);
+    if (period === 'month') {
+      const d = new Date();
+      query = query.gte('updated_at', new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)).toISOString());
+    }
+    const { data, error } = await query;
+    if (error) throw error;
+    res.set('Cache-Control', 'public, max-age=15');
+    return res.json({ ok: true, period, entries: (data || []).sort(aspirantBetter).slice(0, LIMIT) });
+  } catch (error) {
+    console.error('[chapas] aspirants get', error);
+    return res.status(503).json({ ok: false, error: 'Ranking de aspirantes no disponible' });
+  }
+});
+router.post('/aspirants', express.json({ limit: '4kb' }), async (req, res) => {
+  try {
+    const { deviceId, wins, losses, goalsFor, goalsAgainst } = req.body || {};
+    const nickname = String(req.body?.nickname || '').trim().replace(/\s+/g, ' ');
+    const matches = wins + losses;
+    if (!validId(deviceId) || nickname.length < 3 || nickname.length > 15 || !/^[\p{L}\p{N} _.-]+$/u.test(nickname) ||
+        ![wins, losses, goalsFor, goalsAgainst].every(validInt) || wins < 1 || wins > 24 ||
+        goalsFor < wins * 3 || goalsFor > matches * 3 || goalsAgainst < losses * 3 || goalsAgainst > matches * 3) {
+      return res.status(400).json({ ok: false, error: 'Progreso o apodo no válido' });
+    }
+    const { data: old, error: lookupError } = await supabase.from('chapas_aspirants').select('*').eq('device_id', deviceId).maybeSingle();
+    if (lookupError) throw lookupError;
+    // Una instalación conserva su apodo inicial. No se aceptan regresiones en el récord.
+    if (old && old.nickname !== nickname) return res.status(409).json({ ok: false, error: 'Este dispositivo ya tiene un apodo asignado' });
+    const row = { device_id: deviceId, nickname, wins, losses, goals_for: goalsFor, goals_against: goalsAgainst, updated_at: new Date().toISOString() };
+    if (old && aspirantBetter(row, old) >= 0) return res.json({ ok: true, improved: false });
+    const { error } = await supabase.from('chapas_aspirants').upsert(row, { onConflict: 'device_id' });
+    if (error) throw error;
+    return res.json({ ok: true, improved: true });
+  } catch (error) {
+    console.error('[chapas] aspirants post', error);
+    return res.status(503).json({ ok: false, error: 'No se pudo guardar el progreso' });
+  }
+});
 module.exports = router;

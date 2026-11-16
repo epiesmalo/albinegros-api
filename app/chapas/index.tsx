@@ -47,9 +47,12 @@ const LOCAL_RIVALS: Rival[] = [
 const CAREER_KEY = '@albinegros_chapas/career_v2';
 const HALL_KEY = '@albinegros_chapas/hall_v1';
 const HALL_DEVICE_KEY = '@albinegros_chapas/hall_device_v1';
+const ASPIRANT_NICK_KEY = '@albinegros_chapas/aspirant_nickname_v1';
+const ASPIRANT_PENDING_KEY = '@albinegros_chapas/aspirant_pending_v1';
 const HALL_API = 'https://albinegros-api.onrender.com/api/chapas';
 type CareerStats = { wins: number; losses: number; goalsFor: number; goalsAgainst: number; eligible: boolean };
 const emptyStats = (): CareerStats => ({ wins: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, eligible: true });
+type AspirantEntry = { nickname: string; wins: number; losses: number; goals_for: number; goals_against: number; updated_at: string };
 type HallEntry = { nickname: string; wins: number; losses: number; goals_for: number; goals_against: number; finished_at: string };
 const hallCompare = (a: HallEntry, b: HallEntry) => a.losses - b.losses || (a.wins + a.losses) - (b.wins + b.losses) || ((b.goals_for - b.goals_against) - (a.goals_for - a.goals_against)) || b.goals_for - a.goals_for || a.finished_at.localeCompare(b.finished_at);
 
@@ -803,6 +806,15 @@ export default function ChapasScreen() {
   const [stats, setStats] = useState<CareerStats>(emptyStats);
   const statsRef = useRef<CareerStats>(emptyStats());
   const [hallOpen, setHallOpen] = useState(false);
+  const [rankingTab, setRankingTab] = useState<'champions' | 'aspirants'>('champions');
+  const [aspirantRows, setAspirantRows] = useState<AspirantEntry[]>([]);
+  const [aspirantNickname, setAspirantNickname] = useState('');
+  const [aspirantDraft, setAspirantDraft] = useState('');
+  const [aspirantMessage, setAspirantMessage] = useState('');
+  const [aspirantSaving, setAspirantSaving] = useState(false);
+  const pendingSyncRef = useRef(false);
+  const deviceIdRef = useRef('');
+  const nicknameRef = useRef('');
   const [hallPeriod, setHallPeriod] = useState<'all' | 'month'>('all');
   const [hallRows, setHallRows] = useState<HallEntry[]>([]);
   const [hallLoading, setHallLoading] = useState(false);
@@ -813,13 +825,63 @@ export default function ChapasScreen() {
   const [deviceId, setDeviceId] = useState('');
   const [hallEligible, setHallEligible] = useState(false);
   const [completedStats, setCompletedStats] = useState<CareerStats | null>(null);
+  const syncAspirant = useCallback(async (name: string, current: CareerStats) => {
+    const id = deviceIdRef.current;
+    if (!id || !name || !current.eligible || current.wins < 1) return;
+    const payload = { deviceId: id, nickname: name, wins: current.wins, losses: current.losses, goalsFor: current.goalsFor, goalsAgainst: current.goalsAgainst };
+    // Se guarda ANTES de enviar para reintentar al reabrir el juego.
+    await AsyncStorage.setItem(ASPIRANT_PENDING_KEY, JSON.stringify(payload));
+    if (pendingSyncRef.current) return;
+    pendingSyncRef.current = true;
+    try {
+      // Procesa la última versión guardada; si hubo otra victoria durante la petición,
+      // envía también la nueva sin esperar a que el usuario reabra la pantalla.
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const raw = await AsyncStorage.getItem(ASPIRANT_PENDING_KEY);
+        if (!raw) break;
+        const latest = JSON.parse(raw);
+        const response = await fetch(`${HALL_API}/aspirants`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(latest) });
+        if (!response.ok) throw new Error('No se pudo sincronizar');
+        const pending = await AsyncStorage.getItem(ASPIRANT_PENDING_KEY);
+        if (pending === raw) { await AsyncStorage.removeItem(ASPIRANT_PENDING_KEY); break; }
+      }
+      setAspirantMessage('Progreso sincronizado online.');
+    } catch {
+      setAspirantMessage('Progreso guardado; se sincronizará al volver a abrir el ranking.');
+    } finally { pendingSyncRef.current = false; }
+  }, []);
+  const retryAspirant = useCallback(async () => {
+    try {
+      const raw = await AsyncStorage.getItem(ASPIRANT_PENDING_KEY);
+      if (!raw || pendingSyncRef.current) return;
+      const pending = JSON.parse(raw);
+      if (pending.deviceId !== deviceIdRef.current || !nicknameRef.current) return;
+      await syncAspirant(nicknameRef.current, statsRef.current);
+    } catch (error) { console.warn('[chapas] Sincronización aspirantes', error); }
+  }, [syncAspirant]);
+  const saveAspirantNickname = useCallback(async () => {
+    const name = aspirantDraft.trim().replace(/\s+/g, ' ');
+    if (name.length < 3 || name.length > 15 || !/^[\p{L}\p{N} _.-]+$/u.test(name)) {
+      setAspirantMessage('Apodo de 3 a 15 caracteres; usa letras, números, espacios, puntos, guiones o _.'); return;
+    }
+    if (aspirantNickname || aspirantSaving) return;
+    setAspirantSaving(true);
+    try {
+      await AsyncStorage.setItem(ASPIRANT_NICK_KEY, name);
+      nicknameRef.current = name; setAspirantNickname(name); setNickname(name);
+      setAspirantMessage('¡Apodo guardado! Tu progreso se publicará automáticamente.');
+      await syncAspirant(name, statsRef.current);
+    } catch { setAspirantMessage('No se pudo guardar el apodo en este dispositivo.'); }
+    finally { setAspirantSaving(false); }
+  }, [aspirantDraft, aspirantNickname, aspirantSaving, syncAspirant]);
   const recordStats = useCallback((result: 'win' | 'loss', gf: number, ga: number) => {
     const old = statsRef.current;
     const next = { ...old, wins: old.wins + (result === 'win' ? 1 : 0), losses: old.losses + (result === 'loss' ? 1 : 0), goalsFor: old.goalsFor + gf, goalsAgainst: old.goalsAgainst + ga };
     statsRef.current = next; setStats(next);
     AsyncStorage.setItem(HALL_KEY, JSON.stringify(next)).catch(console.warn);
+    if (result === 'win' && nicknameRef.current && next.eligible) { void syncAspirant(nicknameRef.current, next).catch(console.warn); }
     return next;
-  }, []);
+  }, [syncAspirant]);
   const loadHall = useCallback(async (period: 'all' | 'month') => {
     setHallLoading(true); setHallError('');
     try {
@@ -830,10 +892,25 @@ export default function ChapasScreen() {
     } catch (error) { setHallError('Clasificación no disponible. Comprueba tu conexión.'); }
     finally { setHallLoading(false); }
   }, []);
-  useEffect(() => { if (hallOpen) loadHall(hallPeriod); }, [hallOpen, hallPeriod, loadHall]);
+  const loadAspirants = useCallback(async (period: 'all' | 'month') => {
+    setHallLoading(true); setHallError('');
+    try {
+      const response = await fetch(`${HALL_API}/aspirants?period=${period}`);
+      if (!response.ok) throw new Error('No disponible');
+      const data = await response.json();
+      if (!data.ok) throw new Error('No disponible');
+      setAspirantRows(Array.isArray(data.entries) ? data.entries : []);
+    } catch { setHallError('Ranking de aspirantes no disponible. Comprueba la conexión.'); }
+    finally { setHallLoading(false); }
+  }, []);
+  useEffect(() => {
+    if (!hallOpen) return;
+    if (rankingTab === 'aspirants') { void retryAspirant().then(() => loadAspirants(hallPeriod)); }
+    else loadHall(hallPeriod);
+  }, [hallOpen, hallPeriod, rankingTab, loadHall, loadAspirants, retryAspirant]);
   const submitHall = useCallback(async () => {
     if (!hallEligible || !completedStats || submitting || !deviceId) return;
-    const name = nickname.trim().replace(/\s+/g, ' ');
+    const name = (aspirantNickname || nickname).trim().replace(/\s+/g, ' ');
     if (name.length < 3 || name.length > 15) { setHallMessage('El apodo debe tener entre 3 y 15 caracteres.'); return; }
     setSubmitting(true); setHallMessage('');
     try {
@@ -844,7 +921,7 @@ export default function ChapasScreen() {
       setHallOpen(true);
     } catch (error) { setHallMessage(error instanceof Error ? error.message : 'Error de conexión'); }
     finally { setSubmitting(false); }
-  }, [hallEligible, completedStats, submitting, deviceId, nickname]);
+  }, [hallEligible, completedStats, submitting, deviceId, nickname, aspirantNickname]);
   const restartCareer = useCallback(async () => {
     const fresh = emptyStats(); statsRef.current = fresh; setStats(fresh); setCompletedStats(null); setHallEligible(false);
     unlockRef.current = 0; setUnlocked(0); setChampion(false); setRivalIndex(0);
@@ -863,10 +940,13 @@ export default function ChapasScreen() {
       AsyncStorage.getItem(`${CAREER_KEY}_champion`),
       AsyncStorage.getItem(HALL_KEY),
       AsyncStorage.getItem(HALL_DEVICE_KEY),
-    ]).then(([current, legacy, champ, savedStats, savedDevice]) => {
+      AsyncStorage.getItem(ASPIRANT_NICK_KEY),
+    ]).then(([current, legacy, champ, savedStats, savedDevice, savedNickname]) => {
       let id = savedDevice;
       if (!id) { id = `chapas-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`; AsyncStorage.setItem(HALL_DEVICE_KEY, id).catch(console.warn); }
+      deviceIdRef.current = id;
       if (active) setDeviceId(id);
+      if (savedNickname && active) { nicknameRef.current = savedNickname; setAspirantNickname(savedNickname); setAspirantDraft(savedNickname); setNickname(savedNickname); }
       let parsedStats: CareerStats = emptyStats();
       try { if (savedStats) parsedStats = { ...emptyStats(), ...JSON.parse(savedStats) }; else if (Number(current ?? legacy ?? '0') > 0 || champ === 'yes') parsedStats.eligible = false; } catch { parsedStats.eligible = false; }
       if (active) { statsRef.current = parsedStats; setStats(parsedStats); }
@@ -878,9 +958,10 @@ export default function ChapasScreen() {
       const safe = Number.isInteger(parsed) ? Math.max(0, Math.min(RIVALS.length - 1, parsed)) : 0;
       if (active) { unlockRef.current = safe; setUnlocked(safe); setChampion(champ === 'yes'); setLoaded(true); }
       if (current === null) AsyncStorage.setItem(CAREER_KEY, String(safe)).catch(() => {});
+      if (savedNickname && parsedStats.eligible && parsedStats.wins > 0) { void syncAspirant(savedNickname, parsedStats).catch(console.warn); }
     }).catch(() => { if (active) setLoaded(true); });
     return () => { active = false; };
-  }, []);
+  }, [syncAspirant]);
   const winCareer = useCallback((soundMode: 0 | 1 | 2, gf: number, ga: number) => {
     // Las victorias repetidas contra rivales ya superados no cuentan para el ranking.
     if (rivalIndex === unlockRef.current && !champion) {
@@ -923,21 +1004,42 @@ export default function ChapasScreen() {
       ) : hallOpen ? (
         <ScrollView contentContainerStyle={styles.careerContent}>
           <Pressable onPress={() => setHallOpen(false)} style={styles.backButton}><Text style={styles.backText}>‹ MENÚ PRINCIPAL</Text></Pressable>
-          <Text style={styles.careerTitle}>🏆 SALÓN DE LA FAMA</Text>
-          <Text style={styles.careerSubtitle}>LOS MEJORES JUGADORES DE ALBINEGROS CHAPAS</Text>
+          <Text style={styles.careerTitle}>🏆 CLASIFICACIONES ONLINE</Text>
+          <Text style={styles.careerSubtitle}>ALBINEGROS CHAPAS · COMPITE DESDE TU PRIMERA VICTORIA</Text>
+          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
+            <Pressable onPress={() => setRankingTab('champions')} style={[styles.primaryButton, { flex: 1, opacity: rankingTab === 'champions' ? 1 : .55, paddingHorizontal: 4 }]}><Text style={[styles.buttonText, { fontSize: 12 }]}>🏆 CAMPEONES</Text></Pressable>
+            <Pressable onPress={() => setRankingTab('aspirants')} style={[styles.primaryButton, { flex: 1, opacity: rankingTab === 'aspirants' ? 1 : .55, paddingHorizontal: 4 }]}><Text style={[styles.buttonText, { fontSize: 12 }]}>⚔️ ASPIRANTES</Text></Pressable>
+          </View>
           <View style={{ flexDirection: 'row', gap: 10, justifyContent: 'center', marginBottom: 18 }}>
             {(['all', 'month'] as const).map(period => <Pressable key={period} onPress={() => setHallPeriod(period)} style={[styles.primaryButton, { flex: 1, opacity: hallPeriod === period ? 1 : .55 }]}><Text style={styles.buttonText}>{period === 'all' ? 'HISTÓRICO' : 'MENSUAL'}</Text></Pressable>)}
           </View>
+          {rankingTab === 'aspirants' && <View style={{ marginBottom: 18, gap: 8 }}>
+            <Text style={styles.careerSubtitle}>TU PERFIL DE ASPIRANTE</Text>
+            {aspirantNickname ? (
+              <Text style={styles.careerProgress}>⚔️ {aspirantNickname} · {stats.wins}/24 RIVALES · {stats.losses} DERROTAS · DG {stats.goalsFor - stats.goalsAgainst}</Text>
+            ) : (
+              <>
+                <Text style={styles.careerProgress}>Elige un apodo una sola vez. Se guardará en este dispositivo.</Text>
+                <TextInput value={aspirantDraft} onChangeText={setAspirantDraft} maxLength={15} autoCapitalize="characters" placeholder="APODO (3–15 CARACTERES)" placeholderTextColor="#999" style={{ backgroundColor: '#242424', color: '#FFF', padding: 14, borderRadius: 10 }} />
+                <Pressable disabled={aspirantSaving || !loaded} onPress={() => { void saveAspirantNickname(); }} style={styles.primaryButton}><Text style={styles.buttonText}>{aspirantSaving ? 'GUARDANDO…' : 'GUARDAR MI APODO'}</Text></Pressable>
+              </>
+            )}
+            {!!aspirantMessage && <Text style={styles.careerProgress}>{aspirantMessage}</Text>}
+            <Text style={styles.careerResetHint}>La clasificación se actualiza tras cada victoria. Si no hay conexión, se reintentará al volver a abrirla.</Text>
+          </View>}
           {hallLoading && <Text style={styles.careerProgress}>CARGANDO CLASIFICACIÓN…</Text>}
           {!!hallError && <Text style={styles.careerProgress}>{hallError}</Text>}
-          {!hallLoading && !hallError && hallRows.length === 0 && <Text style={styles.careerProgress}>¡Sé el primero en entrar en el Salón de la Fama!</Text>}
-          {hallRows.map((entry, i) => <View key={`${entry.nickname}-${i}`} style={[styles.rivalCard, { justifyContent: 'space-between', padding: 13 }]}>
+          {!hallLoading && !hallError && (rankingTab === 'champions' ? hallRows.length === 0 : aspirantRows.length === 0) && <Text style={styles.careerProgress}>{rankingTab === 'champions' ? '¡Sé el primero en entrar en el Salón de la Fama!' : '¡Sé el primer aspirante en publicar una victoria!'}</Text>}
+          {rankingTab === 'champions' ? hallRows.map((entry, i) => <View key={`${entry.nickname}-${i}`} style={[styles.rivalCard, { justifyContent: 'space-between', padding: 13 }]}>
             <View style={{ flex: 1 }}><Text style={styles.rivalName}>{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`} {entry.nickname}</Text><Text style={styles.rivalLevel}>24 VICTORIAS · {entry.losses} DERROTAS</Text></View>
             <Text style={styles.rivalState}>DG {entry.goals_for - entry.goals_against > 0 ? '+' : ''}{entry.goals_for - entry.goals_against}</Text>
+          </View>) : aspirantRows.map((entry, i) => <View key={`${entry.nickname}-${i}`} style={[styles.rivalCard, { justifyContent: 'space-between', padding: 13 }]}>
+            <View style={{ flex: 1 }}><Text style={styles.rivalName}>{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`} {entry.nickname}</Text><Text style={styles.rivalLevel}>{entry.wins}/24 RIVALES · {entry.losses} DERROTAS · DIVISIÓN {RIVALS[Math.min(23, entry.wins)].division}</Text></View>
+            <Text style={styles.rivalState}>DG {entry.goals_for - entry.goals_against > 0 ? '+' : ''}{entry.goals_for - entry.goals_against}</Text>
           </View>)}
-          {hallEligible && completedStats && <View style={{ marginTop: 22, gap: 10 }}>
+          {rankingTab === 'champions' && hallEligible && completedStats && <View style={{ marginTop: 22, gap: 10 }}>
             <Text style={styles.careerSubtitle}>¡HAS COMPLETADO LA CARRERA! INSCRIBE TU MARCA</Text>
-            <TextInput value={nickname} onChangeText={setNickname} maxLength={15} autoCapitalize="characters" placeholder="TU APODO (3–15 CARACTERES)" placeholderTextColor="#999" style={{ backgroundColor: '#242424', color: '#FFF', padding: 14, borderRadius: 10 }} />
+            {aspirantNickname ? <Text style={styles.careerProgress}>APODO: {aspirantNickname}</Text> : <TextInput value={nickname} onChangeText={setNickname} maxLength={15} autoCapitalize="characters" placeholder="TU APODO (3–15 CARACTERES)" placeholderTextColor="#999" style={{ backgroundColor: '#242424', color: '#FFF', padding: 14, borderRadius: 10 }} />}
             <Text style={styles.careerProgress}>24 VICTORIAS · {completedStats.losses} DERROTAS · DG {completedStats.goalsFor - completedStats.goalsAgainst}</Text>
             <Pressable disabled={submitting} onPress={submitHall} style={styles.primaryButton}><Text style={styles.buttonText}>{submitting ? 'REGISTRANDO…' : 'INSCRIBIR MI MARCA'}</Text></Pressable>
             {!!hallMessage && <Text style={styles.careerProgress}>{hallMessage}</Text>}
@@ -949,6 +1051,8 @@ export default function ChapasScreen() {
           <Text style={styles.careerTitle}>CAMINO A LA GLORIA</Text>
           <Text style={styles.careerSubtitle}>24 RIVALES · 6 DIVISIONES · UN SOLO CAMPEÓN</Text>
           <Text style={styles.careerProgress}>ESTADÍSTICAS: {stats.wins} V · {stats.losses} D · DG {stats.goalsFor - stats.goalsAgainst}</Text>
+          {!!aspirantNickname && <Text style={styles.careerProgress}>⚔️ ASPIRANTE: {aspirantNickname} · SINCRONIZACIÓN AUTOMÁTICA</Text>}
+          {!aspirantNickname && stats.eligible && <Pressable onPress={() => { setCareerOpen(false); setRankingTab('aspirants'); setHallOpen(true); }} style={styles.primaryButton}><Text style={[styles.buttonText, { fontSize: 13 }]}>⚔️ ELEGIR APODO PARA RANKING ONLINE</Text></Pressable>}
           <Text style={styles.careerProgress}>{champion ? '🏆 ¡CAMPEÓN ALBINEGRO!' : `RIVALES DESBLOQUEADOS: ${unlocked + 1} / ${RIVALS.length}`}</Text>
           {[6, 5, 4, 3, 2, 1].map(division => {
             const startIndex = (6 - division) * 4;
