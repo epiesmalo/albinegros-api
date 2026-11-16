@@ -1109,7 +1109,7 @@ export default function ChapasScreen() {
             <View style={styles.menuActions}>
               <Pressable style={styles.primaryButton} onPress={startQuickMatch}><Text style={styles.buttonText}>PARTIDA RÁPIDA</Text></Pressable>
               <Pressable style={styles.primaryButton} onPress={() => setCareerOpen(true)}><Text style={styles.buttonText}>MODO CARRERA</Text></Pressable>
-              <Pressable style={styles.primaryButton} onPress={() => { setHallOpen(true); setCareerOpen(false); }}><Text style={[styles.buttonText, { fontSize: 13 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>🏆 SALÓN DE LA FAMA</Text></Pressable>
+              <Pressable style={styles.primaryButton} onPress={() => { setHallOpen(true); setCareerOpen(false); }}><Text style={[styles.buttonText, { fontSize: 13 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>🏆 CLASIFICACIONES</Text></Pressable>
               <Pressable style={styles.secondaryButton} onPress={() => setLocalSelectOpen(value => !value)}><Text style={styles.buttonText}>DOS JUGADORES</Text></Pressable>
               {localSelectOpen && <View style={styles.localPicker}>
                 <Text style={styles.localPickerTitle}>ELIGE EL EQUIPO RIVAL</Text>
