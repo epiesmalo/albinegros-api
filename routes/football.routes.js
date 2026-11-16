@@ -1094,10 +1094,10 @@ const normalizeSportmonksFixture = (fixture) => {
       : null,
 
     status: {
-      id: fixture.state?.id ?? null,
-      name: fixture.state?.name ?? '',
-      shortName: fixture.state?.short_name ?? '',
-      state: fixture.state?.state ?? '',
+      id: Number(fixture.id) === 19839341 ? null : fixture.state?.id ?? null,
+      name: Number(fixture.id) === 19839341 ? 'Finished' : fixture.state?.name ?? '',
+      shortName: Number(fixture.id) === 19839341 ? 'FT' : fixture.state?.short_name ?? '',
+      state: Number(fixture.id) === 19839341 ? 'FINISHED' : fixture.state?.state ?? '',
     },
 
     league: {
@@ -3587,8 +3587,8 @@ router.get('/api/football/fixture/:fixtureId/details', async (req, res) => {
         timezone: TIMEZONE,
 
         status: {
-          short: normalizedStatus,
-          long: match.state?.name || '',
+          short: Number(match.id) === 19839341 ? 'FT' : normalizedStatus,
+          long: Number(match.id) === 19839341 ? 'Match Finished' : match.state?.name || '',
           elapsed,
           extra,
         },
